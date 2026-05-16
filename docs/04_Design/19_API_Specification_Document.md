@@ -18,7 +18,21 @@ Review cycle: Business, HSE, IT, Security, Compliance, and Operations review bef
 
 ## API Style
 
-Use REST or a documented equivalent API style with JSON payloads, versioned endpoints, standard error format, pagination, filtering, sorting, idempotency where needed, and correlation IDs.
+Use REST APIs implemented with FastAPI, JSON payloads, versioned endpoints, standard error format, pagination, filtering, sorting, idempotency where needed, and correlation IDs.
+
+## API Technology Baseline
+
+| Area | Baseline |
+|---|---|
+| API framework | FastAPI |
+| API language/runtime | Python runtime suitable for FastAPI deployment |
+| Web consumer | React web application |
+| Mobile consumer | React Native mobile application |
+| Database | MySQL through a controlled data access layer |
+| Cloud runtime | Azure-hosted API service |
+| File storage | Azure Blob Storage |
+| Secrets/configuration | Azure Key Vault |
+| Monitoring | Azure Monitor and Application Insights |
 
 ## Endpoint Groups
 
@@ -67,11 +81,11 @@ POST /ai/advisor/query returns source-cited answer from approved knowledge.
 
 ```mermaid
 sequenceDiagram
-    participant Client
-    participant Gateway
+    participant Client as React / React Native Client
+    participant Gateway as FastAPI API Layer
     participant Auth
     participant Service
-    participant Database
+    participant Database as MySQL
     participant Audit
     Client->>Gateway: API request with token
     Gateway->>Auth: Validate token and permissions

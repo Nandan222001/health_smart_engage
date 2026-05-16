@@ -2,6 +2,16 @@
 
 This folder separates the HSE platform APIs by consuming channel and technical responsibility.
 
+## Technology Baseline
+
+| Layer | Technology |
+|---|---|
+| API framework | FastAPI |
+| Web client | React |
+| Mobile client | React Native |
+| Database | MySQL |
+| Cloud platform | Azure |
+
 ## API Folder Structure
 
 | Folder | Audience | Contents |

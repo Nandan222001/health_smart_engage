@@ -42,6 +42,16 @@ Vulnerability scanning and patching.
 
 Backup and disaster recovery.
 
+## Stack Security Baseline
+
+| Layer | Security Requirement |
+|---|---|
+| React web app | Secure token handling, route guards, content security policy, dependency scanning |
+| React Native app | Secure storage for tokens, certificate pinning where required, offline data encryption, jailbreak/root risk consideration |
+| FastAPI backend | OAuth2/OIDC validation, request validation, rate limiting, role/permission enforcement, structured audit logging |
+| MySQL | Encryption at rest, private network access, least-privilege database users, backup, point-in-time recovery |
+| Azure | Key Vault for secrets, managed identities where possible, Azure Monitor/Application Insights logging, network controls, environment separation |
+
 ## Privacy Controls
 
 Purpose limitation and minimisation for personal data.
