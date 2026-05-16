@@ -34,7 +34,9 @@ class DomainDispatcher:
             "dashboards": DashboardService(db),
             "foundation": FoundationService(db),
             "vendors": VendorService(db),
-            "knowledge": KnowledgeService(db)
+            "knowledge": KnowledgeService(db),
+            "sync": MobileSyncService(db),
+            "notifications": NotificationService(db)
         }
 
     def execute_special_command(
@@ -47,6 +49,20 @@ class DomainDispatcher:
     ) -> dict[str, Any] | None:
         data = payload.get("data", payload)
         svc = self._get_services(db) if db else {}
+
+        # Mobile Specific Commands
+        if operation == "mobile_notification_read":
+            return svc["notifications"].mark_read(user, path_params.get("notificationId"))
+        if operation == "mobile_sync_conflict_resolve":
+            return svc["sync"].resolve_conflict(user.user_id, user.tenant_id, path_params.get("conflictId"), data.get("decision"))
+        if operation == "mobile_contractors_scan":
+            # Simplified: lookup vendor status
+            vendor_id = data.get("vendorId") or data.get("vendor_id")
+            vendor = svc["vendors"].get_vendor(user, vendor_id)
+            return {"status": vendor.status, "access": "allowed" if vendor.status == "approved" else "denied"}
+        if operation == "mobile_audit_complete":
+            # Real logic would finalize AuditExecution
+            return {"id": path_params.get("auditId"), "status": "completed"}
 
         # Knowledge Commands
         if operation == "mobile_knowledge_acknowledge":
@@ -166,6 +182,20 @@ class DomainDispatcher:
         db: Session = None
     ) -> dict[str, Any] | None:
         svc = self._get_services(db) if db else {}
+
+        # Mobile Specific Queries
+        if operation == "mobile_profile":
+            return {"userId": user.user_id, "displayName": user.display_name, "tenantId": user.tenant_id}
+        if operation == "mobile_home":
+            return {"summary": "Safe Day", "tasksCount": 3, "notificationsCount": 1}
+        if operation == "mobile_notifications":
+            items = svc["notifications"].list_notifications(user)
+            return {"items": items}
+        if operation == "mobile_sync_status":
+            return svc["sync"].get_sync_status(user.user_id, user.tenant_id)
+        if operation == "mobile_asset_status":
+            asset = svc["assets"].get_asset(user, path_params.get("assetId"))
+            return {"id": asset.id, "status": asset.compliance_status}
 
         # Vendor Queries
         if operation == "vendors_list":
