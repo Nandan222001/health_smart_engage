@@ -1,0 +1,1 @@
+"""HSE FastAPI backend package."""
