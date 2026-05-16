@@ -31,7 +31,7 @@ class CatalogEndpointService:
         method: str = "GET",
     ) -> dict[str, Any]:
         enforce_permission(user, infer_required_permission(group, operation, method))
-        special = self.dispatcher.execute_special_query(user, operation, path_params)
+        special = self.dispatcher.execute_special_query(user, operation, path_params, db=self.db)
         self.audit.record_action(
             user=user,
             action=f"{group}.{operation}.query",
@@ -62,7 +62,7 @@ class CatalogEndpointService:
     ) -> dict[str, Any]:
         enforce_permission(user, infer_required_permission(group, operation, method))
         self.rules.validate_command(user, operation, payload, path_params)
-        special = self.dispatcher.execute_special_command(user, operation, payload, path_params)
+        special = self.dispatcher.execute_special_command(user, operation, payload, path_params, db=self.db)
         record = self.records.create(
             tenant_id=user.tenant_id,
             module=group,
