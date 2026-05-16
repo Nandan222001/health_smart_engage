@@ -27,6 +27,18 @@ class ComplianceService:
     def list_capas(self, user: CurrentUser, filters: dict) -> list[Capa]:
         return self.repo.list(Capa, user.tenant_id, filters)
 
+    def get_capa(self, user: CurrentUser, capa_id: str) -> Capa:
+        capa = self.repo.get(Capa, user.tenant_id, capa_id)
+        if not capa:
+            raise AppError("CAPA_NOT_FOUND", "CAPA not found", 404)
+        return capa
+
+    def submit_capa_closure(self, user: CurrentUser, capa_id: str, data: dict) -> Capa:
+        return self.repo.update(Capa, user.tenant_id, capa_id, {
+            "status": "pending_approval",
+            "evidence_file_id": data.get("evidence_file_id") or data.get("evidenceFileId")
+        })
+
     def approve_capa_closure(self, user: CurrentUser, capa_id: str, data: dict) -> Capa:
         return self.repo.update(Capa, user.tenant_id, capa_id, {"status": "closed"})
 

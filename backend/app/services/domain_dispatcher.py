@@ -11,8 +11,10 @@ from app.services.permit_service import PermitService
 from app.services.people_service import PeopleService
 from app.services.asset_service import AssetService
 from app.services.compliance_service import ComplianceService
-
 from app.services.dashboard_service import DashboardService
+from app.services.foundation_service import FoundationService
+from app.services.vendor_service import VendorService
+from app.services.knowledge_service import KnowledgeService
 
 class DomainDispatcher:
     def __init__(self):
@@ -29,7 +31,10 @@ class DomainDispatcher:
             "people": PeopleService(db),
             "assets": AssetService(db),
             "compliance": ComplianceService(db),
-            "dashboards": DashboardService(db)
+            "dashboards": DashboardService(db),
+            "foundation": FoundationService(db),
+            "vendors": VendorService(db),
+            "knowledge": KnowledgeService(db)
         }
 
     def execute_special_command(
@@ -42,6 +47,36 @@ class DomainDispatcher:
     ) -> dict[str, Any] | None:
         data = payload.get("data", payload)
         svc = self._get_services(db) if db else {}
+
+        # Knowledge Commands
+        if operation == "mobile_knowledge_acknowledge":
+            res = svc["knowledge"].acknowledge_document(user, path_params.get("documentId"), data)
+            return {"id": res.id}
+        
+        # Vendor Commands
+        if operation == "vendors_create":
+            res = svc["vendors"].create_vendor(user, data)
+            return {"id": res.id, "status": res.status}
+        if operation == "vendor_documents_upload":
+            res = svc["vendors"].upload_vendor_document(user, path_params.get("vendorId"), data)
+            return {"id": res.id}
+        if operation == "vendor_documents_review":
+            res = svc["vendors"].review_vendor_document(user, path_params.get("documentId"), data)
+            return {"id": res.id, "status": res.status}
+
+        # Foundation Commands
+        if operation == "admin_organisation_nodes_create":
+            res = svc["foundation"].create_organisation_node(user, data)
+            return {"id": res.id}
+        if operation == "admin_users_invitations_create":
+            res = svc["foundation"].invite_user(user, data)
+            return {"id": res.id, "status": res.status}
+        if operation == "admin_roles_create":
+            res = svc["foundation"].create_role(user, data)
+            return {"id": res.id}
+        if operation == "admin_roles_update":
+            res = svc["foundation"].update_role(user, path_params.get("roleId"), data)
+            return {"id": res.id}
 
         # Permit Commands
         if operation in ["permits_create", "mobile_permits_create"]:
@@ -56,8 +91,11 @@ class DomainDispatcher:
         if operation in ["permits_reject", "mobile_permits_reject"]:
             res = svc["permits"].reject_permit(user, path_params.get("permitId"), data)
             return {"id": res.id, "status": res.status}
-        if operation in ["permits_close", "mobile_permits_close"]:
+        if operation == "permits_close" or operation == "mobile_permits_close":
             res = svc["permits"].close_permit(user, path_params.get("permitId"), data)
+            return {"id": res.id, "status": res.status}
+        if operation == "permits_override_conflict":
+            res = svc["permits"].override_conflict(user, path_params.get("permitId"), data)
             return {"id": res.id, "status": res.status}
 
         # People & Training Commands
@@ -89,6 +127,12 @@ class DomainDispatcher:
         if operation == "incident_investigations_create":
             res = svc["compliance"].start_investigation(user, path_params.get("incidentId"), data)
             return {"id": res.id}
+        if operation == "capas_submit_closure":
+            res = svc["compliance"].submit_capa_closure(user, path_params.get("capaId"), data)
+            return {"id": res.id, "status": res.status}
+        if operation == "capas_approve_closure":
+            res = svc["compliance"].approve_capa_closure(user, path_params.get("capaId"), data)
+            return {"id": res.id, "status": res.status}
 
         # Integration Commands
         if operation == "integrations_hr_employees_upsert":
@@ -123,6 +167,25 @@ class DomainDispatcher:
     ) -> dict[str, Any] | None:
         svc = self._get_services(db) if db else {}
 
+        # Vendor Queries
+        if operation == "vendors_list":
+            items = svc["vendors"].list_vendors(user)
+            return {"items": [i.__dict__ for i in items]}
+        if operation == "vendors_get":
+            res = svc["vendors"].get_vendor(user, path_params.get("vendorId"))
+            return res.__dict__
+
+        # Foundation Queries
+        if operation == "admin_organisation_nodes_list":
+            items = svc["foundation"].list_organisation_nodes(user)
+            return {"items": [i.__dict__ for i in items]}
+        if operation == "admin_users_list":
+            items = svc["foundation"].list_users(user)
+            return {"items": [i.__dict__ for i in items]}
+        if operation == "admin_roles_list":
+            items = svc["foundation"].list_roles(user)
+            return {"items": [i.__dict__ for i in items]}
+
         # Dashboard Queries
         if operation == "dashboard_executive_safety":
             return svc["dashboards"].get_executive_safety(user)
@@ -134,6 +197,38 @@ class DomainDispatcher:
             return svc["dashboards"].get_vendor_compliance(user)
         if operation == "dashboard_asset_compliance":
             return svc["dashboards"].get_asset_compliance(user)
+        if operation == "dashboard_my_tasks":
+            return svc["dashboards"].get_my_tasks(user)
+        if operation == "dashboard_audit_capa":
+            return svc["dashboards"].get_audit_capa(user)
+        if operation == "dashboard_risk_register":
+            return svc["dashboards"].get_risk_register(user)
+        if operation == "dashboard_permit_live_board":
+            return svc["dashboards"].get_permit_live_board(user)
+        if operation == "dashboard_incident_analytics":
+            return svc["dashboards"].get_incident_analytics(user)
+        if operation == "dashboard_knowledge_usage":
+            return svc["dashboards"].get_knowledge_usage(user)
+        if operation == "dashboard_ai_intelligence":
+            return svc["dashboards"].get_ai_intelligence(user)
+        if operation == "dashboard_data_quality":
+            return svc["dashboards"].get_data_quality(user)
+
+        # Compliance Queries
+        if operation == "capas_list":
+            items = svc["compliance"].list_capas(user, {})
+            return {"items": [i.__dict__ for i in items]}
+        if operation == "capas_get":
+            res = svc["compliance"].get_capa(user, path_params.get("capaId"))
+            return res.__dict__
+
+        # Knowledge Queries
+        if operation == "mobile_knowledge_search":
+            items = svc["knowledge"].list_documents(user)
+            return {"items": [i.__dict__ for i in items]}
+        if operation == "mobile_knowledge_document":
+            res = svc["knowledge"].get_document(user, path_params.get("documentId"))
+            return res.__dict__
 
         # Queries
         if operation in ["permits_list", "mobile_permits_list"]:
@@ -142,6 +237,9 @@ class DomainDispatcher:
         if operation in ["permits_get", "mobile_permits_get"]:
             res = svc["permits"].get_permit(user, path_params.get("permitId"))
             return res.__dict__
+        if operation == "permits_conflicts":
+            items = svc["permits"].get_conflicts(user, path_params.get("permitId"))
+            return {"items": [i.__dict__ for i in items]}
         
         if operation == "employees_list":
             items = svc["people"].list_employees(user, {})

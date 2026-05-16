@@ -66,3 +66,18 @@ class PermitService:
         permit.status = "closed"
         # Logic for evidence check would be in BusinessRuleService
         return permit
+
+    def get_conflicts(self, user: CurrentUser, permit_id: str) -> list[Permit]:
+        permit = self.get_permit(user, permit_id)
+        return self.repo.list_active_permit_conflicts(
+            user.tenant_id, 
+            permit.zone_id, 
+            permit.asset_id, 
+            exclude_permit_id=permit_id
+        )
+
+    def override_conflict(self, user: CurrentUser, permit_id: str, payload: dict) -> Permit:
+        permit = self.get_permit(user, permit_id)
+        # In a real app, we'd store the override justification/approver
+        permit.status = "approved"
+        return permit
