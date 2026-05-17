@@ -1,35 +1,31 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, SafeAreaView, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { styled } from 'nativewind';
-import { Colors, Spacing, BorderRadius } from '../theme';
+import { Colors, Spacing } from '../theme';
+import { TopAppBar, BottomNavBar, IndustrialCard, StatusChip } from '../components';
 
 const StyledView = styled(View);
 const StyledText = styled(Text);
-const StyledTouchableOpacity = styled(TouchableOpacity);
 const StyledImage = styled(Image);
 
 const DashboardScreen = ({ navigation }: any) => {
+  const navItems = [
+    { icon: '📊', label: 'Dashboard', active: true },
+    { icon: '📖', label: 'Incidents', onPress: () => navigation?.navigate('Incidents') },
+    { icon: '📋', label: 'Tasks', onPress: () => navigation?.navigate('CAPA') },
+    { icon: '⚙️', label: 'Settings' },
+  ];
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface }}>
-      {/* TopAppBar */}
-      <StyledView 
-        className="flex-row justify-between items-center w-full px-4 h-14 bg-white border-b-2 z-50"
-        style={{ borderColor: Colors.outline }}
-      >
-        <StyledView className="flex-row items-center" style={{ gap: Spacing.stackSm }}>
-          <StyledTouchableOpacity className="w-12 h-12 items-center justify-center rounded-full">
-            <StyledText className="text-xl" style={{ color: Colors.primary }}>☰</StyledText>
-          </StyledTouchableOpacity>
-          <StyledText className="text-xl font-bold" style={{ color: Colors.primary }}>HSE Operations</StyledText>
-        </StyledView>
-        <StyledTouchableOpacity className="w-12 h-12 items-center justify-center rounded-full">
-          <StyledText className="text-xl" style={{ color: Colors.primary }}>👤</StyledText>
-        </StyledTouchableOpacity>
-      </StyledView>
+      <TopAppBar 
+        title="HSE Operations" 
+        showNotifications 
+        onBack={() => navigation?.navigate('Notifications')} 
+      />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
         <StyledView className="px-4 pt-6" style={{ gap: Spacing.stackLg }}>
-          {/* Greeting Section */}
           <StyledView>
             <StyledText className="text-xs font-bold uppercase tracking-wider" style={{ color: Colors.onSurfaceVariant }}>Welcome back</StyledText>
             <StyledText className="text-3xl font-bold mt-1" style={{ color: Colors.onSurface }}>Hello, Mike</StyledText>
@@ -52,60 +48,45 @@ const DashboardScreen = ({ navigation }: any) => {
             <StyledText className="text-4xl text-white">✅</StyledText>
           </StyledView>
 
-          {/* Quick Actions Grid */}
+          {/* Quick Actions */}
           <StyledView>
             <StyledText className="text-xs font-bold uppercase mb-2" style={{ color: Colors.onSurfaceVariant }}>Quick Actions</StyledText>
             <StyledView className="flex-row justify-between" style={{ gap: Spacing.stackSm }}>
-              <ActionItem icon="⚠️" label="Report Incident" color={Colors.primary} textColor="white" onPress={() => navigation?.navigate('Incident')} />
-              <ActionItem icon="🔍" label="Scan QR" color={Colors.secondaryContainer} textColor={Colors.onSecondaryContainer} border={Colors.onSecondaryContainer} />
-              <ActionItem icon="✅" label="My Tasks" color={Colors.surfaceContainerHigh} textColor={Colors.onSurface} border={Colors.outline} />
+              <ActionItem icon="⚠️" label="Report Incident" color={Colors.primary} textColor="white" onPress={() => navigation?.navigate('Incidents')} />
+              <ActionItem icon="🚨" label="Hazard" color={Colors.error} textColor="white" onPress={() => navigation?.navigate('Hazard')} />
+              <ActionItem icon="🤖" label="AI Advisor" color={Colors.secondary} textColor="white" onPress={() => navigation?.navigate('AIAdvisor')} />
             </StyledView>
           </StyledView>
 
-          {/* Tasks Section */}
+          {/* Additional Features */}
+          <StyledView>
+            <StyledText className="text-xs font-bold uppercase mb-2" style={{ color: Colors.onSurfaceVariant }}>Operations</StyledText>
+            <StyledView className="flex-row justify-between" style={{ gap: Spacing.stackSm }}>
+              <ActionItem icon="🏗️" label="Assets" color={Colors.surfaceContainerHigh} textColor={Colors.onSurface} border={Colors.outline} onPress={() => navigation?.navigate('Assets')} />
+              <ActionItem icon="📝" label="Permits" color={Colors.surfaceContainerHigh} textColor={Colors.onSurface} border={Colors.outline} onPress={() => navigation?.navigate('Permits')} />
+              <ActionItem icon="📖" label="SOPs" color={Colors.surfaceContainerHigh} textColor={Colors.onSurface} border={Colors.outline} onPress={() => navigation?.navigate('Docs')} />
+            </StyledView>
+          </StyledView>
+
           <StyledView style={{ gap: Spacing.stackSm }}>
             <StyledView className="flex-row justify-between items-end">
               <StyledText className="text-xs font-bold uppercase" style={{ color: Colors.onSurfaceVariant }}>Recent Tasks</StyledText>
-              <StyledTouchableOpacity>
+              <TouchableOpacity onPress={() => navigation?.navigate('CAPA')}>
                 <StyledText className="text-xs underline" style={{ color: Colors.primary }}>View All</StyledText>
-              </StyledTouchableOpacity>
+              </TouchableOpacity>
             </StyledView>
-            <StyledView style={{ gap: 12 }}>
-              <TaskCard title="Site Perimeter Check" location="Main Warehouse" due="Due by 14:00" status="IN PROGRESS" indicator={Colors.secondaryContainer} />
-              <TaskCard title="Equipment Tagging" location="Loading Dock 4" due="Due Yesterday" status="OVERDUE" indicator={Colors.error} />
-              <TaskCard title="Staff PPE Audit" location="Admin Block" due="Due tomorrow" status="UPCOMING" indicator={Colors.primary} />
-            </StyledView>
-          </StyledView>
-
-          {/* Visual Anchor */}
-          <StyledView className="rounded-lg overflow-hidden border-2 relative h-40" style={{ borderColor: Colors.outline }}>
-            <StyledImage 
-              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBEd-eTDviReeB-k-SWLVXQSI-XkZJYvWWV_-QVoEwc_vTchC4L-3dMiaTrbp6-kXVK5zQfcvRdyOifaJdHACS9Gy16KcvUleJ_hxutiZTyWx0gxEv5gDtleVf4QpQ0ZQgyOcXPvM6g7DzF6zWQDKo_W5Nw6eJpEPcUQN8gA1yEF4T8EZu4dxR11gTATubAtNvA1Jcp7mbrVdkAugLgd-HHdSh9GYS6KWiqxtHJmo0yVNiAoJoXvhvJYMHzxfGP58sjQDp-7jn1ig' }}
-              className="w-full h-full opacity-60"
-            />
-            <StyledView className="absolute inset-0 bg-black/40 flex-col justify-end p-4">
-              <StyledText className="text-[10px] font-bold text-white uppercase">Active Site</StyledText>
-              <StyledText className="text-lg font-bold text-white">Zone B-North Operations</StyledText>
-            </StyledView>
+            <TaskCard title="Site Perimeter Check" location="Main Warehouse" due="Due by 14:00" status="IN PROGRESS" indicator={Colors.secondaryContainer} />
           </StyledView>
         </StyledView>
       </ScrollView>
 
-      {/* BottomNavBar */}
-      <StyledView 
-        className="absolute bottom-0 left-0 w-full flex-row justify-around items-center px-4 py-2 bg-white border-t-2 z-50"
-        style={{ borderColor: Colors.outline }}
-      >
-        <NavItem icon="📊" label="Dashboard" active />
-        <NavItem icon="📖" label="Incidents" onPress={() => navigation?.navigate('Incident')} />
-        <NavItem icon="🏢" label="Sites" onPress={() => navigation?.navigate('SiteSelection')} />
-        <NavItem icon="⚙️" label="Settings" />
-      </StyledView>
+      <BottomNavBar items={navItems} />
     </SafeAreaView>
   );
 };
 
-// Sub-components
+const StyledTouchableOpacity = styled(TouchableOpacity);
+
 const ActionItem = ({ icon, label, color, textColor, border, onPress }: any) => (
   <StyledTouchableOpacity 
     className="flex-1 aspect-square rounded-lg items-center justify-center p-2 border-2"
@@ -118,29 +99,14 @@ const ActionItem = ({ icon, label, color, textColor, border, onPress }: any) => 
 );
 
 const TaskCard = ({ title, location, due, status, indicator }: any) => (
-  <StyledView className="bg-white border-2 p-4 rounded-lg flex-row relative overflow-hidden" style={{ borderColor: Colors.outlineVariant }}>
-    <StyledView className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: indicator }} />
-    <StyledView className="flex-1">
-      <StyledView className="flex-row justify-between items-start mb-1">
-        <StyledText className="text-lg font-bold" style={{ color: Colors.onSurface }}>{title}</StyledText>
-        <StyledView className="px-2 py-0.5 rounded-full border" style={{ backgroundColor: Colors.surfaceContainer, borderColor: Colors.outline }}>
-          <StyledText className="text-[8px] font-bold uppercase">{status}</StyledText>
-        </StyledView>
-      </StyledView>
-      <StyledText className="text-xs" style={{ color: Colors.onSurfaceVariant }}>📍 {location}</StyledText>
-      <StyledText className="text-xs mt-1" style={{ color: Colors.onSurfaceVariant }}>🕒 {due}</StyledText>
+  <IndustrialCard indicatorColor={indicator}>
+    <StyledView className="flex-row justify-between items-start mb-1">
+      <StyledText className="text-lg font-bold" style={{ color: Colors.onSurface }}>{title}</StyledText>
+      <StatusChip label={status} />
     </StyledView>
-  </StyledView>
-);
-
-const NavItem = ({ icon, label, active = false, onPress }: any) => (
-  <StyledTouchableOpacity 
-    className={`flex-col items-center justify-center px-4 py-1 rounded-lg ${active ? 'bg-[#fed000]' : ''}`}
-    onPress={onPress}
-  >
-    <StyledText className="text-xl">{icon}</StyledText>
-    <StyledText className="text-[10px] font-bold">{label}</StyledText>
-  </StyledTouchableOpacity>
+    <StyledText className="text-xs" style={{ color: Colors.onSurfaceVariant }}>📍 {location}</StyledText>
+    <StyledText className="text-xs mt-1" style={{ color: Colors.onSurfaceVariant }}>🕒 {due}</StyledText>
+  </IndustrialCard>
 );
 
 export default DashboardScreen;
