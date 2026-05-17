@@ -1,0 +1,48 @@
+export const Colors = {
+  primary: '#003d9b',
+  primaryContainer: '#0052cc',
+  onPrimary: '#ffffff',
+  onPrimaryContainer: '#c4d2ff',
+  secondary: '#725c00',
+  secondaryContainer: '#fed000',
+  onSecondary: '#ffffff',
+  onSecondaryContainer: '#6f5900',
+  tertiary: '#3e444b',
+  tertiaryContainer: '#555b63',
+  onTertiary: '#ffffff',
+  onTertiaryContainer: '#cdd3dc',
+  background: '#f8f9fb',
+  onBackground: '#191c1e',
+  surface: '#f8f9fb',
+  surfaceVariant: '#e1e2e4',
+  onSurface: '#191c1e',
+  onSurfaceVariant: '#434654',
+  outline: '#737685',
+  outlineVariant: '#c3c6d6',
+  error: '#ba1a1a',
+  onError: '#ffffff',
+  errorContainer: '#ffdad6',
+  onErrorContainer: '#93000a',
+  surfaceContainerLowest: '#ffffff',
+  surfaceContainerLow: '#f3f4f6',
+  surfaceContainer: '#edeef0',
+  surfaceContainerHigh: '#e7e8ea',
+  surfaceContainerHighest: '#e1e2e4',
+};
+
+export const Spacing = {
+  stackSm: 8,
+  stackMd: 16,
+  stackLg: 24,
+  marginMobile: 16,
+  gutterMobile: 12,
+  touchTargetMin: 48,
+  base: 8,
+};
+
+export const BorderRadius = {
+  default: 4,
+  lg: 8,
+  xl: 12,
+  full: 9999,
+};
