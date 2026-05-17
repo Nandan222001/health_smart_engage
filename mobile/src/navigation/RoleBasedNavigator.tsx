@@ -1,6 +1,10 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useUserRole } from '../hooks/useUserRole';
+import { Colors } from '../theme';
+
+// Screens
 import DashboardScreen from '../screens/DashboardScreen';
 import IncidentScreen from '../screens/IncidentScreen';
 import PermitScreen from '../screens/PermitScreen';
@@ -11,13 +15,22 @@ import HazardObservationScreen from '../screens/HazardObservationScreen';
 import CapaScreen from '../screens/CapaScreen';
 import AIAdvisorScreen from '../screens/AIAdvisorScreen';
 import AssetLookupScreen from '../screens/AssetLookupScreen';
-import { useUserRole } from '../hooks/useUserRole';
-import { Colors } from '../theme';
+import ContractorScanScreen from '../screens/ContractorScanScreen';
+import RiskAssessmentScreen from '../screens/RiskAssessmentScreen';
+import InvestigationScreen from '../screens/InvestigationScreen';
+import SyncStatusScreen from '../screens/SyncStatusScreen';
+import TrainingCompletionScreen from '../screens/TrainingCompletionScreen';
+import EmployeeCertificationScreen from '../screens/EmployeeCertificationScreen';
+import VendorStatusScreen from '../screens/VendorStatusScreen';
+import LivePermitBoardScreen from '../screens/LivePermitBoardScreen';
+import AssetInspectionScreen from '../screens/AssetInspectionScreen';
+import AuditSyncQueueScreen from '../screens/AuditSyncQueueScreen';
+import PermitExtensionScreen from '../screens/PermitExtensionScreen';
+import PermitClosureScreen from '../screens/PermitClosureScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// Common Stack for detailed screens accessible from any role
 const CommonStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Main" component={TabNavigator} />
@@ -30,6 +43,18 @@ const CommonStack = () => (
     <Stack.Screen name="Permits" component={PermitScreen} />
     <Stack.Screen name="Audit" component={AuditScreen} />
     <Stack.Screen name="Docs" component={SOPScreen} />
+    <Stack.Screen name="ContractorScan" component={ContractorScanScreen} />
+    <Stack.Screen name="RiskAssessment" component={RiskAssessmentScreen} />
+    <Stack.Screen name="Investigation" component={InvestigationScreen} />
+    <Stack.Screen name="SyncStatus" component={SyncStatusScreen} />
+    <Stack.Screen name="TrainingRecord" component={TrainingCompletionScreen} />
+    <Stack.Screen name="EmpCert" component={EmployeeCertificationScreen} />
+    <Stack.Screen name="VendorStatus" component={VendorStatusScreen} />
+    <Stack.Screen name="LivePermits" component={LivePermitBoardScreen} />
+    <Stack.Screen name="AssetInspection" component={AssetInspectionScreen} />
+    <Stack.Screen name="AuditSync" component={AuditSyncQueueScreen} />
+    <Stack.Screen name="PermitExtend" component={PermitExtensionScreen} />
+    <Stack.Screen name="PermitClose" component={PermitClosureScreen} />
   </Stack.Navigator>
 );
 
@@ -47,15 +72,16 @@ const TabNavigator = () => {
       )}
       {role === 'SAFETY_MANAGER' && (
         <>
-          <Tab.Screen name="LiveBoard" component={DashboardScreen} options={{ tabBarIcon: () => '📈' }} />
+          <Tab.Screen name="Board" component={LivePermitBoardScreen} options={{ tabBarIcon: () => '📈' }} />
           <Tab.Screen name="Audits" component={AuditScreen} options={{ tabBarIcon: () => '📋' }} />
         </>
       )}
-      <Tab.Screen name="SOPs" component={SOPScreen} options={{ tabBarIcon: () => '📖' }} />
+      {role === 'GATE_SECURITY' && (
+        <Tab.Screen name="Scan" component={ContractorScanScreen} options={{ tabBarIcon: () => '🔍' }} />
+      )}
+      <Tab.Screen name="Library" component={SOPScreen} options={{ tabBarIcon: () => '📖' }} />
     </Tab.Navigator>
   );
 };
 
-export const RoleBasedNavigator = () => {
-  return <CommonStack />;
-};
+export const RoleBasedNavigator = () => <CommonStack />;
