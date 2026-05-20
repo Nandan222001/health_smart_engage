@@ -62,8 +62,8 @@ flowchart TD
     SELECT_CONFLICT --> COMPARE[Compare versions side by side\nLocal version vs Server version\nField-by-field diff shown]
     COMPARE --> RESOLUTION{Choose\nResolution}
 
-    RESOLUTION -->|Keep my version — Local| KEEP_LOCAL[POST /mobile/sync/conflicts/{conflictId}/resolve\nresolution: local\nLocal record overwrites server]
-    RESOLUTION -->|Keep server version — Remote| KEEP_SERVER[POST /mobile/sync/conflicts/{conflictId}/resolve\nresolution: remote\nServer record kept, local discarded]
+    RESOLUTION -->|Keep my version - Local| KEEP_LOCAL[POST /mobile/sync/conflicts/{conflictId}/resolve\nresolution: local\nLocal record overwrites server]
+    RESOLUTION -->|Keep server version - Remote| KEEP_SERVER[POST /mobile/sync/conflicts/{conflictId}/resolve\nresolution: remote\nServer record kept, local discarded]
     RESOLUTION -->|Merge manually| MANUAL_MERGE[Edit merged version\nCombine relevant fields from both]
     MANUAL_MERGE --> SAVE_MERGE[POST /mobile/sync/conflicts/{conflictId}/resolve\nresolution: merge · merged_data provided]
 
@@ -96,8 +96,8 @@ flowchart TD
     USER([User]) --> SYNC_SCREEN[Open Sync Status Screen\nMobile: SyncStatusScreen]
     SYNC_SCREEN --> STATUS_VIEW[View current status\nLast synced timestamp\nPending items: N\nConflicts: N]
     STATUS_VIEW --> MANUAL_SYNC[Tap Sync Now button]
-    MANUAL_SYNC --> SYNC_FLOW[→ Sync Execution Flow]
+    MANUAL_SYNC --> SYNC_FLOW[Sync Execution Flow]
     STATUS_VIEW --> VIEW_QUEUE[View pending queue items\nOperation · Entity type · Created at]
     STATUS_VIEW --> VIEW_CONFLICTS[View unresolved conflicts]
-    VIEW_CONFLICTS --> CONFLICT_RESOLVE[→ Conflict Resolution Flow]
+    VIEW_CONFLICTS --> CONFLICT_RESOLVE[Conflict Resolution Flow]
 ```

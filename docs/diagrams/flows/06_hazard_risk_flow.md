@@ -1,6 +1,6 @@
 # Hazard Observation & Risk Assessment Flow
 
-## Hazard Observation (Mobile — Quick Capture)
+## Hazard Observation (Mobile - Quick Capture)
 
 ```mermaid
 flowchart TD
@@ -8,7 +8,7 @@ flowchart TD
     HAZ_SCREEN --> HAZ_TYPE[Select Hazard Type\nPhysical · Chemical · Biological\nErgonomic · Electrical · Behavioural]
     HAZ_TYPE --> LOCATION[Enter Location\nGPS auto-detected or manual zone entry]
     LOCATION --> DESCRIPTION[Describe the Hazard\nWhat was observed · Potential consequences]
-    DESCRIPTION --> PHOTO[Capture Photo\n— recommended —]
+    DESCRIPTION --> PHOTO[Capture Photo\n- recommended -]
     PHOTO --> SEVERITY_EST[Estimate Severity\nLow · Medium · High · Critical]
     SEVERITY_EST --> SUBMIT_HAZ[Submit Hazard Observation\nPOST /mobile/hazards]
     SUBMIT_HAZ --> CONFIRM[Observation ID assigned\nSafety Manager notified]
@@ -19,9 +19,9 @@ flowchart TD
     ASSIGN_OWNER --> OWNER([Assigned Owner])
     OWNER --> ACTION[Take corrective action\nDocument steps]
     ACTION --> CLOSE_HAZ[Close Hazard\nPOST /mobile/hazards/{hazardId}/close]
-    ASSIGN -->|No — SM handles| CLOSE_HAZ
+    ASSIGN -->|No - SM handles| CLOSE_HAZ
 
-    CLOSE_HAZ --> CLOSED_HAZ[Hazard → CLOSED\nAudit log updated]
+    CLOSE_HAZ --> CLOSED_HAZ[Hazard - CLOSED\nAudit log updated]
 ```
 
 ---
@@ -63,7 +63,7 @@ flowchart TD
     VIEW_LIST --> SELECT_RISK[Select Risk]
     SELECT_RISK --> ACTIONS{Action}
     ACTIONS -->|Review & update controls| UPDATE_RA[Update Risk Assessment\nPATCH risk record]
-    ACTIONS -->|Escalate to CAPA| CAPA_LINK[Create CAPA from Risk\n→ see CAPA Flow]
+    ACTIONS -->|Escalate to CAPA| CAPA_LINK[Create CAPA from Risk\nsee CAPA Flow]
     ACTIONS -->|Close risk| CLOSE_RISK[Mark Risk CLOSED\nRisk eliminated or transferred]
     ACTIONS -->|View trend| TREND[Risk Trend Analytics\nGET /risks/trends]
 ```
@@ -72,21 +72,15 @@ flowchart TD
 
 ## Risk Score Matrix
 
-```mermaid
-quadrantChart
-    title Risk Matrix — Likelihood vs Consequence
-    x-axis Low Consequence --> High Consequence
-    y-axis Low Likelihood --> High Likelihood
-    quadrant-1 HIGH RISK — Immediate Action
-    quadrant-2 MEDIUM RISK — Action Plan
-    quadrant-3 LOW RISK — Monitor
-    quadrant-4 MEDIUM RISK — Control
-    Biological-Exposure: [0.7, 0.8]
-    Chemical-Spill: [0.6, 0.4]
-    Slip-Trip: [0.3, 0.6]
-    Equipment-Failure: [0.5, 0.5]
-    Manual-Handling: [0.2, 0.7]
-```
+| | **Negligible (1)** | **Minor (2)** | **Moderate (3)** | **Major (4)** | **Catastrophic (5)** |
+|---|---|---|---|---|---|
+| **Almost Certain (5)** | 5 Medium | 10 Medium | 15 High | 20 High | 25 High |
+| **Likely (4)** | 4 Low | 8 Medium | 12 Medium | 16 High | 20 High |
+| **Possible (3)** | 3 Low | 6 Medium | 9 Medium | 12 Medium | 15 High |
+| **Unlikely (2)** | 2 Low | 4 Low | 6 Medium | 8 Medium | 10 Medium |
+| **Rare (1)** | 1 Low | 2 Low | 3 Low | 4 Low | 5 Medium |
+
+**Score = Likelihood x Consequence** - Low: 1-4, Medium: 5-12, High: 13-25
 
 ---
 

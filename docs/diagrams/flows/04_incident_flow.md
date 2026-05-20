@@ -7,8 +7,8 @@ flowchart TD
     FW([Field Worker]) --> INC_SCREEN[Open Incident Report Screen\nMobile App]
     INC_SCREEN --> INC_TYPE[Select Incident Type\nNear Miss · Injury · Equipment Damage\nEnvironmental · Fire · Chemical]
     INC_TYPE --> SEVERITY[Select Severity\nLow · Medium · High · Critical]
-    SEVERITY --> PHOTO[Capture Evidence Photo\n— optional but recommended —]
-    PHOTO --> LOCATION[Enter Location\nZone / Area\n— GPS auto-detected or manual —]
+    SEVERITY --> PHOTO[Capture Evidence Photo\n- optional but recommended -]
+    PHOTO --> LOCATION[Enter Location\nZone / Area\n- GPS auto-detected or manual -]
     LOCATION --> DESCRIPTION[Enter Description\nWhat happened · When · Who involved]
     DESCRIPTION --> CONFIDENTIAL{Mark as\nConfidential?}
     CONFIDENTIAL -->|Yes| CONF_FLAG[Confidential flag set\nAccess restricted to authorised roles]
@@ -44,7 +44,7 @@ flowchart TD
     REG_NOTIFY --> INV_DECISION
     INV_DECISION{Start\nInvestigation?}
     INV_DECISION -->|Yes| OPEN_INV[POST /incidents/{incidentId}/investigations\nInvestigation workspace created]
-    INV_DECISION -->|No — minor incident| MONITOR[Monitor & close without\nformal investigation]
+    INV_DECISION -->|No - minor incident| MONITOR[Monitor & close without\nformal investigation]
     MONITOR --> CLOSE_INC
 
     OPEN_INV --> INVESTIGATOR([Assign Investigator])
@@ -53,7 +53,7 @@ flowchart TD
     EVIDENCE_INV --> CAUSE_CATS[Identify Root Causes\nImmediate · Underlying · Systemic]
     CAUSE_CATS --> FINDINGS[Document Findings\nRecommendations for prevention]
     FINDINGS --> CAPA_GEN{CAPA\nRequired?}
-    CAPA_GEN -->|Yes| CREATE_CAPA[Create CAPA Record\n→ see CAPA Flow]
+    CAPA_GEN -->|Yes| CREATE_CAPA[Create CAPA Record\nsee CAPA Flow]
     CAPA_GEN -->|No| REVIEW_SM
 
     CREATE_CAPA --> REVIEW_SM
@@ -62,7 +62,7 @@ flowchart TD
     APPROVE_INV -->|Revisions needed| INVESTIGATOR
     APPROVE_INV -->|Approved| CLOSE_INC
 
-    CLOSE_INC[Close Incident\nStatus → CLOSED\nAudit log updated]
+    CLOSE_INC[Close Incident\nStatus - CLOSED\nAudit log updated]
     CLOSE_INC --> LESSONS[Lessons Learned\nArticle published to Knowledge Base]
 ```
 

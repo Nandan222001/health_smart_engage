@@ -62,7 +62,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    START([Browser → App URL]) --> AUTH_GATE{Session\nCookie Valid?}
+    START([Browser - App URL]) --> AUTH_GATE{Session\nCookie Valid?}
     AUTH_GATE -->|Yes| DASHBOARD[Redirect to Role Dashboard]
     AUTH_GATE -->|No| WEB_LOGIN[Web Login Page\nEmail + Password / SSO button]
 
@@ -79,7 +79,7 @@ flowchart TD
     IDP --> SSO_BACK[GET /auth/sso/{providerKey}/callback]
     SSO_BACK --> WEB_PROFILE
 
-    WEB_PROFILE[GET /auth/me → Load Role + Permissions]
+    WEB_PROFILE[GET /auth/me - Load Role + Permissions]
     WEB_PROFILE --> DASHBOARD
     DASHBOARD --> ROLE_PAGE{User Role}
     ROLE_PAGE -->|Safety Manager| SM_WEB[Site HSE Command Dashboard]
@@ -116,6 +116,6 @@ sequenceDiagram
         API-->>App: 200 Response
     else Refresh expired
         API-->>App: 401
-        App->>App: Clear tokens → redirect to Login
+        App->>App: Clear tokens - redirect to Login
     end
 ```
