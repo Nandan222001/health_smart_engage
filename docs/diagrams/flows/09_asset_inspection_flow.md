@@ -11,7 +11,7 @@ flowchart TD
     CRITICALITY -->|Low| LOW_ASSET[Standard inspection schedule]
     CRITICALITY -->|Medium| MED_ASSET[Increased inspection frequency]
     CRITICALITY -->|High / Safety Critical| HIGH_ASSET[Mandatory inspection before use\nEscalated alerts on failure]
-    LOW_ASSET & MED_ASSET & HIGH_ASSET --> COMPLIANCE_RULES[Define Compliance Rules\nPUT /asset-compliance-rules/{ruleId}\nInspection frequency · Checklist · Standards]
+    LOW_ASSET & MED_ASSET & HIGH_ASSET --> COMPLIANCE_RULES[Define Compliance Rules\nPUT /asset-compliance-rules/:ruleId\nInspection frequency · Checklist · Standards]
     COMPLIANCE_RULES --> ASSET_SAVED[Asset saved to register\nInspection schedule generated]
     ASSET_SAVED --> QR_GEN[Generate QR code for asset tag\nPrint and attach to physical asset]
 ```
@@ -24,12 +24,12 @@ flowchart TD
 flowchart TD
     FW([Field Worker]) --> LOOKUP_SCREEN[Open Asset Lookup Screen\nMobile: AssetLookupScreen]
     LOOKUP_SCREEN --> FIND_METHOD{Find Asset}
-    FIND_METHOD -->|Search by name / code| SEARCH[GET /mobile/assets/search?q={query}]
+    FIND_METHOD -->|Search by name / code| SEARCH[GET /mobile/assets/search?q=:query]
     FIND_METHOD -->|Scan QR on equipment| QR_SCAN[Scan asset QR code]
-    QR_SCAN --> SEARCH_BY_CODE[GET /mobile/assets/search?qr={code}]
+    QR_SCAN --> SEARCH_BY_CODE[GET /mobile/assets/search?qr=:code]
 
     SEARCH & SEARCH_BY_CODE --> ASSET_RESULT[Asset result displayed\nName · Code · Location · Status]
-    ASSET_RESULT --> STATUS[View Compliance Status\nGET /mobile/assets/{assetId}/status]
+    ASSET_RESULT --> STATUS[View Compliance Status\nGET /mobile/assets/:assetId/status]
     STATUS --> STATUS_CHECK{Compliance\nStatus}
     STATUS_CHECK -->|COMPLIANT| PROCEED[Asset safe to use\nProceed with work]
     STATUS_CHECK -->|INSPECTION DUE| WARN_INSP[Warning: Inspection overdue\nRecord inspection before use]
@@ -44,7 +44,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     INSPECTOR([Inspector / Field Worker]) --> INSP_SCREEN[Open Asset Inspection Screen\nMobile: AssetInspectionScreen]
-    INSP_SCREEN --> LOAD_ASSET[Load Asset by code / QR scan\nGET /mobile/assets/{assetId}/status]
+    INSP_SCREEN --> LOAD_ASSET[Load Asset by code / QR scan\nGET /mobile/assets/:assetId/status]
     LOAD_ASSET --> CHECKLIST_ITEMS[Load Inspection Checklist\nItems defined in compliance rules]
     CHECKLIST_ITEMS --> INSPECT_LOOP[For each inspection item]
     INSPECT_LOOP --> ITEM_RESULT[Record result\nPass · Fail · N/A]
@@ -57,8 +57,8 @@ flowchart TD
     NEXT_ITEM -->|No| OVERALL_RESULT
 
     OVERALL_RESULT{Overall\nOutcome}
-    OVERALL_RESULT -->|All pass| PASS_INSP[Record PASS\nPOST /mobile/assets/{assetId}/inspections\nAsset status - COMPLIANT]
-    OVERALL_RESULT -->|Any fail| FAIL_INSP[Record FAIL\nPOST /mobile/assets/{assetId}/inspections\nFailure items listed]
+    OVERALL_RESULT -->|All pass| PASS_INSP[Record PASS\nPOST /mobile/assets/:assetId/inspections\nAsset status - COMPLIANT]
+    OVERALL_RESULT -->|Any fail| FAIL_INSP[Record FAIL\nPOST /mobile/assets/:assetId/inspections\nFailure items listed]
 
     PASS_INSP --> NEXT_INSP_DATE[Next inspection date\nautomatically calculated]
     FAIL_INSP --> FAIL_ACTION{Severity\nof Failure}
@@ -81,10 +81,10 @@ flowchart TD
     OVERVIEW --> FILTER[Filter by\nCriticality · Location · Type · Status]
     FILTER --> ASSET_LIST[Asset list\nColour-coded by status]
     ASSET_LIST --> SELECT_ASSET[Select Asset]
-    SELECT_ASSET --> ACTIONS{Action}
-    ACTIONS -->|View inspection history| HISTORY[GET /assets/{assetId}/inspections]
+    SELECT_ASSET --> ACTIONS:Action
+    ACTIONS -->|View inspection history| HISTORY[GET /assets/:assetId/inspections]
     ACTIONS -->|Schedule inspection| SCHEDULE[Create inspection task\nassign to inspector]
-    ACTIONS -->|Update compliance rules| RULES[PUT /asset-compliance-rules/{ruleId}]
+    ACTIONS -->|Update compliance rules| RULES[PUT /asset-compliance-rules/:ruleId]
     ACTIONS -->|Export| EXPORT[POST /reports/assets/export]
 ```
 

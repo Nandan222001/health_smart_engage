@@ -18,7 +18,7 @@ flowchart TD
     SUBMIT_INC[Submit Incident Report\nPOST /mobile/incidents]
 
     SUBMIT_INC --> ATTACH{Evidence\nPhoto to attach?}
-    ATTACH -->|Yes| UPLOAD_ATTACH[POST /mobile/incidents/{incidentId}/attachments\nUpload photo file]
+    ATTACH -->|Yes| UPLOAD_ATTACH[POST /mobile/incidents/:incidentId/attachments\nUpload photo file]
     UPLOAD_ATTACH --> NOTIFY_SM
     ATTACH -->|No| NOTIFY_SM
 
@@ -34,16 +34,16 @@ flowchart TD
 flowchart TD
     SM([Safety Manager]) --> INC_LIST[Open Incident List\nGET /incidents]
     INC_LIST --> SELECT_INC[Select Incident]
-    SELECT_INC --> REVIEW_DETAIL[Review Incident Detail\nGET /incidents/{incidentId}]
+    SELECT_INC --> REVIEW_DETAIL[Review Incident Detail\nGET /incidents/:incidentId]
 
-    REVIEW_DETAIL --> CLASSIFY[Classify Incident\nPOST /incidents/{incidentId}/classify\nType · Severity · Body part · Cause category]
+    REVIEW_DETAIL --> CLASSIFY[Classify Incident\nPOST /incidents/:incidentId/classify\nType · Severity · Body part · Cause category]
     CLASSIFY --> NOTIFIABLE{Regulatory\nNotification Required?}
     NOTIFIABLE -->|Yes| REG_NOTIFY[Mark as notifiable\nExternal reporting triggered]
     NOTIFIABLE -->|No| INV_DECISION
 
     REG_NOTIFY --> INV_DECISION
     INV_DECISION{Start\nInvestigation?}
-    INV_DECISION -->|Yes| OPEN_INV[POST /incidents/{incidentId}/investigations\nInvestigation workspace created]
+    INV_DECISION -->|Yes| OPEN_INV[POST /incidents/:incidentId/investigations\nInvestigation workspace created]
     INV_DECISION -->|No - minor incident| MONITOR[Monitor & close without\nformal investigation]
     MONITOR --> CLOSE_INC
 
@@ -76,7 +76,7 @@ flowchart TD
     ACCESS_INC --> PERM_CHECK{Has\nconfidential_incidents\npermission?}
     PERM_CHECK -->|No| DENIED[403 Forbidden\nAccess Denied message shown]
     PERM_CHECK -->|Yes| VIEW_INC[Incident detail visible\nAccess logged in Audit Trail]
-    VIEW_INC --> ACCESS_LOG[GET /audit-logs/record/incident/{id}]
+    VIEW_INC --> ACCESS_LOG[GET /audit-logs/record/incident/:id]
 ```
 
 ---

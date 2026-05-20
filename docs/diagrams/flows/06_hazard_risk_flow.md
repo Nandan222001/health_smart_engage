@@ -18,7 +18,7 @@ flowchart TD
     ASSIGN -->|Yes| ASSIGN_OWNER[Assign to responsible person\nOwner notified]
     ASSIGN_OWNER --> OWNER([Assigned Owner])
     OWNER --> ACTION[Take corrective action\nDocument steps]
-    ACTION --> CLOSE_HAZ[Close Hazard\nPOST /mobile/hazards/{hazardId}/close]
+    ACTION --> CLOSE_HAZ[Close Hazard\nPOST /mobile/hazards/:hazardId/close]
     ASSIGN -->|No - SM handles| CLOSE_HAZ
 
     CLOSE_HAZ --> CLOSED_HAZ[Hazard - CLOSED\nAudit log updated]
@@ -61,7 +61,7 @@ flowchart TD
     RISK_REG --> FILTER[Filter by\nLevel · Area · Owner · Status · Due date]
     FILTER --> VIEW_LIST[Risk Register List\nID · Hazard · Score · Level · Owner · Review date]
     VIEW_LIST --> SELECT_RISK[Select Risk]
-    SELECT_RISK --> ACTIONS{Action}
+    SELECT_RISK --> ACTIONS:Action
     ACTIONS -->|Review & update controls| UPDATE_RA[Update Risk Assessment\nPATCH risk record]
     ACTIONS -->|Escalate to CAPA| CAPA_LINK[Create CAPA from Risk\nsee CAPA Flow]
     ACTIONS -->|Close risk| CLOSE_RISK[Mark Risk CLOSED\nRisk eliminated or transferred]

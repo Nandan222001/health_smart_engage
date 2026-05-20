@@ -18,19 +18,19 @@ flowchart TD
 
     AUTH_CHOICE -->|Email + Password| CRED[Enter Credentials]
     CRED --> POST_LOGIN[POST /auth/login]
-    POST_LOGIN --> LOGIN_RESP{Response}
+    POST_LOGIN --> LOGIN_RESP:Response
     LOGIN_RESP -->|401 Invalid| ERROR_MSG[Show Error Message\nInvalid email or password]
     ERROR_MSG --> LOGIN
     LOGIN_RESP -->|200 OK| MFA_CHECK
 
-    AUTH_CHOICE -->|SSO / Enterprise| SSO_START[GET /auth/sso/{providerKey}/start\nRedirect to Identity Provider]
+    AUTH_CHOICE -->|SSO / Enterprise| SSO_START[GET /auth/sso/:providerKey/start\nRedirect to Identity Provider]
     SSO_START --> IDP[Identity Provider\nAzure AD / Okta / etc.]
     IDP --> CORP_CREDS[User enters\nCorporate Credentials]
     CORP_CREDS --> MFA_IDP{MFA\nRequired?}
     MFA_IDP -->|Yes| MFA_IDP_ENTER[Enter OTP /\nAuthenticator Code]
     MFA_IDP_ENTER --> SSO_CB
     MFA_IDP -->|No| SSO_CB
-    SSO_CB[GET /auth/sso/{providerKey}/callback\nToken validated & JWT issued]
+    SSO_CB[GET /auth/sso/:providerKey/callback\nToken validated & JWT issued]
     SSO_CB --> MFA_CHECK
 
     MFA_CHECK{App-level MFA\nRequired?}
@@ -69,14 +69,14 @@ flowchart TD
     WEB_LOGIN --> WEB_CHOICE{Auth\nMethod}
 
     WEB_CHOICE -->|Email + Password| WEB_CRED[Enter Credentials\nPOST /auth/login]
-    WEB_CRED --> WEB_RESP{Response}
+    WEB_CRED --> WEB_RESP:Response
     WEB_RESP -->|401| WEB_ERR[Show Error]
     WEB_ERR --> WEB_LOGIN
     WEB_RESP -->|200| WEB_PROFILE
 
-    WEB_CHOICE -->|SSO| SSO_REDIRECT[Redirect to SSO Provider\nGET /auth/sso/{providerKey}/start]
+    WEB_CHOICE -->|SSO| SSO_REDIRECT[Redirect to SSO Provider\nGET /auth/sso/:providerKey/start]
     SSO_REDIRECT --> IDP[Identity Provider Login]
-    IDP --> SSO_BACK[GET /auth/sso/{providerKey}/callback]
+    IDP --> SSO_BACK[GET /auth/sso/:providerKey/callback]
     SSO_BACK --> WEB_PROFILE
 
     WEB_PROFILE[GET /auth/me - Load Role + Permissions]

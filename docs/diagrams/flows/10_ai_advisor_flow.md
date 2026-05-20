@@ -26,8 +26,8 @@ flowchart TD
     SOURCES --> USER_ACTION{User\nAction}
 
     USER_ACTION -->|Ask follow-up| INPUT_AREA
-    USER_ACTION -->|Open cited document| SOP_VIEW[View SOP / Document\nGET /knowledge/documents/{documentId}]
-    USER_ACTION -->|Give feedback| FEEDBACK[Submit Feedback\nPOST /mobile/ai/responses/{responseId}/feedback\nHelpful · Not helpful · Inaccurate]
+    USER_ACTION -->|Open cited document| SOP_VIEW[View SOP / Document\nGET /knowledge/documents/:documentId]
+    USER_ACTION -->|Give feedback| FEEDBACK[Submit Feedback\nPOST /mobile/ai/responses/:responseId/feedback\nHelpful · Not helpful · Inaccurate]
     USER_ACTION -->|End session| SAVE_CONV[Conversation saved\nto AI Conversations history]
 
     FEEDBACK --> FEEDBACK_USED[Feedback used to\nimprove AI responses]
@@ -75,12 +75,12 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    USER([User]) --> SEARCH_INPUT[Enter search query\nGET /mobile/knowledge/search?q={query}\nor GET /search/knowledge?q={query}]
+    USER([User]) --> SEARCH_INPUT[Enter search query\nGET /mobile/knowledge/search?q=:query\nor GET /search/knowledge?q=:query]
     SEARCH_INPUT --> RESULTS[Search results displayed\nDocument title · Tag · Revision · Date]
     RESULTS --> SELECT_DOC[Select document]
-    SELECT_DOC --> VIEW_DOC[View SOP / Knowledge Document\nGET /mobile/knowledge/documents/{documentId}\nor GET /knowledge/documents/{documentId}]
+    SELECT_DOC --> VIEW_DOC[View SOP / Knowledge Document\nGET /mobile/knowledge/documents/:documentId\nor GET /knowledge/documents/:documentId]
     VIEW_DOC --> ACK_Q{Acknowledge\nrequired?}
-    ACK_Q -->|Yes| ACK[Tap Acknowledge\nPOST /mobile/knowledge/documents/{documentId}/acknowledge]
+    ACK_Q -->|Yes| ACK[Tap Acknowledge\nPOST /mobile/knowledge/documents/:documentId/acknowledge]
     ACK --> RECORD[Read acknowledgement\nrecorded against user]
     ACK_Q -->|No| READ_ONLY[Read only]
 ```

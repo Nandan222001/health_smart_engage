@@ -52,7 +52,7 @@ flowchart TD
 
     ACCEPT_TERMS[Accept Terms of Use\n& Privacy Policy]
     ACCEPT_TERMS --> SUBMIT[Submit Onboarding]
-    SUBMIT --> ACTIVATE[Account ACTIVATED\nPATCH /admin/users/{userId}/roles applied]
+    SUBMIT --> ACTIVATE[Account ACTIVATED\nPATCH /admin/users/:userId/roles applied]
     ACTIVATE --> LOGIN_REDIRECT[Redirect to Login Screen]
     LOGIN_REDIRECT --> FIRST_LOGIN[First Login\nsee Login Flow]
 ```
@@ -67,7 +67,7 @@ flowchart TD
     USER_PROFILE --> REVOKE_BTN[Click Revoke Access]
     REVOKE_BTN --> CONFIRM{Confirm\nRevocation?}
     CONFIRM -->|Cancel| USER_PROFILE
-    CONFIRM -->|Confirm| POST_REVOKE[POST /admin/users/{userId}/revoke]
+    CONFIRM -->|Confirm| POST_REVOKE[POST /admin/users/:userId/revoke]
     POST_REVOKE --> STATUS_CHANGE[User status - REVOKED\nAll active sessions invalidated\nUser cannot log in]
     STATUS_CHANGE --> AUDIT_LOG[Audit log entry created]
 ```
@@ -80,7 +80,7 @@ flowchart TD
 flowchart TD
     ADMIN([Administrator]) --> OPEN_USER[Open User Profile]
     OPEN_USER --> ROLES_TAB[Go to Roles & Permissions Tab]
-    ROLES_TAB --> ASSIGN[Select Role/s to Assign\nPATCH /admin/users/{userId}/roles]
+    ROLES_TAB --> ASSIGN[Select Role/s to Assign\nPATCH /admin/users/:userId/roles]
     ASSIGN --> PERMS_APPLIED[Permissions from Role applied immediately\nNext request by user uses new permissions]
     PERMS_APPLIED --> NOTIFY_USER[Optional: Notify user of role change]
 ```

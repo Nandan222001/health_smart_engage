@@ -7,7 +7,7 @@ flowchart TD
     ADM([Admin / Safety Manager]) --> MATRIX_SCREEN[Open Training Matrix\nGET /training/matrix]
     MATRIX_SCREEN --> NEW_REQ[Create Training Requirement\nRole - Required Training]
     NEW_REQ --> FILL_REQ[Define Requirement\nRole · Training name · Frequency\nValidity period · Mandatory flag]
-    FILL_REQ --> SAVE_REQ[PUT /training/matrix/{roleId}\nRequirement saved]
+    FILL_REQ --> SAVE_REQ[PUT /training/matrix/:roleId\nRequirement saved]
     SAVE_REQ --> PUBLISH[Requirement active\nGap checker will use this]
     PUBLISH --> MATRIX[(Training Requirements DB)]
 ```
@@ -59,7 +59,7 @@ flowchart TD
     FW([Field Worker]) --> CERT_SCREEN[Open Certification Screen\nMobile: EmployeeCertificationScreen]
     CERT_SCREEN --> VIEW_CERTS[View My Certifications\nStatus · Expiry dates]
 
-    VIEW_CERTS --> ADD_CERT[Add New Certification\nPOST /employees/{employeeId}/certifications]
+    VIEW_CERTS --> ADD_CERT[Add New Certification\nPOST /employees/:employeeId/certifications]
     ADD_CERT --> CERT_DETAILS[Enter Details\nCert type · Issuing body\nIssue date · Expiry date]
     CERT_DETAILS --> UPLOAD_CERT_FILE[Upload Certificate File\nPOST /files + link to certification]
     UPLOAD_CERT_FILE --> CERT_SAVED[Certification record saved]
@@ -81,7 +81,7 @@ flowchart TD
     TRAIN_DASH --> OVERVIEW[See Overview\nCompliance % · Gaps count · Expiring soon]
     OVERVIEW --> HEATMAP_VIEW[View Heatmap\nRole × Training item grid\nColour-coded: Green / Amber / Red]
     HEATMAP_VIEW --> DRILL{Drill Down}
-    DRILL -->|Select employee| EMP_DETAIL[Employee Training Profile\nGET /training/gaps?employee={id}]
+    DRILL -->|Select employee| EMP_DETAIL[Employee Training Profile\nGET /training/gaps?employee=:id]
     DRILL -->|Select training item| TRAIN_DETAIL[Who's compliant vs. gap\nfor this specific training]
     DRILL -->|Export| EXPORT[POST /reports/training/export\nDownload CSV / PDF]
     EMP_DETAIL --> REMIND[Send Reminder\nNotification to employee]

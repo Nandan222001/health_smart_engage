@@ -7,7 +7,7 @@ flowchart TD
     SM([Safety Manager]) --> CHECKLIST_Q{Checklist\nExists?}
     CHECKLIST_Q -->|No| BUILD_CHECKLIST[Build Audit Checklist\nPOST /audit-checklists\nStandard: ISO 45001 · ISO 14001 · Custom]
     BUILD_CHECKLIST --> ADD_CLAUSES[Add Clauses & Questions\nMap to ISO clause numbers]
-    ADD_CLAUSES --> PUBLISH_CL[Publish Checklist\nPOST /audit-checklists/{checklistId}/publish]
+    ADD_CLAUSES --> PUBLISH_CL[Publish Checklist\nPOST /audit-checklists/:checklistId/publish]
     PUBLISH_CL --> ISO_MAP[Map ISO Clauses\nPOST /iso-clause-mappings]
     ISO_MAP --> PLAN_AUDIT
 
@@ -24,7 +24,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     AUDITOR([Auditor]) --> OPEN_AUDIT[Open Assigned Audit\nGET /mobile/audits/assigned]
-    OPEN_AUDIT --> DOWNLOAD_CL[Download Checklist\nGET /mobile/audits/{auditId}/checklist]
+    OPEN_AUDIT --> DOWNLOAD_CL[Download Checklist\nGET /mobile/audits/:auditId/checklist]
     DOWNLOAD_CL --> OFFLINE_Q{Network\nAvailable?}
     OFFLINE_Q -->|Yes| ONLINE_MODE[Online Mode\nAnswers sync in real time]
     OFFLINE_Q -->|No| OFFLINE_MODE[Offline Mode\nAnswers queued locally]
@@ -35,17 +35,17 @@ flowchart TD
     ANSWER_LOOP --> RESPOND[Select Response\nPass · Fail · N/A · Observation]
     RESPOND --> NOTES[Add Notes\n- optional -]
     NOTES --> EVIDENCE_Q{Evidence\nRequired?}
-    EVIDENCE_Q -->|Yes| CAPTURE_PHOTO[Capture Photo / Attach File\nPOST /mobile/audits/{auditId}/evidence]
+    EVIDENCE_Q -->|Yes| CAPTURE_PHOTO[Capture Photo / Attach File\nPOST /mobile/audits/:auditId/evidence]
     EVIDENCE_Q -->|No| SAVE_ANS
     CAPTURE_PHOTO --> SAVE_ANS
 
-    SAVE_ANS[Save Answer\nPATCH /mobile/audits/{auditId}/answers/{questionId}]
+    SAVE_ANS[Save Answer\nPATCH /mobile/audits/:auditId/answers/:questionId]
     SAVE_ANS --> MORE_Q{More\nQuestions?}
     MORE_Q -->|Yes| ANSWER_LOOP
     MORE_Q -->|No| REVIEW_AUDIT
 
     REVIEW_AUDIT[Review Completed Checklist\nProgress: N of N answered]
-    REVIEW_AUDIT --> SUBMIT_AUDIT[Complete Audit\nPOST /mobile/audits/{auditId}/complete]
+    REVIEW_AUDIT --> SUBMIT_AUDIT[Complete Audit\nPOST /mobile/audits/:auditId/complete]
     SUBMIT_AUDIT --> OFFLINE_Q2{Was Offline?}
     OFFLINE_Q2 -->|Yes| SYNC_QUEUE[Add to Sync Queue\nsee Offline Sync Flow]
     OFFLINE_Q2 -->|No| FINDINGS_GEN
@@ -61,7 +61,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    SM([Safety Manager]) --> FINDINGS_LIST[Open Findings Register\nGET /audits/{auditId}/findings]
+    SM([Safety Manager]) --> FINDINGS_LIST[Open Findings Register\nGET /audits/:auditId/findings]
     FINDINGS_LIST --> SELECT_FINDING[Select Finding]
     SELECT_FINDING --> CLASSIFY_FINDING[Classify Severity\nMinor · Major · Critical · Observation]
     CLASSIFY_FINDING --> CAPA_Q{CAPA\nRequired?}
@@ -80,10 +80,10 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    OWNER([CAPA Owner]) --> VIEW_CAPA[View Assigned CAPA\nGET /capas/{capaId}\nMobile: GET /mobile/tasks]
+    OWNER([CAPA Owner]) --> VIEW_CAPA[View Assigned CAPA\nGET /capas/:capaId\nMobile: GET /mobile/tasks]
     VIEW_CAPA --> IMPLEMENT[Implement Corrective Action\nDocument steps taken]
-    IMPLEMENT --> UPLOAD_EV[Upload Evidence of Completion\nPOST /files then POST /files/{id}/link\nMobile: CAPA evidence upload screen]
-    UPLOAD_EV --> SUBMIT_CLOSE[Submit Closure Request\nPOST /capas/{capaId}/submit-closure]
+    IMPLEMENT --> UPLOAD_EV[Upload Evidence of Completion\nPOST /files then POST /files/:id/link\nMobile: CAPA evidence upload screen]
+    UPLOAD_EV --> SUBMIT_CLOSE[Submit Closure Request\nPOST /capas/:capaId/submit-closure]
     SUBMIT_CLOSE --> SM([Safety Manager / Reviewer])
 
     SM --> REVIEW_CAPA[Review Closure Evidence]
@@ -92,7 +92,7 @@ flowchart TD
     EV_VALID -->|No - insufficient evidence| REJECT_CLOSE[Reject Closure\nFeedback sent to Owner]
     REJECT_CLOSE --> OWNER
 
-    EV_VALID -->|Yes| APPROVE_CLOSE[Approve Closure\nPOST /capas/{capaId}/approve-closure]
+    EV_VALID -->|Yes| APPROVE_CLOSE[Approve Closure\nPOST /capas/:capaId/approve-closure]
     APPROVE_CLOSE --> CAPA_CLOSED[CAPA - CLOSED\nAudit log updated\nFinding marked resolved]
     CAPA_CLOSED --> OVERDUE_CHECK{Was it\nOverdue?}
     OVERDUE_CHECK -->|Yes| FLAG_OVERDUE[Flag in reporting\nfor trend analysis]

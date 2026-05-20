@@ -29,27 +29,27 @@ flowchart TD
     PENDING --> MANAGER_NOTIFY[Safety Manager receives\nPush / Email notification]
 
     MANAGER_NOTIFY --> SM([Safety Manager])
-    SM --> REVIEW_Q[Open Permit Review Queue\nGET /permits/{permitId}]
+    SM --> REVIEW_Q[Open Permit Review Queue\nGET /permits/:permitId]
     REVIEW_Q --> CONFLICT_VIEW{Review\nConflict Details?}
-    CONFLICT_VIEW -->|Yes| CONFLICT_PAGE[View Concurrent Permit\nConflict Map\nGET /permits/{permitId}/conflicts]
+    CONFLICT_VIEW -->|Yes| CONFLICT_PAGE[View Concurrent Permit\nConflict Map\nGET /permits/:permitId/conflicts]
     CONFLICT_PAGE --> DECISION
     CONFLICT_VIEW -->|No| DECISION
 
     DECISION{Approve or\nReject?}
-    DECISION -->|Approve| APPROVAL[POST /permits/{permitId}/approve\nGPS location captured\nTimestamp recorded]
+    DECISION -->|Approve| APPROVAL[POST /permits/:permitId/approve\nGPS location captured\nTimestamp recorded]
     APPROVAL --> ACTIVE[Permit - ACTIVE\nRequester notified\n8-hour validity warning shown]
 
-    DECISION -->|Reject| REJECTION[POST /permits/{permitId}/reject\nReason entered]
+    DECISION -->|Reject| REJECTION[POST /permits/:permitId/reject\nReason entered]
     REJECTION --> REJECTED_NOTIF[Permit - REJECTED\nRequester notified with reason]
     REJECTED_NOTIF --> FW
 
     ACTIVE --> WORK[Work in Progress\nPermit visible on Live Board]
 
     WORK --> EXTEND_Q{Extension\nNeeded?}
-    EXTEND_Q -->|Yes| EXT_REQ[POST /mobile/permits/{permitId}/extend\nNew end time requested]
+    EXTEND_Q -->|Yes| EXT_REQ[POST /mobile/permits/:permitId/extend\nNew end time requested]
     EXT_REQ --> SM
     SM --> EXT_DECISION{Approve\nExtension?}
-    EXT_DECISION -->|Yes| POST_EXTEND[POST /permits/{permitId}/extend\nValidity extended]
+    EXT_DECISION -->|Yes| POST_EXTEND[POST /permits/:permitId/extend\nValidity extended]
     POST_EXTEND --> ACTIVE
     EXT_DECISION -->|No| FW
 
@@ -57,7 +57,7 @@ flowchart TD
 
     CLOSE_FLOW[Ready to Close]
     CLOSE_FLOW --> EVIDENCE[Upload Closure Evidence\nPhotos · Sign-off · Notes]
-    EVIDENCE --> CLOSE[POST /mobile/permits/{permitId}/close]
+    EVIDENCE --> CLOSE[POST /mobile/permits/:permitId/close]
     CLOSE --> CLOSED[Permit - CLOSED\nAudit log updated]
     CLOSED --> AUDIT_LOG[(Audit Log)]
 ```
@@ -74,12 +74,12 @@ flowchart TD
 
     VIEW_LIST --> SELECT[Select a Permit]
     SELECT --> DETAIL[Permit Detail View]
-    DETAIL --> ACTIONS{Action}
-    ACTIONS -->|Approve pending| APPROVAL[POST /permits/{id}/approve]
-    ACTIONS -->|Reject pending| REJECTION[POST /permits/{id}/reject]
-    ACTIONS -->|Override conflict| OVERRIDE[POST /permits/{id}/override-conflict\nReason required]
-    ACTIONS -->|Close active| CLOSE_SM[POST /permits/{id}/close]
-    ACTIONS -->|View audit trail| TRAIL[GET /audit-logs/record/permit/{id}]
+    DETAIL --> ACTIONS:Action
+    ACTIONS -->|Approve pending| APPROVAL[POST /permits/:id/approve]
+    ACTIONS -->|Reject pending| REJECTION[POST /permits/:id/reject]
+    ACTIONS -->|Override conflict| OVERRIDE[POST /permits/:id/override-conflict\nReason required]
+    ACTIONS -->|Close active| CLOSE_SM[POST /permits/:id/close]
+    ACTIONS -->|View audit trail| TRAIL[GET /audit-logs/record/permit/:id]
     ACTIONS -->|Export| EXPORT[POST /reports/permits/export]
 ```
 

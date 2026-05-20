@@ -13,7 +13,7 @@ flowchart TD
 
     CREATE_ROOT --> ADD_CHILDREN[Add child nodes\nSites · Departments · Teams]
     ADD_CHILDREN --> MOVE_NODES{Restructure\nNeeded?}
-    MOVE_NODES -->|Yes| MOVE[Move node to new parent\nPOST /admin/organisation-nodes/{nodeId}/move]
+    MOVE_NODES -->|Yes| MOVE[Move node to new parent\nPOST /admin/organisation-nodes/:nodeId/move]
     MOVE --> ADD_CHILDREN
     MOVE_NODES -->|No| ORG_DONE[Organisation structure ready]
 ```
@@ -28,11 +28,11 @@ flowchart TD
     SSO_LIST --> ADD_SSO[Add SSO Provider\nPOST /admin/sso/providers]
     ADD_SSO --> SSO_FORM[Enter SSO Details\nProvider name · Type: Azure AD / Okta / SAML / OIDC\nClient ID · Client secret · Tenant/Domain\nAuthorisation URL · Token URL · JWKS URI]
     SSO_FORM --> SAVE_SSO[SSO provider saved\nStatus: CONFIGURED - not yet active]
-    SAVE_SSO --> TEST_SSO[Test SSO Connection\nPOST /admin/sso/providers/{providerId}/test]
+    SAVE_SSO --> TEST_SSO[Test SSO Connection\nPOST /admin/sso/providers/:providerId/test]
     TEST_SSO --> TEST_RESULT{Test\nSuccessful?}
     TEST_RESULT -->|Fail| FIX_CONFIG[Review configuration\nCheck client ID · Secret · URLs]
     FIX_CONFIG --> SSO_FORM
-    TEST_RESULT -->|Pass| ENABLE_SSO[Enable SSO Provider\nPOST /admin/sso/providers/{providerId}/enable]
+    TEST_RESULT -->|Pass| ENABLE_SSO[Enable SSO Provider\nPOST /admin/sso/providers/:providerId/enable]
     ENABLE_SSO --> SSO_ACTIVE[SSO provider ACTIVE\nLogin screen shows SSO option]
 ```
 
@@ -48,12 +48,12 @@ flowchart TD
     NEW_ROLE_Q -->|No - edit existing| SELECT_ROLE[Select existing role]
 
     CREATE_ROLE & SELECT_ROLE --> PERM_LIST[View available permissions\nGET /admin/permissions]
-    PERM_LIST --> ASSIGN_PERMS[Select permissions to assign\nPUT /admin/roles/{roleId}/permissions\nReplace full permission set]
+    PERM_LIST --> ASSIGN_PERMS[Select permissions to assign\nPUT /admin/roles/:roleId/permissions\nReplace full permission set]
 
     ASSIGN_PERMS --> PERMS_SAVED[Permissions saved\nUsers with this role get updated access\non their next request]
 
     PERMS_SAVED --> REVIEW_Q{Review\nusers with role?}
-    REVIEW_Q -->|Yes| USER_LIST[Filter users by role\nGET /admin/users?role={roleId}]
+    REVIEW_Q -->|Yes| USER_LIST[Filter users by role\nGET /admin/users?role=:roleId]
     USER_LIST --> VERIFY[Verify correct users\nhave this role]
     REVIEW_Q -->|No| DONE_ROLE([Done])
     VERIFY --> DONE_ROLE
@@ -67,12 +67,12 @@ flowchart TD
 flowchart TD
     ADMIN([System Administrator]) --> USER_DIR[Open User Directory\nGET /admin/users]
     USER_DIR --> SEARCH[Search / filter users\nBy name · email · role · status · site]
-    SEARCH --> USER_ACTIONS{Action}
+    SEARCH --> USER_ACTIONS:Action
 
     USER_ACTIONS -->|Invite new user| INVITE[POST /admin/users/invitations\nsee Invitation Flow]
-    USER_ACTIONS -->|Change user role| CHANGE_ROLE[PATCH /admin/users/{userId}/roles\nNew role assigned immediately]
-    USER_ACTIONS -->|Revoke access| REVOKE[POST /admin/users/{userId}/revoke\nAll sessions invalidated]
-    USER_ACTIONS -->|View audit trail| AUDIT[GET /admin/audit-logs?userId={id}\nAll actions by this user]
+    USER_ACTIONS -->|Change user role| CHANGE_ROLE[PATCH /admin/users/:userId/roles\nNew role assigned immediately]
+    USER_ACTIONS -->|Revoke access| REVOKE[POST /admin/users/:userId/revoke\nAll sessions invalidated]
+    USER_ACTIONS -->|View audit trail| AUDIT[GET /admin/audit-logs?userId=:id\nAll actions by this user]
     USER_ACTIONS -->|Re-send invitation| RESEND_INV[POST /admin/users/invitations\nnew invite for same email]
 ```
 
@@ -84,11 +84,11 @@ flowchart TD
 flowchart TD
     ADMIN([System Administrator]) --> WORKFLOW_LIST[Open Workflow Configuration\nGET /admin/workflows]
     WORKFLOW_LIST --> SELECT_WF[Select workflow to configure\nPermit approval · CAPA closure\nIncident classification · Vendor review]
-    SELECT_WF --> EDIT_WF[Edit workflow settings\nPUT /admin/workflows/{workflowKey}\nApprovers · Deadlines · Auto-escalation rules]
+    SELECT_WF --> EDIT_WF[Edit workflow settings\nPUT /admin/workflows/:workflowKey\nApprovers · Deadlines · Auto-escalation rules]
     EDIT_WF --> SAVE_WF[Workflow updated\nActive immediately]
 
     ADMIN --> ESC_LIST[Open Escalation Rules\nGET /admin/escalation-rules]
-    ESC_LIST --> EDIT_ESC[Edit escalation rule\nPUT /admin/escalation-rules/{ruleId}\nTrigger condition · Delay · Escalation target]
+    ESC_LIST --> EDIT_ESC[Edit escalation rule\nPUT /admin/escalation-rules/:ruleId\nTrigger condition · Delay · Escalation target]
     EDIT_ESC --> SAVE_ESC[Escalation rule saved]
 ```
 
@@ -102,7 +102,7 @@ flowchart TD
     AUDIT_LOG --> FILTER_LOGS[Filter audit logs\nBy user · entity type · date range\noperation type · tenant]
     FILTER_LOGS --> LOG_LIST[Log entries displayed\nTimestamp · User · Operation\nEntity · Before / After values]
     LOG_LIST --> SELECT_LOG[Select an event]
-    SELECT_LOG --> LOG_DETAIL[View event detail\nGET /admin/audit-logs/{eventId}\nFull before/after snapshot · IP · Session ID]
+    SELECT_LOG --> LOG_DETAIL[View event detail\nGET /admin/audit-logs/:eventId\nFull before/after snapshot · IP · Session ID]
     LOG_DETAIL --> EXPORT_Q{Export\nneeded?}
     EXPORT_Q -->|Yes| EXPORT_LOGS[Export log entries\nGET /audit-logs/exports\nCSV / PDF for compliance audit]
     EXPORT_Q -->|No| DONE_LOG([Done])
@@ -124,7 +124,7 @@ flowchart TD
     VALIDATE_RESULT -->|Errors found| ERROR_REPORT[Download error report\nFix data errors]
     ERROR_REPORT --> FILL_DATA
     VALIDATE_RESULT -->|Pass| IMPORT_JOB[Import job created\nBackground processing starts]
-    IMPORT_JOB --> POLL_STATUS[Poll status\nGET /admin/master-data/imports/{importId}]
+    IMPORT_JOB --> POLL_STATUS[Poll status\nGET /admin/master-data/imports/:importId]
     POLL_STATUS --> IMPORT_STATUS{Job\nStatus}
     IMPORT_STATUS -->|Processing| POLL_STATUS
     IMPORT_STATUS -->|Complete| IMPORT_DONE[Import successful\nRecords created in system]
