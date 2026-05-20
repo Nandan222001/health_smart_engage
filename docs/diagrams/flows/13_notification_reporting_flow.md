@@ -33,7 +33,7 @@ flowchart TD
     NOTIF_SCREEN --> LOAD_NOTIFS[Load notifications\nGET /mobile/notifications\nor GET /notifications]
     LOAD_NOTIFS --> NOTIF_LIST[List of notifications\nUnread · Read · All]
     NOTIF_LIST --> SELECT_NOTIF[Select notification]
-    SELECT_NOTIF --> MARK_READ[Mark as read\nPOST /mobile/notifications/{notificationId}/read\nor POST /notifications/{notificationId}/read]
+    SELECT_NOTIF --> MARK_READ[Mark as read\nPOST /mobile/notifications/:notificationId/read\nor POST /notifications/:notificationId/read]
     MARK_READ --> DEEP_LINK{Navigate to\nrelated record?}
     DEEP_LINK -->|Yes| OPEN_RECORD[Navigate to linked record\nPermit detail · Incident · CAPA · Audit etc.]
     DEEP_LINK -->|No| BACK[Back to notification list]
@@ -73,10 +73,10 @@ flowchart TD
     SELECT_TEMPLATE --> CONFIG_REPORT[Configure parameters\nDate range · Sites · Departments\nStatus filters · Format: PDF / CSV / Excel]
     CONFIG_REPORT --> GENERATE[Generate report\nPOST /reports/generate]
     GENERATE --> JOB_CREATED[Report job queued\nJob ID returned]
-    JOB_CREATED --> POLL_STATUS[Poll job status\nGET /reports/jobs/{jobId}]
+    JOB_CREATED --> POLL_STATUS[Poll job status\nGET /reports/jobs/:jobId]
     POLL_STATUS --> JOB_STATUS{Job\nStatus}
     JOB_STATUS -->|Processing| POLL_STATUS
-    JOB_STATUS -->|Complete| DOWNLOAD[Download report\nGET /reports/jobs/{jobId}/download]
+    JOB_STATUS -->|Complete| DOWNLOAD[Download report\nGET /reports/jobs/:jobId/download]
     JOB_STATUS -->|Failed| RETRY[Show error\nRetry option]
     DOWNLOAD --> SAVE[Save / open file locally]
 ```

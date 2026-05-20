@@ -62,10 +62,10 @@ flowchart TD
     SELECT_CONFLICT --> COMPARE[Compare versions side by side\nLocal version vs Server version\nField-by-field diff shown]
     COMPARE --> RESOLUTION{Choose\nResolution}
 
-    RESOLUTION -->|Keep my version - Local| KEEP_LOCAL[POST /mobile/sync/conflicts/{conflictId}/resolve\nresolution: local\nLocal record overwrites server]
-    RESOLUTION -->|Keep server version - Remote| KEEP_SERVER[POST /mobile/sync/conflicts/{conflictId}/resolve\nresolution: remote\nServer record kept, local discarded]
+    RESOLUTION -->|Keep my version - Local| KEEP_LOCAL[POST /mobile/sync/conflicts/:conflictId/resolve\nresolution: local\nLocal record overwrites server]
+    RESOLUTION -->|Keep server version - Remote| KEEP_SERVER[POST /mobile/sync/conflicts/:conflictId/resolve\nresolution: remote\nServer record kept, local discarded]
     RESOLUTION -->|Merge manually| MANUAL_MERGE[Edit merged version\nCombine relevant fields from both]
-    MANUAL_MERGE --> SAVE_MERGE[POST /mobile/sync/conflicts/{conflictId}/resolve\nresolution: merge · merged_data provided]
+    MANUAL_MERGE --> SAVE_MERGE[POST /mobile/sync/conflicts/:conflictId/resolve\nresolution: merge · merged_data provided]
 
     KEEP_LOCAL & KEEP_SERVER & SAVE_MERGE --> CONFLICT_RESOLVED[Conflict resolved\nRecord updated]
     CONFLICT_RESOLVED --> MORE_CONFLICTS{More\nConflicts?}

@@ -9,7 +9,7 @@ flowchart TD
     NEW_VENDOR --> VENDOR_FORM[Enter Vendor Details\nCompany name · ABN / Registration number\nContact person · Email · Phone\nServices provided · Operating regions]
     VENDOR_FORM --> SAVE_VENDOR[Vendor record saved\nStatus: PENDING]
 
-    SAVE_VENDOR --> DOC_UPLOAD[Upload Compliance Documents\nPOST /vendors/{vendorId}/documents]
+    SAVE_VENDOR --> DOC_UPLOAD[Upload Compliance Documents\nPOST /vendors/:vendorId/documents]
     DOC_UPLOAD --> DOC_TYPES[Documents required per standard:\nPublic Liability Insurance\nWorkers Compensation Insurance\nSafety Management Plan\nInductionCertificates · Licences]
     DOC_TYPES --> DOC_META[For each document enter:\nDocument type · Issue date · Expiry date]
     DOC_META --> DOC_SAVED[Documents saved\nAwaiting review]
@@ -22,21 +22,21 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    SM([Safety Manager]) --> REVIEW_QUEUE[Open Vendor Document Review\nGET /vendors/{vendorId}]
+    SM([Safety Manager]) --> REVIEW_QUEUE[Open Vendor Document Review\nGET /vendors/:vendorId]
     REVIEW_QUEUE --> SELECT_DOC[Select Document to Review]
-    SELECT_DOC --> VIEW_DOC[View Document\nGET /files/{fileId}/download]
+    SELECT_DOC --> VIEW_DOC[View Document\nGET /files/:fileId/download]
     VIEW_DOC --> CHECK_VALIDITY{Document\nValid & Current?}
 
-    CHECK_VALIDITY -->|Expired| REJECT_DOC[Reject Document\nPOST /vendors/{vendorId}/documents/{docId}/review\nstatus: REJECTED · reason provided]
+    CHECK_VALIDITY -->|Expired| REJECT_DOC[Reject Document\nPOST /vendors/:vendorId/documents/:docId/review\nstatus: REJECTED · reason provided]
     REJECT_DOC --> VENDOR_NOTIF[Vendor contact notified\nRe-upload requested]
     VENDOR_NOTIF --> DOC_UPLOAD_AGAIN[Vendor uploads updated document]
     DOC_UPLOAD_AGAIN --> SELECT_DOC
 
-    CHECK_VALIDITY -->|Valid| APPROVE_DOC[Approve Document\nPOST /vendors/{vendorId}/documents/{docId}/review\nstatus: APPROVED]
+    CHECK_VALIDITY -->|Valid| APPROVE_DOC[Approve Document\nPOST /vendors/:vendorId/documents/:docId/review\nstatus: APPROVED]
     APPROVE_DOC --> ALL_DOCS_Q{All required\ndocuments approved?}
 
     ALL_DOCS_Q -->|No| REVIEW_QUEUE
-    ALL_DOCS_Q -->|Yes| APPROVE_VENDOR[Vendor status - APPROVED\nPATCH /vendors/{vendorId}]
+    ALL_DOCS_Q -->|Yes| APPROVE_VENDOR[Vendor status - APPROVED\nPATCH /vendors/:vendorId]
     APPROVE_VENDOR --> ACTIVE_VENDOR[Vendor: ACTIVE\nCan send contractors on site]
 ```
 
@@ -57,7 +57,7 @@ flowchart TD
     VERIFY_RESP -->|Vendor not found| NOT_FOUND[Show error:\nContractor not registered]
     NOT_FOUND --> DENY_ENTRY
 
-    VERIFY_RESP -->|Vendor found| CHECK_STATUS[GET /mobile/vendors/{vendorId}/status\nFetch compliance status]
+    VERIFY_RESP -->|Vendor found| CHECK_STATUS[GET /mobile/vendors/:vendorId/status\nFetch compliance status]
     CHECK_STATUS --> STATUS_CHECK{Vendor\nStatus}
 
     STATUS_CHECK -->|APPROVED - all docs valid| CLEARANCE[Grant Entry Clearance\nContractor permitted on site\nEntry logged]
