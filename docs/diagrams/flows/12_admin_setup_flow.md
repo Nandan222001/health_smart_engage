@@ -27,7 +27,7 @@ flowchart TD
     ADMIN([System Administrator]) --> SSO_LIST[Open SSO Configuration\nGET /admin/sso/providers]
     SSO_LIST --> ADD_SSO[Add SSO Provider\nPOST /admin/sso/providers]
     ADD_SSO --> SSO_FORM[Enter SSO Details\nProvider name · Type: Azure AD / Okta / SAML / OIDC\nClient ID · Client secret · Tenant/Domain\nAuthorisation URL · Token URL · JWKS URI]
-    SSO_FORM --> SAVE_SSO[SSO provider saved\nStatus: CONFIGURED — not yet active]
+    SSO_FORM --> SAVE_SSO[SSO provider saved\nStatus: CONFIGURED - not yet active]
     SAVE_SSO --> TEST_SSO[Test SSO Connection\nPOST /admin/sso/providers/{providerId}/test]
     TEST_SSO --> TEST_RESULT{Test\nSuccessful?}
     TEST_RESULT -->|Fail| FIX_CONFIG[Review configuration\nCheck client ID · Secret · URLs]
@@ -45,7 +45,7 @@ flowchart TD
     ADMIN([System Administrator]) --> ROLES_LIST[Open Role Management\nGET /admin/roles]
     ROLES_LIST --> NEW_ROLE_Q{Create\nnew role?}
     NEW_ROLE_Q -->|Yes| CREATE_ROLE[POST /admin/roles\nRole name · Description]
-    NEW_ROLE_Q -->|No — edit existing| SELECT_ROLE[Select existing role]
+    NEW_ROLE_Q -->|No - edit existing| SELECT_ROLE[Select existing role]
 
     CREATE_ROLE & SELECT_ROLE --> PERM_LIST[View available permissions\nGET /admin/permissions]
     PERM_LIST --> ASSIGN_PERMS[Select permissions to assign\nPUT /admin/roles/{roleId}/permissions\nReplace full permission set]
@@ -69,7 +69,7 @@ flowchart TD
     USER_DIR --> SEARCH[Search / filter users\nBy name · email · role · status · site]
     SEARCH --> USER_ACTIONS{Action}
 
-    USER_ACTIONS -->|Invite new user| INVITE[POST /admin/users/invitations\n→ see Invitation Flow]
+    USER_ACTIONS -->|Invite new user| INVITE[POST /admin/users/invitations\nsee Invitation Flow]
     USER_ACTIONS -->|Change user role| CHANGE_ROLE[PATCH /admin/users/{userId}/roles\nNew role assigned immediately]
     USER_ACTIONS -->|Revoke access| REVOKE[POST /admin/users/{userId}/revoke\nAll sessions invalidated]
     USER_ACTIONS -->|View audit trail| AUDIT[GET /admin/audit-logs?userId={id}\nAll actions by this user]

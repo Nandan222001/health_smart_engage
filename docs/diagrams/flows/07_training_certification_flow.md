@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TD
     ADM([Admin / Safety Manager]) --> MATRIX_SCREEN[Open Training Matrix\nGET /training/matrix]
-    MATRIX_SCREEN --> NEW_REQ[Create Training Requirement\nRole → Required Training]
+    MATRIX_SCREEN --> NEW_REQ[Create Training Requirement\nRole - Required Training]
     NEW_REQ --> FILL_REQ[Define Requirement\nRole · Training name · Frequency\nValidity period · Mandatory flag]
     FILL_REQ --> SAVE_REQ[PUT /training/matrix/{roleId}\nRequirement saved]
     SAVE_REQ --> PUBLISH[Requirement active\nGap checker will use this]
@@ -32,7 +32,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    SCHEDULER([Scheduled Job\nDaily / Weekly]) --> LOAD_MATRIX[Load Training Requirements\nGET /training/matrix — all roles]
+    SCHEDULER([Scheduled Job\nDaily / Weekly]) --> LOAD_MATRIX[Load Training Requirements\nGET /training/matrix - all roles]
     LOAD_MATRIX --> LOAD_COMPLETIONS[Load Training Completions\n& Certifications for all employees]
     LOAD_COMPLETIONS --> GAP_LOOP[For each Employee × Required Training]
     GAP_LOOP --> HAS_RECORD{Completion\nRecord Exists?}
@@ -44,7 +44,7 @@ flowchart TD
 
     GAP & EXPIRED_FLAG & EXPIRING_SOON --> ALERT_Q{Send\nAlert?}
     ALERT_Q -->|Yes| NOTIFY_BOTH[Notify Employee & Manager\nEmail / Push notification]
-    NOTIFY_BOTH --> GAP_REPORT[Update Training Gaps\nGET /training/gaps — refreshed]
+    NOTIFY_BOTH --> GAP_REPORT[Update Training Gaps\nGET /training/gaps - refreshed]
     COMPLIANT_FLAG --> GAP_REPORT
 
     GAP_REPORT --> HEATMAP[Training Compliance Heatmap\nUpdated for dashboard]
@@ -68,7 +68,7 @@ flowchart TD
     EXPIRY_MONITOR --> RENEWAL_ALERT{Expiry\nApproaching?}
     RENEWAL_ALERT -->|Yes| RENEW_NOTIF[Push / Email alert sent\nto employee and manager]
     RENEWAL_ALERT -->|No| COMPLIANT_CERT[Certification: VALID]
-    RENEW_NOTIF --> RENEW_FLOW[Employee renews certification\n→ repeat Add Certification flow]
+    RENEW_NOTIF --> RENEW_FLOW[Employee renews certification\nrepeat Add Certification flow]
 ```
 
 ---

@@ -19,7 +19,7 @@ flowchart TD
 
 ---
 
-## Audit Execution (Mobile — On Site)
+## Audit Execution (Mobile - On Site)
 
 ```mermaid
 flowchart TD
@@ -33,7 +33,7 @@ flowchart TD
 
     ANSWER_LOOP[For each question in checklist]
     ANSWER_LOOP --> RESPOND[Select Response\nPass · Fail · N/A · Observation]
-    RESPOND --> NOTES[Add Notes\n— optional —]
+    RESPOND --> NOTES[Add Notes\n- optional -]
     NOTES --> EVIDENCE_Q{Evidence\nRequired?}
     EVIDENCE_Q -->|Yes| CAPTURE_PHOTO[Capture Photo / Attach File\nPOST /mobile/audits/{auditId}/evidence]
     EVIDENCE_Q -->|No| SAVE_ANS
@@ -47,11 +47,11 @@ flowchart TD
     REVIEW_AUDIT[Review Completed Checklist\nProgress: N of N answered]
     REVIEW_AUDIT --> SUBMIT_AUDIT[Complete Audit\nPOST /mobile/audits/{auditId}/complete]
     SUBMIT_AUDIT --> OFFLINE_Q2{Was Offline?}
-    OFFLINE_Q2 -->|Yes| SYNC_QUEUE[Add to Sync Queue\n→ see Offline Sync Flow]
+    OFFLINE_Q2 -->|Yes| SYNC_QUEUE[Add to Sync Queue\nsee Offline Sync Flow]
     OFFLINE_Q2 -->|No| FINDINGS_GEN
     SYNC_QUEUE --> FINDINGS_GEN
 
-    FINDINGS_GEN[System Auto-generates Findings\nFailed answers → Finding records\nISO clause mapped automatically]
+    FINDINGS_GEN[System Auto-generates Findings\nFailed answers - Finding records\nISO clause mapped automatically]
     FINDINGS_GEN --> SM_NOTIF[Safety Manager notified]
 ```
 
@@ -66,7 +66,7 @@ flowchart TD
     SELECT_FINDING --> CLASSIFY_FINDING[Classify Severity\nMinor · Major · Critical · Observation]
     CLASSIFY_FINDING --> CAPA_Q{CAPA\nRequired?}
 
-    CAPA_Q -->|No — observation only| ACCEPT[Mark as Accepted\nNo CAPA needed]
+    CAPA_Q -->|No - observation only| ACCEPT[Mark as Accepted\nNo CAPA needed]
     CAPA_Q -->|Yes| CREATE_CAPA
 
     CREATE_CAPA[Create CAPA Record\nPOST /capas\nLinked to Finding & Audit]
@@ -89,11 +89,11 @@ flowchart TD
     SM --> REVIEW_CAPA[Review Closure Evidence]
     REVIEW_CAPA --> EV_VALID{Evidence\nAcceptable?}
 
-    EV_VALID -->|No — insufficient evidence| REJECT_CLOSE[Reject Closure\nFeedback sent to Owner]
+    EV_VALID -->|No - insufficient evidence| REJECT_CLOSE[Reject Closure\nFeedback sent to Owner]
     REJECT_CLOSE --> OWNER
 
     EV_VALID -->|Yes| APPROVE_CLOSE[Approve Closure\nPOST /capas/{capaId}/approve-closure]
-    APPROVE_CLOSE --> CAPA_CLOSED[CAPA → CLOSED\nAudit log updated\nFinding marked resolved]
+    APPROVE_CLOSE --> CAPA_CLOSED[CAPA - CLOSED\nAudit log updated\nFinding marked resolved]
     CAPA_CLOSED --> OVERDUE_CHECK{Was it\nOverdue?}
     OVERDUE_CHECK -->|Yes| FLAG_OVERDUE[Flag in reporting\nfor trend analysis]
     OVERDUE_CHECK -->|No| DONE([Done])
@@ -112,7 +112,7 @@ stateDiagram-v2
     IN_PROGRESS --> PENDING_REVIEW : Owner submits closure
     OVERDUE --> PENDING_REVIEW : Owner submits closure late
     PENDING_REVIEW --> CLOSED : Reviewer approves
-    PENDING_REVIEW --> IN_PROGRESS : Reviewer rejects — needs more evidence
+    PENDING_REVIEW --> IN_PROGRESS : Reviewer rejects - needs more evidence
     CLOSED --> [*]
 ```
 

@@ -1,6 +1,6 @@
 # AI Safety Advisor Flow
 
-## AI Advisor — Query & Response Flow
+## AI Advisor - Query & Response Flow
 
 ```mermaid
 flowchart TD
@@ -17,12 +17,12 @@ flowchart TD
     INPUT_AREA --> SUBMIT_Q[Submit Query\nPOST /mobile/ai/advisor/query\nor POST /ai/advisor/query]
 
     SUBMIT_Q --> AI_BACKEND[AI Service\nProcesses query]
-    AI_BACKEND --> CONTEXT_FETCH[Retrieve relevant context\n• Knowledge documents / SOPs\n• Past incident reports\n• Risk assessments\n• Regulatory standards]
+    AI_BACKEND --> CONTEXT_FETCH[Retrieve relevant context\n- Knowledge documents / SOPs\n- Past incident reports\n- Risk assessments\n- Regulatory standards]
     CONTEXT_FETCH --> AI_ENGINE([AI / ML Engine\nGenerates answer])
     AI_ENGINE --> RESPONSE[Answer generated\nWith source citations]
 
     RESPONSE --> DISPLAY[Display answer in chat\nWith linked source documents]
-    DISPLAY --> SOURCES[Show citation list\n• Document name · Revision · Clause]
+    DISPLAY --> SOURCES[Show citation list\n- Document name · Revision · Clause]
     SOURCES --> USER_ACTION{User\nAction}
 
     USER_ACTION -->|Ask follow-up| INPUT_AREA
@@ -45,9 +45,9 @@ flowchart TD
     COLLECT_DATA --> AI_RISK_ENGINE([AI / ML Risk Engine\nPOST /ai/predictive-risk/score])
     AI_RISK_ENGINE --> SCORE[Predictive Risk Score\n0-100 per area / department]
     SCORE --> THRESHOLDS{Score\nThreshold}
-    THRESHOLDS -->|< 30 — Low| LOW_RISK[Low risk flagged\nNo immediate action]
-    THRESHOLDS -->|30-70 — Medium| MED_RISK[Medium risk\nSafety Manager advisory alert]
-    THRESHOLDS -->|> 70 — High| HIGH_RISK[High risk\nUrgent alert dispatched\nAppears in AI Intelligence Dashboard]
+    THRESHOLDS -->|Score under 30 - Low| LOW_RISK[Low risk flagged\nNo immediate action]
+    THRESHOLDS -->|Score 30-70 - Medium| MED_RISK[Medium risk\nSafety Manager advisory alert]
+    THRESHOLDS -->|Score above 70 - High| HIGH_RISK[High risk\nUrgent alert dispatched\nAppears in AI Intelligence Dashboard]
 
     LOW_RISK & MED_RISK & HIGH_RISK --> SAVE_SCORE[Score saved\nPredictiveRiskScore record created]
     SAVE_SCORE --> DASH_UPDATE[AI Intelligence Dashboard updated\nGET /dashboards/ai-intelligence]
@@ -61,7 +61,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    SCHEDULER([Scheduled Job — Weekly]) --> COLLECT_WEEKLY[Collect weekly data\nIncidents · Hazards · Audits\nCAPAs · Risk trends · Training gaps]
+    SCHEDULER([Scheduled Job - Weekly]) --> COLLECT_WEEKLY[Collect weekly data\nIncidents · Hazards · Audits\nCAPAs · Risk trends · Training gaps]
     COLLECT_WEEKLY --> AI_BRIEFING[POST /ai/briefings/generate\nAI compiles weekly briefing]
     AI_BRIEFING --> BRIEFING_DOC[Weekly briefing document generated\nKey metrics · Trends · Alerts\nRecommended focus areas]
     BRIEFING_DOC --> PUSH_TO_DASH[Published to AI Safety Intelligence Dashboard\nGET /dashboards/ai-intelligence]

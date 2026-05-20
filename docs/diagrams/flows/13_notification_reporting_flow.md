@@ -48,15 +48,15 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    SCHEDULER([Scheduled Job — Hourly]) --> CHECK_OVERDUE[Check for overdue items\nCAPAs past due date\nPermits expiring without action\nInspections overdue\nVendor docs expired]
+    SCHEDULER([Scheduled Job - Hourly]) --> CHECK_OVERDUE[Check for overdue items\nCAPAs past due date\nPermits expiring without action\nInspections overdue\nVendor docs expired]
 
     CHECK_OVERDUE --> FOR_EACH[For each overdue item]
     FOR_EACH --> ESC_RULE[Load escalation rule\nGET /admin/escalation-rules]
     ESC_RULE --> LEVEL{Escalation\nLevel}
 
-    LEVEL -->|Level 1 — owner reminder| L1[Notify assigned owner\nFirst reminder]
-    LEVEL -->|Level 2 — manager escalation| L2[Notify owner's manager\nEscalation alert]
-    LEVEL -->|Level 3 — executive alert| L3[Notify Safety Manager + Executive\nUrgent escalation]
+    LEVEL -->|Level 1 - owner reminder| L1[Notify assigned owner\nFirst reminder]
+    LEVEL -->|Level 2 - manager escalation| L2[Notify owner's manager\nEscalation alert]
+    LEVEL -->|Level 3 - executive alert| L3[Notify Safety Manager + Executive\nUrgent escalation]
 
     L1 & L2 & L3 --> LOG_ESC[Log escalation event\nAudit trail updated]
     LOG_ESC --> UPDATE_DASH[Escalation appears on\nNotification & Escalation Dashboard]
@@ -68,7 +68,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    USER([User — Manager / Admin / Executive]) --> REPORT_SCREEN[Open Report Builder\nGET /reports/templates]
+    USER([User - Manager / Admin / Executive]) --> REPORT_SCREEN[Open Report Builder\nGET /reports/templates]
     REPORT_SCREEN --> SELECT_TEMPLATE[Select report template\nPermits · Audits · Incidents · CAPAs\nVendors · Assets · Training]
     SELECT_TEMPLATE --> CONFIG_REPORT[Configure parameters\nDate range · Sites · Departments\nStatus filters · Format: PDF / CSV / Excel]
     CONFIG_REPORT --> GENERATE[Generate report\nPOST /reports/generate]

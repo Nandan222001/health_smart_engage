@@ -21,9 +21,9 @@ flowchart TD
     CONFLICT_CHECK -->|Conflict Detected| CONFLICT_WARN[Show Conflict Warning\nOverlapping permit details]
     CONFLICT_WARN --> EDIT_CHOICE{User\nAction}
     EDIT_CHOICE -->|Edit permit| FILL_FORM
-    EDIT_CHOICE -->|Submit anyway| PENDING_CONFLICT[Permit → PENDING\nConflict flag attached]
+    EDIT_CHOICE -->|Submit anyway| PENDING_CONFLICT[Permit - PENDING\nConflict flag attached]
 
-    CONFLICT_CHECK -->|No Conflict| PENDING[Permit → PENDING\nSafety Manager notified]
+    CONFLICT_CHECK -->|No Conflict| PENDING[Permit - PENDING\nSafety Manager notified]
     PENDING_CONFLICT --> MANAGER_NOTIFY
 
     PENDING --> MANAGER_NOTIFY[Safety Manager receives\nPush / Email notification]
@@ -37,10 +37,10 @@ flowchart TD
 
     DECISION{Approve or\nReject?}
     DECISION -->|Approve| APPROVAL[POST /permits/{permitId}/approve\nGPS location captured\nTimestamp recorded]
-    APPROVAL --> ACTIVE[Permit → ACTIVE\nRequester notified\n8-hour validity warning shown]
+    APPROVAL --> ACTIVE[Permit - ACTIVE\nRequester notified\n8-hour validity warning shown]
 
     DECISION -->|Reject| REJECTION[POST /permits/{permitId}/reject\nReason entered]
-    REJECTION --> REJECTED_NOTIF[Permit → REJECTED\nRequester notified with reason]
+    REJECTION --> REJECTED_NOTIF[Permit - REJECTED\nRequester notified with reason]
     REJECTED_NOTIF --> FW
 
     ACTIVE --> WORK[Work in Progress\nPermit visible on Live Board]
@@ -58,7 +58,7 @@ flowchart TD
     CLOSE_FLOW[Ready to Close]
     CLOSE_FLOW --> EVIDENCE[Upload Closure Evidence\nPhotos · Sign-off · Notes]
     EVIDENCE --> CLOSE[POST /mobile/permits/{permitId}/close]
-    CLOSE --> CLOSED[Permit → CLOSED\nAudit log updated]
+    CLOSE --> CLOSED[Permit - CLOSED\nAudit log updated]
     CLOSED --> AUDIT_LOG[(Audit Log)]
 ```
 
@@ -108,6 +108,6 @@ flowchart TD
     CHECK_TIME3 -->|Yes| FLAG_PERSON[Flag: Personnel Conflict]
 
     FLAG_ZONE & FLAG_ASSET & FLAG_PERSON --> CONFLICT_SUMMARY[Conflict Summary\nreturned in API response]
-    NO_CONFLICT --> PERMIT_PENDING[Permit → PENDING]
-    CONFLICT_SUMMARY --> PERMIT_PENDING_C[Permit → PENDING\nwith conflict flag]
+    NO_CONFLICT --> PERMIT_PENDING[Permit - PENDING]
+    CONFLICT_SUMMARY --> PERMIT_PENDING_C[Permit - PENDING\nwith conflict flag]
 ```

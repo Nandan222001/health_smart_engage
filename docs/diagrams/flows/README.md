@@ -2,7 +2,7 @@
 
 All flows use Mermaid diagrams and render natively on GitHub.
 
-> **Note:** Health Smart Engage is an enterprise platform — there is no public self-registration.
+> **Note:** Health Smart Engage is an enterprise platform - there is no public self-registration.
 > New users are onboarded via admin invitation (see flow 02).
 
 ## Flow Index

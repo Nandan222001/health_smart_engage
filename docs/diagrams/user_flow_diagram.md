@@ -1,20 +1,20 @@
-# User Flow Diagram — Health Smart Engage
+# User Flow Diagram - Health Smart Engage
 
-## 1. Authentication & Onboarding Flow
+## 1. Authentication and Onboarding Flow
 
 ```mermaid
 flowchart TD
     START([App Launch]) --> SPLASH[Splash Screen]
-    SPLASH --> AUTH_CHECK{Session\nValid?}
+    SPLASH --> AUTH_CHECK{Session Valid?}
 
-    AUTH_CHECK -->|Yes| SITE_CHECK{Multiple\nSites?}
+    AUTH_CHECK -->|Yes| SITE_CHECK{Multiple Sites?}
     AUTH_CHECK -->|No| LOGIN[Login Screen]
 
-    LOGIN --> AUTH_METHOD{Auth\nMethod}
+    LOGIN --> AUTH_METHOD{Auth Method}
     AUTH_METHOD -->|Username + Password| JWT[JWT Login]
     AUTH_METHOD -->|SSO / Enterprise| OIDC[OIDC / OAuth Login]
 
-    JWT --> MFA{MFA\nRequired?}
+    JWT --> MFA{MFA Required?}
     OIDC --> MFA
 
     MFA -->|Yes| MFA_INPUT[Enter OTP / Authenticator]
@@ -37,20 +37,20 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph Field Worker
-        FW_DASH[Dashboard\nMy Tasks & Alerts]
+    subgraph "Field Worker"
+        FW_DASH[Dashboard - My Tasks and Alerts]
         FW_INC[Report Incident]
-        FW_HAZ[Log Hazard\nObservation]
-        FW_PERMIT[Create Permit\nRequest]
-        FW_SOP[Browse SOPs /\nKnowledge Docs]
-        FW_TRAIN[Record Training\nCompletion]
+        FW_HAZ[Log Hazard Observation]
+        FW_PERMIT[Create Permit Request]
+        FW_SOP[Browse SOPs / Knowledge Docs]
+        FW_TRAIN[Record Training Completion]
         FW_CERT[Upload Certification]
         FW_AI[AI Safety Advisor]
-        FW_SYNC[Sync Status\n& Offline Queue]
+        FW_SYNC[Sync Status and Offline Queue]
     end
 
-    subgraph Safety Manager
-        SM_DASH[Dashboard\nKPIs & Alerts]
+    subgraph "Safety Manager"
+        SM_DASH[Dashboard - KPIs and Alerts]
         SM_PERMIT[Live Permit Board]
         SM_AUDIT[Conduct Audit]
         SM_CAPA[Manage CAPAs]
@@ -58,274 +58,204 @@ flowchart TD
         SM_INC[Incident Analytics]
         SM_VENDOR[Vendor Compliance]
         SM_ASSET[Asset Compliance]
-        SM_TRAIN_MGR[Training Matrix\n& Gaps]
+        SM_TRAIN_MGR[Training Matrix and Gaps]
         SM_REPORT[Generate Reports]
     end
 
-    subgraph Gate Security
+    subgraph "Gate Security"
         GS_DASH[Dashboard]
-        GS_SCAN[Scan Contractor\nQR Code]
-        GS_VENDOR[View Vendor\nStatus]
-        GS_PERMIT_VIEW[View Active\nPermits]
+        GS_SCAN[Scan Contractor QR Code]
+        GS_VENDOR[View Vendor Status]
+        GS_PERMIT_VIEW[View Active Permits]
     end
 
-    subgraph Administrator
+    subgraph "Administrator"
         ADM_USERS[User Management]
-        ADM_ROLES[Role & Permission\nManagement]
-        ADM_ORG[Organisation\nStructure]
-        ADM_SETTINGS[System Settings\n& Integrations]
+        ADM_ROLES[Role and Permission Management]
+        ADM_ORG[Organisation Structure]
+        ADM_SETTINGS[System Settings and Integrations]
         ADM_LOGS[Audit Log Viewer]
     end
 ```
 
 ---
 
-## 3. Work Permit Flow
+## 3. Work Permit User Flow
 
 ```mermaid
 flowchart TD
-    FW([Field Worker]) --> CREATE[Open Permit\nRequest Screen]
-    CREATE --> FORM[Fill Permit Form\nWork type / Zone / Times / Assets]
-    FORM --> SUBMIT[Submit Permit]
+    FW([Field Worker]) --> PERMIT[Open Permit Request Screen]
+    PERMIT --> FILL[Fill form - Work type, Zone, Time, Assets]
+    FILL --> SUBMIT[Submit Permit]
+    SUBMIT --> CONFLICT{Conflict Detected?}
+    CONFLICT -->|Yes| WARN[Show conflict warning - Edit or submit anyway]
+    WARN --> SUBMIT
+    CONFLICT -->|No| PENDING[Permit PENDING - Manager notified]
 
-    SUBMIT --> CONFLICT{Conflict\nDetected?}
-    CONFLICT -->|Yes| WARN[Show Conflict Warning\nOverlapping zone / asset / time]
-    WARN --> EDIT[Edit Permit Details]
-    EDIT --> SUBMIT
+    PENDING --> SM([Safety Manager])
+    SM --> DECIDE{Approve or Reject?}
+    DECIDE -->|Approve| ACTIVE[Permit ACTIVE - Requester notified]
+    DECIDE -->|Reject| REJECTED[Permit REJECTED - Reason sent]
 
-    CONFLICT -->|No| PENDING[Permit in PENDING state\nManager notified]
-
-    PENDING --> MGR([Safety Manager])
-    MGR --> REVIEW[Review Permit\nDetails & Conflicts]
-    REVIEW --> DECISION{Approve /\nReject?}
-
-    DECISION -->|Approve| APPROVAL[Record Approval\nGPS location captured]
-    APPROVAL --> ACTIVE[Permit ACTIVE\nRequester notified]
-
-    DECISION -->|Reject| REJECTED[Permit REJECTED\nReason provided\nRequester notified]
-
-    ACTIVE --> EXT_Q{Extension\nNeeded?}
-    EXT_Q -->|Yes| EXT_REQ[Submit Extension\nRequest]
-    EXT_REQ --> MGR
-    EXT_Q -->|No| CLOSE_FLOW
-
-    CLOSE_FLOW[Closure Flow]
-    CLOSE_FLOW --> EVIDENCE[Upload Closure Evidence\nPhotos / Sign-off]
-    EVIDENCE --> CLOSED[Permit CLOSED\nAudit log updated]
+    ACTIVE --> WORK[Work in Progress]
+    WORK --> EXT{Extension Needed?}
+    EXT -->|Yes| EXT_REQ[Request Extension - Manager approves]
+    EXT_REQ --> ACTIVE
+    EXT -->|No| CLOSE[Close with evidence]
+    CLOSE --> CLOSED[Permit CLOSED]
 ```
 
 ---
 
-## 4. Incident Reporting & Investigation Flow
+## 4. Incident Reporting User Flow
 
 ```mermaid
 flowchart TD
-    FW([Field Worker]) --> INC_SCREEN[Incident Report Screen]
-    INC_SCREEN --> CAPTURE[Capture Details\nDescription / Photos / Location / Time]
-    CAPTURE --> CLASSIFY[Classify Incident\nType / Severity / Confidentiality]
-    CLASSIFY --> SUBMIT_INC[Submit Incident Report]
-
+    FW([Field Worker]) --> REPORT[Open Incident Report Screen]
+    REPORT --> CAPTURE[Select type, severity, location, photo]
+    CAPTURE --> SUBMIT_INC[Submit Incident]
     SUBMIT_INC --> SM([Safety Manager])
-    SM --> REVIEW_INC[Review Incident\nReport]
-    REVIEW_INC --> ASSIGN{Assign\nInvestigation?}
 
-    ASSIGN -->|Yes| INV_SCREEN[Investigation Screen]
-    INV_SCREEN --> RCA[Root Cause Analysis\nFindings Entry]
-    RCA --> CAPA_GEN[Generate CAPA\nCorrective / Preventive Action]
-
-    CAPA_GEN --> CAPA_ASSIGN[Assign CAPA\nOwner / Due Date / Priority]
-    CAPA_ASSIGN --> OWNER([CAPA Owner])
-    OWNER --> ACTION[Implement\nCorrective Action]
-    ACTION --> EVIDENCE_C[Upload Evidence\nof Completion]
-    EVIDENCE_C --> SM
-    SM --> CLOSE_CAPA{Verify &\nClose CAPA?}
-
-    CLOSE_CAPA -->|Yes| CAPA_CLOSED[CAPA CLOSED\nAudit log updated]
-    CLOSE_CAPA -->|No| OWNER
-
-    ASSIGN -->|No| MONITOR[Monitor &\nClose Incident]
-    MONITOR --> INC_CLOSED[Incident CLOSED]
+    SM --> CLASSIFY[Classify incident]
+    CLASSIFY --> INV{Investigation needed?}
+    INV -->|Yes| RCA[Root Cause Analysis - assign investigator]
+    RCA --> CAPA[Generate CAPA]
+    CAPA --> ASSIGN[Assign CAPA owner]
+    ASSIGN --> EVIDENCE[Owner uploads evidence]
+    EVIDENCE --> CLOSE_CAPA[Safety Manager approves closure]
+    INV -->|No| CLOSE_INC[Close Incident]
+    CLOSE_CAPA --> CLOSE_INC
 ```
 
 ---
 
-## 5. Audit & Compliance Flow
+## 5. Audit Execution User Flow
 
 ```mermaid
 flowchart TD
-    SM([Safety Manager]) --> AUDIT_PLAN[Plan Audit\nSelect Standard / Checklist / Date]
-    AUDIT_PLAN --> SCHEDULE[Schedule Audit\nAssign Auditor / Location]
-    SCHEDULE --> AUDITOR([Auditor])
-
-    AUDITOR --> EXECUTE[Open Audit Execution\nScreen On-Site]
-    EXECUTE --> QUESTIONS[Answer Checklist\nQuestions with Evidence Photos]
-    QUESTIONS --> SUBMIT_AUDIT[Submit Completed\nAudit]
-
-    SUBMIT_AUDIT --> FINDINGS[System Generates\nFindings with ISO Clause Mapping]
+    SM([Safety Manager]) --> PLAN[Plan audit - checklist, date, auditor]
+    PLAN --> AUDITOR([Auditor notified])
+    AUDITOR --> EXECUTE[Open checklist on mobile]
+    EXECUTE --> ANSWER[Answer each question - Pass / Fail / NA]
+    ANSWER --> EVIDENCE_A[Attach photo evidence for failures]
+    EVIDENCE_A --> COMPLETE[Submit completed audit]
+    COMPLETE --> FINDINGS[System generates findings]
     FINDINGS --> SM
-
-    SM --> REVIEW_FINDINGS[Review Findings\n& Severity]
-    REVIEW_FINDINGS --> CAPA_Q{CAPAs\nRequired?}
-
-    CAPA_Q -->|Yes| CAPA_CREATE[Create CAPA\nRecords from Findings]
-    CAPA_CREATE --> CAPA_FLOW[→ CAPA Assignment Flow\nsee Incident Flow]
-
-    CAPA_Q -->|No| AUDIT_CLOSED[Audit CLOSED\nReport Generated]
-    CAPA_FLOW --> AUDIT_CLOSED
+    SM --> CAPA_A{CAPA required?}
+    CAPA_A -->|Yes| CREATE_CAPA[Create and assign CAPA]
+    CAPA_A -->|No| CLOSE_AUDIT[Close Audit]
+    CREATE_CAPA --> CLOSE_AUDIT
 ```
 
 ---
 
-## 6. Training & Certification Flow
+## 6. Training and Certification User Flow
 
 ```mermaid
 flowchart TD
-    ADM([Admin / Manager]) --> MATRIX[Define Training Matrix\nRole → Required Training]
-    MATRIX --> DS_MATRIX[(Training Requirements)]
+    ADM([Admin]) --> MATRIX[Define training matrix - Role to required training]
+    MATRIX --> DS_M[(Training Requirements)]
 
-    FW([Field Worker]) --> TRAIN_SCREEN[Training Completion\nScreen]
-    TRAIN_SCREEN --> FILL[Enter Training Details\nDate / Provider / Score]
-    FILL --> UPLOAD_CERT[Upload Evidence /\nCertificate File]
-    UPLOAD_CERT --> SUBMIT_TRAIN[Submit Completion Record]
+    FW([Field Worker]) --> TRAIN_SCR[Training Completion Screen]
+    TRAIN_SCR --> FILL_T[Enter training details and upload certificate]
+    FILL_T --> SUBMIT_T[Submit completion record]
+    SUBMIT_T --> DS_T[(Training Completions)]
 
-    SUBMIT_TRAIN --> DS_TRAIN[(Training Completions)]
-
-    SYSTEM([System / Scheduler]) --> GAP_CHECK[Check Training\nGaps vs Matrix]
-    DS_TRAIN --> GAP_CHECK
-    DS_MATRIX --> GAP_CHECK
-    GAP_CHECK --> GAP_ALERT{Gaps or\nExpiring Soon?}
-
-    GAP_ALERT -->|Yes| NOTIFY[Send Alert\nto Manager & Employee]
-    GAP_ALERT -->|No| COMPLIANT[Mark Compliant]
-
-    FW --> CERT_SCREEN[Certification\nManagement Screen]
-    CERT_SCREEN --> UPLOAD_CERT2[Upload Certification\nExpiry Date / Type]
-    UPLOAD_CERT2 --> DS_CERTS[(Certifications)]
-
-    DS_CERTS --> EXPIRY_CHECK[Expiry Monitor\nScheduled Check]
-    EXPIRY_CHECK -->|Expiring / Expired| RENEW_ALERT[Send Renewal\nAlert]
+    DS_T --> GAP[System checks gaps vs matrix daily]
+    DS_M --> GAP
+    GAP --> ALERT{Gap or expiry found?}
+    ALERT -->|Yes| NOTIFY[Alert employee and manager]
+    ALERT -->|No| COMPLIANT[Status: Compliant]
 ```
 
 ---
 
-## 7. Vendor Management Flow
+## 7. Vendor and Contractor User Flow
 
 ```mermaid
 flowchart TD
-    SM([Safety Manager]) --> VENDOR_SCREEN[Vendor\nManagement Screen]
-    VENDOR_SCREEN --> CREATE_VENDOR[Create Vendor\nProfile]
-    CREATE_VENDOR --> VENDOR_DETAILS[Enter Details\nName / Contact / Services / Region]
-    VENDOR_DETAILS --> DS_VENDOR[(Vendors)]
+    SM([Safety Manager]) --> CREATE_V[Create vendor profile]
+    CREATE_V --> UPLOAD_D[Upload compliance documents]
+    UPLOAD_D --> REVIEW[Review documents - approve or reject]
+    REVIEW --> APPROVED{All docs approved?}
+    APPROVED -->|No| UPLOAD_D
+    APPROVED -->|Yes| VENDOR_ACTIVE[Vendor status - ACTIVE]
 
-    VENDOR_SCREEN --> UPLOAD_DOCS[Upload Compliance\nDocuments]
-    UPLOAD_DOCS --> DOC_TYPE[Classify Document\nInsurance / Certification / License]
-    DOC_TYPE --> DS_VENDOR_DOCS[(Vendor Documents)]
-
-    DS_VENDOR_DOCS --> REVIEW[Review Documents\nValidity / Expiry]
-    REVIEW --> DECISION{Approve /\nReject?}
-
-    DECISION -->|Approve| APPROVED[Vendor APPROVED\nStatus Active]
-    DECISION -->|Reject| REJECTED_V[Vendor REJECTED\nReason provided]
-    REJECTED_V --> VENDOR_SCREEN
-
-    APPROVED --> GS([Gate Security])
-    GS --> SCAN[Scan Contractor\nQR Code at Gate]
-    SCAN --> VERIFY{Vendor\nApproved &\nDocuments Valid?}
-    VERIFY -->|Yes| CLEARANCE[Grant Entry\nClearance]
-    VERIFY -->|No| DENY[Deny Entry\nAlert Manager]
+    VENDOR_ACTIVE --> GS([Gate Security])
+    GS --> SCAN[Scan contractor QR at gate]
+    SCAN --> CHECK{Vendor approved and docs valid?}
+    CHECK -->|Yes| ENTRY[Grant site entry]
+    CHECK -->|No| DENY[Deny entry - alert manager]
 ```
 
 ---
 
-## 8. AI Safety Advisor Flow
+## 8. AI Safety Advisor User Flow
 
 ```mermaid
 flowchart TD
-    USER([Any User]) --> AI_SCREEN[AI Advisor\nScreen]
-    AI_SCREEN --> QUERY[Enter Safety\nQuestion / Query]
-    QUERY --> SUBMIT_AI[Submit Query]
-
-    SUBMIT_AI --> AI_PROC[AI Service\nProcesses Query]
-    AI_PROC --> CONTEXT[Retrieve Relevant\nKnowledge Documents\n& Past Conversations]
-    CONTEXT --> AI_ENGINE([AI / ML Engine])
-    AI_ENGINE --> ANSWER[Generate Answer\nwith Source Citations]
-
-    ANSWER --> DISPLAY[Display Answer\n& Referenced Documents]
-    DISPLAY --> FOLLOW_UP{Follow-up\nQuery?}
-    FOLLOW_UP -->|Yes| QUERY
-    FOLLOW_UP -->|No| SAVE[Save Conversation\nto History]
-
-    RISK_SCORE[Predictive Risk\nScoring — Background]
-    AI_ENGINE --> RISK_SCORE
-    RISK_SCORE --> RISK_ALERT{High Risk\nPredicted?}
-    RISK_ALERT -->|Yes| SM([Safety Manager Alert])
+    USER([Any User]) --> AI[Open AI Advisor Screen]
+    AI --> QUERY[Type safety question]
+    QUERY --> SUBMIT_AI[Submit query]
+    SUBMIT_AI --> ANSWER_AI[AI returns answer with source citations]
+    ANSWER_AI --> ACTION{Next action}
+    ACTION -->|Follow-up question| QUERY
+    ACTION -->|Open cited document| VIEW_DOC[View SOP / knowledge doc]
+    ACTION -->|Give feedback| FEEDBACK[Submit helpful / not helpful]
+    ACTION -->|End| SAVE[Conversation saved to history]
 ```
 
 ---
 
-## 9. Mobile Offline Sync Flow
+## 9. Mobile Offline Sync User Flow
 
 ```mermaid
 flowchart TD
-    FW([Field Worker]) --> OFFLINE_ACTION[Perform Action\nOffline — Incident / Permit / Hazard]
-    OFFLINE_ACTION --> QUEUE[Add to Sync\nQueue — MobileSyncItem]
-    QUEUE --> DS_SYNC[(Local Sync Queue)]
-
-    CONNECTIVITY{Device Online?}
-    DS_SYNC --> CONNECTIVITY
-
-    CONNECTIVITY -->|No| WAIT[Wait for\nConnectivity]
-    WAIT --> CONNECTIVITY
-
-    CONNECTIVITY -->|Yes| PUSH[Push Queued\nOperations to API]
-    PUSH --> CONFLICT_CHECK{Conflict\nDetected?}
-
-    CONFLICT_CHECK -->|No conflict| APPLIED[Records Applied\nRemote DB Updated]
-    CONFLICT_CHECK -->|Conflict| CONFLICT_SCREEN[Show Conflict\nResolution Screen]
-    CONFLICT_SCREEN --> FW
-    FW --> RESOLVE[User Resolves\nConflict — Keep Local / Remote / Merge]
-    RESOLVE --> APPLIED
-
-    APPLIED --> PULL[Pull Latest\nData from Server]
-    PULL --> LOCAL_DB[Update Local\nCache]
-    LOCAL_DB --> SYNC_STATUS[Sync Status Screen\nShows Complete]
+    FW([Field Worker]) --> OFFLINE[Work offline - actions queued locally]
+    OFFLINE --> QUEUE[(Local Sync Queue)]
+    QUEUE --> CONN{Device back online?}
+    CONN -->|No| OFFLINE
+    CONN -->|Yes| PULL[Pull latest data from server]
+    PULL --> PUSH[Push queued operations]
+    PUSH --> CONFLICT_S{Conflicts?}
+    CONFLICT_S -->|No| DONE_S[Sync complete]
+    CONFLICT_S -->|Yes| RESOLVE[Conflict resolution screen - choose local or server version]
+    RESOLVE --> DONE_S
 ```
 
 ---
 
-## 10. Executive Dashboard Flow
+## 10. Executive Dashboard User Flow
 
 ```mermaid
 flowchart TD
-    EXEC([Executive / Safety Manager]) --> DASH_HOME[Dashboard Home]
+    EXEC([Executive / Safety Manager]) --> DASH[Dashboard Home]
+    DASH --> CHOOSE{Select Dashboard}
 
-    DASH_HOME --> CHOOSE{Select\nDashboard View}
+    CHOOSE --> KPI[Executive Safety KPIs]
+    CHOOSE --> SITE[Site Command Overview]
+    CHOOSE --> PERMITS[Live Permit Board]
+    CHOOSE --> INCIDENTS[Incident Analytics]
+    CHOOSE --> AUDITS[Audit and CAPA Status]
+    CHOOSE --> RISK[Risk Register]
+    CHOOSE --> TRAINING[Training Compliance]
+    CHOOSE --> VENDORS[Vendor Compliance]
+    CHOOSE --> ASSETS[Asset Compliance]
+    CHOOSE --> AI_DASH[AI Intelligence Dashboard]
 
-    CHOOSE --> EXEC_KPI[Executive Safety\nKPIs & Trends]
-    CHOOSE --> SITE_CMD[Site Command\nOperational Overview]
-    CHOOSE --> PERMIT_BOARD[Live Permit\nBoard]
-    CHOOSE --> INCIDENT_ANALYTICS[Incident Analytics\n& RCA Status]
-    CHOOSE --> AUDIT_CAPA[Audit & CAPA\nStatus]
-    CHOOSE --> RISK_REG[Risk Register\n& Trends]
-    CHOOSE --> TRAIN_COMP[Training Compliance\nMatrix & Gaps]
-    CHOOSE --> VENDOR_COMP[Vendor Compliance\nStatus]
-    CHOOSE --> ASSET_COMP[Asset Compliance\n& Inspection Schedule]
-    CHOOSE --> AI_INTEL[AI Intelligence\nQuery Metrics]
-    CHOOSE --> DATA_QUAL[Data Quality\nCompleteness]
-
-    EXEC_KPI & SITE_CMD & PERMIT_BOARD & INCIDENT_ANALYTICS --> DRILL{Drill Down?}
-    DRILL -->|Yes| DETAIL[Open Detail\nRecord / Report]
-    DRILL -->|Export| REPORT[Download\nExport Report]
+    KPI & SITE & PERMITS & INCIDENTS --> DRILL{Drill down or export?}
+    DRILL -->|Drill down| DETAIL[Open detail record]
+    DRILL -->|Export| REPORT[Download report]
 ```
 
 ---
 
 ## Summary: User Journey Map
 
-| User Role | Entry Point | Core Tasks | Exit / Output |
+| User Role | Entry Point | Core Tasks | Output |
 |---|---|---|---|
-| Field Worker | Login → Dashboard | Report incident, Log hazard, Create permit, Browse SOPs, Record training | Submitted records, Accessed SOPs |
-| Safety Manager | Login → Dashboard | Review permits, Conduct audits, Manage CAPAs, View dashboards, Generate reports | Approved permits, Closed CAPAs, Reports |
-| Gate Security | Login → Dashboard | Scan contractor QR, Verify vendor status, View active permits | Entry clearance granted / denied |
-| Administrator | Login → Admin Panel | Manage users/roles, Configure org structure, View audit logs, Manage integrations | System configured, Users provisioned |
-| Executive | Login → Dashboard | View KPI dashboards, Drill into incidents/risk/compliance | Insight reports, Data exports |
+| Field Worker | Login - Dashboard | Report incident, log hazard, create permit, browse SOPs, record training | Submitted records, accessed SOPs |
+| Safety Manager | Login - Dashboard | Review permits, conduct audits, manage CAPAs, view dashboards, generate reports | Approved permits, closed CAPAs, reports |
+| Gate Security | Login - Dashboard | Scan contractor QR, verify vendor status, view active permits | Entry clearance granted or denied |
+| Administrator | Login - Admin Panel | Manage users and roles, configure org structure, view audit logs | System configured, users provisioned |
+| Executive | Login - Dashboard | View KPI dashboards, drill into incidents, risk, compliance | Insight reports, data exports |

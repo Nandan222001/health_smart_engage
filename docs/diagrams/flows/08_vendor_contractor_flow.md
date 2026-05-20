@@ -36,7 +36,7 @@ flowchart TD
     APPROVE_DOC --> ALL_DOCS_Q{All required\ndocuments approved?}
 
     ALL_DOCS_Q -->|No| REVIEW_QUEUE
-    ALL_DOCS_Q -->|Yes| APPROVE_VENDOR[Vendor status → APPROVED\nPATCH /vendors/{vendorId}]
+    ALL_DOCS_Q -->|Yes| APPROVE_VENDOR[Vendor status - APPROVED\nPATCH /vendors/{vendorId}]
     APPROVE_VENDOR --> ACTIVE_VENDOR[Vendor: ACTIVE\nCan send contractors on site]
 ```
 
@@ -60,8 +60,8 @@ flowchart TD
     VERIFY_RESP -->|Vendor found| CHECK_STATUS[GET /mobile/vendors/{vendorId}/status\nFetch compliance status]
     CHECK_STATUS --> STATUS_CHECK{Vendor\nStatus}
 
-    STATUS_CHECK -->|APPROVED — all docs valid| CLEARANCE[Grant Entry Clearance\nContractor permitted on site\nEntry logged]
-    STATUS_CHECK -->|PENDING — not yet approved| PENDING_MSG[Show: Pending Approval\nContact Safety Manager]
+    STATUS_CHECK -->|APPROVED - all docs valid| CLEARANCE[Grant Entry Clearance\nContractor permitted on site\nEntry logged]
+    STATUS_CHECK -->|PENDING - not yet approved| PENDING_MSG[Show: Pending Approval\nContact Safety Manager]
     STATUS_CHECK -->|EXPIRED docs| EXPIRED_MSG[Show: Documents Expired\nDetails of expired docs shown]
     STATUS_CHECK -->|REVOKED| REVOKED_MSG[Show: Vendor Revoked\nEntry not permitted]
 
@@ -78,7 +78,7 @@ flowchart TD
     SCHEDULER([Scheduled Job\nDaily]) --> LOAD_VENDORS[Load all APPROVED vendors\nGET /vendors]
     LOAD_VENDORS --> DOC_LOOP[For each vendor's documents]
     DOC_LOOP --> EXPIRY_CHECK{Document\nExpiry Status}
-    EXPIRY_CHECK -->|Expired| FLAG_EXPIRED[Flag: EXPIRED\nVendor status may → SUSPENDED]
+    EXPIRY_CHECK -->|Expired| FLAG_EXPIRED[Flag: EXPIRED\nVendor status may - SUSPENDED]
     EXPIRY_CHECK -->|Expiring ≤ 30 days| FLAG_SOON[Flag: EXPIRING SOON]
     EXPIRY_CHECK -->|Valid| OK[Mark: VALID]
 

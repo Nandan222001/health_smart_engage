@@ -15,7 +15,7 @@ flowchart TD
     SITE_SEL --> SEND_INVITE[POST /admin/users/invitations\nInvitation email dispatched]
     SEND_INVITE --> PENDING[User appears as PENDING\nin User Directory]
     PENDING --> WATCH{User\nAccepts?}
-    WATCH -->|Yes, within expiry| ACTIVE_USER[User status → ACTIVE\nAdmin notified]
+    WATCH -->|Yes, within expiry| ACTIVE_USER[User status - ACTIVE\nAdmin notified]
     WATCH -->|Invitation expired| RESEND{Resend\nInvitation?}
     RESEND -->|Yes| SEND_INVITE
     RESEND -->|No| REVOKE[Keep as PENDING\nor Revoke]
@@ -27,7 +27,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    EMAIL([New User receives\nInvitation Email]) --> LINK[Click Invitation Link\n— time-limited token —]
+    EMAIL([New User receives\nInvitation Email]) --> LINK[Click Invitation Link\n- time-limited token -]
     LINK --> TOKEN_VALID{Link\nValid & Not Expired?}
     TOKEN_VALID -->|No| EXPIRED_PAGE[Show Expired Page\nContact your Administrator]
     TOKEN_VALID -->|Yes| ONBOARD_PAGE[Onboarding Screen\nWelcome message · Name pre-filled]
@@ -54,7 +54,7 @@ flowchart TD
     ACCEPT_TERMS --> SUBMIT[Submit Onboarding]
     SUBMIT --> ACTIVATE[Account ACTIVATED\nPATCH /admin/users/{userId}/roles applied]
     ACTIVATE --> LOGIN_REDIRECT[Redirect to Login Screen]
-    LOGIN_REDIRECT --> FIRST_LOGIN[First Login\n→ see Login Flow]
+    LOGIN_REDIRECT --> FIRST_LOGIN[First Login\nsee Login Flow]
 ```
 
 ---
@@ -68,7 +68,7 @@ flowchart TD
     REVOKE_BTN --> CONFIRM{Confirm\nRevocation?}
     CONFIRM -->|Cancel| USER_PROFILE
     CONFIRM -->|Confirm| POST_REVOKE[POST /admin/users/{userId}/revoke]
-    POST_REVOKE --> STATUS_CHANGE[User status → REVOKED\nAll active sessions invalidated\nUser cannot log in]
+    POST_REVOKE --> STATUS_CHANGE[User status - REVOKED\nAll active sessions invalidated\nUser cannot log in]
     STATUS_CHANGE --> AUDIT_LOG[Audit log entry created]
 ```
 

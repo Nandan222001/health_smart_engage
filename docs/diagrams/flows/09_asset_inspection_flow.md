@@ -18,7 +18,7 @@ flowchart TD
 
 ---
 
-## Asset Lookup (Mobile — Field Worker)
+## Asset Lookup (Mobile - Field Worker)
 
 ```mermaid
 flowchart TD
@@ -34,7 +34,7 @@ flowchart TD
     STATUS_CHECK -->|COMPLIANT| PROCEED[Asset safe to use\nProceed with work]
     STATUS_CHECK -->|INSPECTION DUE| WARN_INSP[Warning: Inspection overdue\nRecord inspection before use]
     STATUS_CHECK -->|NON-COMPLIANT| BLOCK[Do not use this asset\nNotify Safety Manager]
-    WARN_INSP --> INSPECT_FLOW[→ Asset Inspection Flow]
+    WARN_INSP --> INSPECT_FLOW[Asset Inspection Flow]
 ```
 
 ---
@@ -49,7 +49,7 @@ flowchart TD
     CHECKLIST_ITEMS --> INSPECT_LOOP[For each inspection item]
     INSPECT_LOOP --> ITEM_RESULT[Record result\nPass · Fail · N/A]
     ITEM_RESULT --> NOTES_Q{Notes or\nEvidence needed?}
-    NOTES_Q -->|Yes| ADD_NOTES[Add notes · Capture photo\n— especially for Fail items —]
+    NOTES_Q -->|Yes| ADD_NOTES[Add notes · Capture photo\n- especially for Fail items -]
     NOTES_Q -->|No| NEXT_ITEM
     ADD_NOTES --> NEXT_ITEM
     NEXT_ITEM{More\nItems?}
@@ -57,15 +57,15 @@ flowchart TD
     NEXT_ITEM -->|No| OVERALL_RESULT
 
     OVERALL_RESULT{Overall\nOutcome}
-    OVERALL_RESULT -->|All pass| PASS_INSP[Record PASS\nPOST /mobile/assets/{assetId}/inspections\nAsset status → COMPLIANT]
+    OVERALL_RESULT -->|All pass| PASS_INSP[Record PASS\nPOST /mobile/assets/{assetId}/inspections\nAsset status - COMPLIANT]
     OVERALL_RESULT -->|Any fail| FAIL_INSP[Record FAIL\nPOST /mobile/assets/{assetId}/inspections\nFailure items listed]
 
     PASS_INSP --> NEXT_INSP_DATE[Next inspection date\nautomatically calculated]
     FAIL_INSP --> FAIL_ACTION{Severity\nof Failure}
     FAIL_ACTION -->|Minor| MAINTENANCE[Schedule maintenance\nAsset still usable with caution]
-    FAIL_ACTION -->|Major / Safety-critical| QUARANTINE[Quarantine asset\nStatus → NON-COMPLIANT\nSafety Manager alerted\nDo not use tag applied]
+    FAIL_ACTION -->|Major / Safety-critical| QUARANTINE[Quarantine asset\nStatus - NON-COMPLIANT\nSafety Manager alerted\nDo not use tag applied]
     MAINTENANCE & QUARANTINE --> CAPA_Q{CAPA\nRequired?}
-    CAPA_Q -->|Yes| CAPA_LINK[Create CAPA from inspection failure\n→ see CAPA Flow]
+    CAPA_Q -->|Yes| CAPA_LINK[Create CAPA from inspection failure\nsee CAPA Flow]
     CAPA_Q -->|No| DONE([Done])
     CAPA_LINK --> DONE
 ```
@@ -97,7 +97,7 @@ stateDiagram-v2
     [*] --> COMPLIANT : Asset registered and inspected
     COMPLIANT --> INSPECTION_DUE : Inspection schedule date reached
     INSPECTION_DUE --> COMPLIANT : Inspection passed
-    INSPECTION_DUE --> NON_COMPLIANT : Inspection failed — major issue
+    INSPECTION_DUE --> NON_COMPLIANT : Inspection failed - major issue
     INSPECTION_DUE --> OVERDUE : Inspection not done by due date
     OVERDUE --> COMPLIANT : Inspection passed (late)
     OVERDUE --> NON_COMPLIANT : Inspection failed
