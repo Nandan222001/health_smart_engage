@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
 
     database_url: str = Field(
-        default="mysql+pymysql://hse_user:hse_password@localhost:3306/hse",
+        default="mysql+pymysql://root:@localhost:3306/hse",
         validation_alias="DATABASE_URL",
     )
 
