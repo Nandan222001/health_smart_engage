@@ -18,12 +18,19 @@ class Settings(BaseSettings):
         validation_alias="DATABASE_URL",
     )
 
-    jwt_issuer: str = "hse-platform"
-    jwt_audience: str = "hse-users"
-    jwt_secret: str = "replace-with-azure-key-vault-secret"
-    jwt_algorithm: str = "HS256"
-    oidc_jwks_url: str = ""
-    access_token_expire_minutes: int = 60
+    # jwt_issuer: str = "hse-platform"
+    # jwt_audience: str = "hse-users"
+    # jwt_secret: str = "replace-with-azure-key-vault-secret"
+    # jwt_algorithm: str = "HS256"
+    # oidc_jwks_url: str = ""
+    # access_token_expire_minutes: int = 60
+    
+    # JWT Settings
+    jwt_secret: str = Field(default="your-secret-key-change-in-production", env="JWT_SECRET")
+    jwt_algorithm: str = Field(default="HS256", env="JWT_ALGORITHM")
+    jwt_audience: str = Field(default="fastapi-app", env="JWT_AUDIENCE")
+    jwt_issuer: str = Field(default="your-app", env="JWT_ISSUER")
+    access_token_expire_minutes: int = Field(default=60, env="ACCESS_TOKEN_EXPIRE_MINUTES")
 
     allowed_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 

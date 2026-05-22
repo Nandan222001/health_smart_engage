@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ApiResponse(BaseModel):
@@ -18,6 +18,7 @@ class ErrorResponse(BaseModel):
 
 
 class CommandPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
     data: dict[str, Any] = Field(default_factory=dict)
     comment: str | None = None
     idempotency_key: str | None = None

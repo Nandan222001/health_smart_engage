@@ -79,6 +79,9 @@ class CatalogEndpointService:
         )
         self.db.commit()
         if special is not None:
+            # If a special handler marked the response as raw, return the payload directly
+            if isinstance(special, dict) and special.get("_raw_response"):
+                return special.get("payload")
             special["recordId"] = record.id
             special["status"] = record.status
             return special

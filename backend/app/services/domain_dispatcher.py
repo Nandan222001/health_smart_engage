@@ -15,6 +15,7 @@ from app.services.dashboard_service import DashboardService
 from app.services.foundation_service import FoundationService
 from app.services.vendor_service import VendorService
 from app.services.knowledge_service import KnowledgeService
+from app.services.auth_service import AuthService
 
 class DomainDispatcher:
     def __init__(self):
@@ -47,8 +48,16 @@ class DomainDispatcher:
         path_params: dict[str, Any],
         db: Session = None
     ) -> dict[str, Any] | None:
-        data = payload.get("data", payload)
+        data = payload.get("data") or payload
         svc = self._get_services(db) if db else {}
+
+        # Authentication commands
+        if operation == "auth_login":
+            # Expecting payload.data to contain email and password
+            auth = AuthService(db)
+            result = auth.login(email=data.get("email"), password=data.get("password"))
+            # Return a raw response marker so caller can return token payload directly
+            return {"_raw_response": True, "payload": result}
 
         # Mobile Specific Commands
         if operation == "mobile_notification_read":

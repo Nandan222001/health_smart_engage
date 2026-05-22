@@ -46,4 +46,11 @@ class CatalogController:
             path_params=path_params,
             method=method,
         )
+        # If the service returned an auth token payload, return it directly.
+        # Support both direct payload and wrapped payload under a "data" key.
+        if isinstance(data, dict):
+            if "access_token" in data and "token_type" in data:
+                return data
+            if "data" in data and isinstance(data["data"], dict) and "access_token" in data["data"]:
+                return data["data"]
         return accepted(data)
