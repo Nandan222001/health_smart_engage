@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
-import { auth, googleProvider, db } from "../../config/firebase";
+import { auth, googleProvider, db } from "@/config/firebase";
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fetchSignInMethodsForEmail, User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { getOnboardingAccessProfile, loginWithThetaCredentials } from "../../services/api";
+import { getOnboardingAccessProfile, loginWithThetaCredentials } from "@/services/api";
+import { env } from "@/config/env";
 
 export type LoginResult =
   | "success"
@@ -14,29 +15,23 @@ export type LoginResult =
   | "network_error"
   | "error";
 
-const ADMIN_EMAIL = "adminhse@thetaai.io";
-const ADMIN_PASSWORD = "Admin@HSE123";
-const SUPER_ADMIN_EMAIL = "thetahsesuperadmin@gmail.com";
-const SUPER_ADMIN_PASSWORD = "Superadmin@123";
-const SUPER_ADMIN_PASSWORD_ALT = "-Superadmin@123";
-const INSPECTOR_EMAIL = "inspector@thetaai.io";
-const INSPECTOR_PASSWORD = "Inspector@HSE123";
-const ENGINEER_EMAIL = "engineer@thetaai.io";
-const ENGINEER_PASSWORD = "Engineer@HSE123";
-const WORKER_EMAIL = "worker@thetaai.io";
-const WORKER_PASSWORD = "Worker@HSE123";
-const ENABLE_DEV_TEST_ACCOUNTS = import.meta.env.DEV && String(import.meta.env.VITE_ENABLE_DEV_TEST_ACCOUNTS ?? "false").toLowerCase() === "true";
-const PRODUCT_ADMIN_EMAILS = new Set(
-  [
-    "thetahsesuperadmin@gmail.com",
-    ...String(import.meta.env.VITE_PRODUCT_ADMIN_EMAILS ?? "")
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean),
-  ],
-);
-const ENABLE_DEV_PRODUCT_ADMIN_FALLBACK = import.meta.env.DEV && String(import.meta.env.VITE_ENABLE_DEV_PRODUCT_ADMIN_FALLBACK ?? "true").toLowerCase() === "true";
-const ENABLE_PROD_SUPERADMIN_HARDCODED_LOGIN = !import.meta.env.DEV && String(import.meta.env.VITE_ENABLE_PROD_SUPERADMIN_HARDCODED_LOGIN ?? "false").toLowerCase() === "true";
+// Dev test account credentials — loaded from .env, never hardcoded in source.
+// These are only active when VITE_ENABLE_DEV_TEST_ACCOUNTS=true (dev builds only).
+const ADMIN_EMAIL = import.meta.env.VITE_DEV_ADMIN_EMAIL as string | undefined ?? "";
+const ADMIN_PASSWORD = import.meta.env.VITE_DEV_ADMIN_PASSWORD as string | undefined ?? "";
+const SUPER_ADMIN_EMAIL = import.meta.env.VITE_DEV_SUPER_ADMIN_EMAIL as string | undefined ?? "";
+const SUPER_ADMIN_PASSWORD = import.meta.env.VITE_DEV_SUPER_ADMIN_PASSWORD as string | undefined ?? "";
+const SUPER_ADMIN_PASSWORD_ALT = import.meta.env.VITE_DEV_SUPER_ADMIN_PASSWORD_ALT as string | undefined ?? "";
+const INSPECTOR_EMAIL = import.meta.env.VITE_DEV_INSPECTOR_EMAIL as string | undefined ?? "";
+const INSPECTOR_PASSWORD = import.meta.env.VITE_DEV_INSPECTOR_PASSWORD as string | undefined ?? "";
+const ENGINEER_EMAIL = import.meta.env.VITE_DEV_ENGINEER_EMAIL as string | undefined ?? "";
+const ENGINEER_PASSWORD = import.meta.env.VITE_DEV_ENGINEER_PASSWORD as string | undefined ?? "";
+const WORKER_EMAIL = import.meta.env.VITE_DEV_WORKER_EMAIL as string | undefined ?? "";
+const WORKER_PASSWORD = import.meta.env.VITE_DEV_WORKER_PASSWORD as string | undefined ?? "";
+const ENABLE_DEV_TEST_ACCOUNTS = env.auth.enableDevTestAccounts;
+const PRODUCT_ADMIN_EMAILS = new Set(["thetahsesuperadmin@gmail.com", ...env.auth.productAdminEmails]);
+const ENABLE_DEV_PRODUCT_ADMIN_FALLBACK = env.auth.enableDevProductAdminFallback;
+const ENABLE_PROD_SUPERADMIN_HARDCODED_LOGIN = env.auth.enableProdSuperadminHardcodedLogin;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROLE DEFINITIONS
