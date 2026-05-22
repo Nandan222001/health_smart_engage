@@ -1,4 +1,4 @@
-import { auth } from '../config/firebase';
+import { auth } from '@/config/firebase';
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 

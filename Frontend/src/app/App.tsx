@@ -1,7 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { RouterProvider } from "react-router";
+import { Provider } from "react-redux";
 import { router } from "./routes";
 import { AuthProvider } from "./context/AuthContext";
+import { store } from "./store";
 
 type AppErrorBoundaryState = {
   hasError: boolean;
@@ -81,10 +83,12 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBounda
 
 export default function App() {
   return (
-    <AppErrorBoundary>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </AppErrorBoundary>
+    <Provider store={store}>
+      <AppErrorBoundary>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </AppErrorBoundary>
+    </Provider>
   );
 }
