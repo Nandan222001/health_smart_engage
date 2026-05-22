@@ -11,6 +11,9 @@ import type {
   OnboardingAccessRequestResponse,
   OrgAccessRequestsResponse,
   ReviewOrgAccessRequestResponse,
+  PostApprovalSetupPayload,
+  PostApprovalSetupResponse,
+  DeletePostApprovalFileResponse,
 } from "@/services/api";
 
 export const onboardingApi = baseApi.injectEndpoints({
@@ -40,6 +43,39 @@ export const onboardingApi = baseApi.injectEndpoints({
     getOnboardingProcessingQueue: builder.query<OnboardingProcessingQueueResponse, void>({
       query: () => "/onboarding/processing-queue",
       providesTags: ["Onboarding"],
+    }),
+    getOnboardingRequests: builder.query<unknown[], void>({
+      query: () => "/onboarding/requests",
+      providesTags: ["Onboarding"],
+    }),
+    savePostApprovalSetup: builder.mutation<
+      PostApprovalSetupResponse,
+      { onboardingUuid: string; payload: PostApprovalSetupPayload }
+    >({
+      query: ({ onboardingUuid, payload }) => {
+        const formData = new FormData();
+        formData.append("org_data_summary", payload.org_data_summary || "");
+        formData.append("workers_json", JSON.stringify(payload.workers || []));
+        (payload.org_files || []).forEach((file) => formData.append("org_files", file));
+        (payload.worker_files || []).forEach((file) => formData.append("worker_files", file));
+        return {
+          url: `/onboarding/requests/${onboardingUuid}/post-approval-setup`,
+          method: "POST",
+          body: formData,
+        };
+      },
+      invalidatesTags: ["Onboarding"],
+    }),
+    deletePostApprovalFile: builder.mutation<
+      DeletePostApprovalFileResponse,
+      { onboardingUuid: string; storedName: string; fileGroup: "org" | "worker" }
+    >({
+      query: ({ onboardingUuid, storedName, fileGroup }) => ({
+        url: `/onboarding/requests/${onboardingUuid}/post-approval-files`,
+        method: "DELETE",
+        body: { stored_name: storedName, file_group: fileGroup },
+      }),
+      invalidatesTags: ["Onboarding"],
     }),
     getOrgAccessRequests: builder.query<OrgAccessRequestsResponse, string | void>({
       query: (orgCode) => {
@@ -170,8 +206,11 @@ export const {
   useGetOnboardingLayerOptionsQuery,
   useGetRequestStatusByEmailQuery,
   useGetOnboardingProcessingQueueQuery,
+  useGetOnboardingRequestsQuery,
   useGetOrgAccessRequestsQuery,
   useSubmitClientOnboardingMutation,
+  useSavePostApprovalSetupMutation,
+  useDeletePostApprovalFileMutation,
   useLoginWithThetaCredentialsMutation,
   useSubmitOnboardingAccessRequestMutation,
   useReviewOrgAccessRequestMutation,

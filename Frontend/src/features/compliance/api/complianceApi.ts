@@ -1,8 +1,12 @@
 import { baseApi } from "@/services/api/baseApi";
-import type { ComplianceStandard, AuditTrail, SLAConfig, Rule, PPEType } from "@/services/api";
+import type { ComplianceStandard, AuditTrail, SLAConfig, Rule, PPEType, AccessLog } from "@/services/api";
 
 export const complianceApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
+    getAccessLog: builder.query<AccessLog[], void>({
+      query: () => "/access-log",
+      providesTags: ["AccessLog"],
+    }),
     getComplianceStandards: builder.query<ComplianceStandard[], void>({
       query: () => "/compliance-standards",
       providesTags: ["ComplianceStandard"],
@@ -27,6 +31,7 @@ export const complianceApi = baseApi.injectEndpoints({
 });
 
 export const {
+  useGetAccessLogQuery,
   useGetComplianceStandardsQuery,
   useGetAuditTrailQuery,
   useGetSLAConfigQuery,

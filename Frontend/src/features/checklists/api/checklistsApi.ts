@@ -9,6 +9,13 @@ import type {
 
 export const checklistsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
+    bootstrapChecklistTemplates: builder.mutation<
+      { status: string; message: string; counts: Record<string, number> },
+      void
+    >({
+      query: () => ({ url: "/checklists/templates/bootstrap", method: "POST" }),
+      invalidatesTags: ["Checklist"],
+    }),
     getChecklistTemplates: builder.query<ChecklistTemplate[], void>({
       query: () => "/checklists/templates",
       providesTags: ["Checklist"],
@@ -79,6 +86,7 @@ export const checklistsApi = baseApi.injectEndpoints({
 });
 
 export const {
+  useBootstrapChecklistTemplatesMutation,
   useGetChecklistTemplatesQuery,
   useGetChecklistSubmissionsQuery,
   useGetChecklistSubmissionDetailQuery,
