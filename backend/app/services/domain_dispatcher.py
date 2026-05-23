@@ -26,6 +26,7 @@ from app.services.ai_intelligence_service import AIIntelligenceService
 from app.services.outputs_service import OutputsService
 from app.services.learning_service import LearningService
 from app.services.superadmin_service import SuperAdminService
+from app.services.auth_service import AuthService
 
 class DomainDispatcher:
     def __init__(self):
@@ -53,6 +54,7 @@ class DomainDispatcher:
             "outputs": OutputsService(db),
             "learning": LearningService(db),
             "superadmin": SuperAdminService(db),
+            "auth": AuthService(db),
         }
 
     def execute_special_command(
@@ -65,6 +67,12 @@ class DomainDispatcher:
     ) -> dict[str, Any] | None:
         data = payload.get("data", payload)
         svc = self._get_services(db) if db else {}
+
+        # Auth Commands
+        if operation == "auth_login":
+            return svc["auth"].login(data.get("email", ""), data.get("password", ""))
+        if operation == "auth_logout":
+            return {"message": "Logged out successfully"}
 
         # Mobile Specific Commands
         if operation == "mobile_notification_read":
@@ -248,6 +256,10 @@ class DomainDispatcher:
         db: Session = None
     ) -> dict[str, Any] | None:
         svc = self._get_services(db) if db else {}
+
+        # Auth Queries
+        if operation == "auth_me":
+            return svc["auth"].me(user.user_id, user.tenant_id)
 
         # Mobile Specific Queries
         if operation == "mobile_profile":

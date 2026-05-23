@@ -29,9 +29,6 @@ const ENGINEER_PASSWORD = import.meta.env.VITE_DEV_ENGINEER_PASSWORD as string |
 const WORKER_EMAIL = import.meta.env.VITE_DEV_WORKER_EMAIL as string | undefined ?? "";
 const WORKER_PASSWORD = import.meta.env.VITE_DEV_WORKER_PASSWORD as string | undefined ?? "";
 const ENABLE_DEV_TEST_ACCOUNTS = env.auth.enableDevTestAccounts;
-const PRODUCT_ADMIN_EMAILS = new Set(["thetahsesuperadmin@gmail.com", ...env.auth.productAdminEmails]);
-const ENABLE_DEV_PRODUCT_ADMIN_FALLBACK = env.auth.enableDevProductAdminFallback;
-const ENABLE_PROD_SUPERADMIN_HARDCODED_LOGIN = env.auth.enableProdSuperadminHardcodedLogin;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROLE DEFINITIONS
@@ -568,6 +565,7 @@ export interface AuthUser {
   onboardingSetupCompleted?: boolean;
   onboardingMaxUsers?: number;
   onboardingConfiguredUsers?: number;
+  is_superadmin?: boolean;
 }
 
 export type SubscriptionPlan = "Free" | "Pro" | "Enterprise";
@@ -683,7 +681,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isOnboardingScopedUser = Boolean(user?.onboardingScoped);
-  const isSuperAdmin = Boolean(user?.email && PRODUCT_ADMIN_EMAILS.has(user.email.toLowerCase()));
+  const isSuperAdmin = Boolean(user?.is_superadmin);
 
   const mapOnboardingRoleToUserRole = (rawRole: string | undefined): UserRole => {
     const normalized = (rawRole || "").trim().toLowerCase();
@@ -699,8 +697,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resolveFirestoreUser = useCallback(async (firebaseUser: FirebaseUser, orgCodeHint?: string): Promise<AccessResolution> => {
     const normalizedEmail = firebaseUser.email?.toLowerCase() ?? "";
     const isDevAdmin = ENABLE_DEV_TEST_ACCOUNTS && normalizedEmail === ADMIN_EMAIL;
-    const isProductAdmin = PRODUCT_ADMIN_EMAILS.has(normalizedEmail);
-    const isPrivilegedAdmin = isDevAdmin || isProductAdmin;
+    const isPrivilegedAdmin = isDevAdmin;
     try {
       const email = normalizedEmail;
 
@@ -862,38 +859,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const trimmedEmail = email.trim().toLowerCase();
     const normalizedPassword = password.trim();
 
-    // Optional production fallback for the legacy hardcoded superadmin account.
-    // Keep disabled by default and enable only via explicit environment flag.
-    if (
-      ENABLE_PROD_SUPERADMIN_HARDCODED_LOGIN
-      && trimmedEmail === SUPER_ADMIN_EMAIL
-      && (normalizedPassword === SUPER_ADMIN_PASSWORD || normalizedPassword === SUPER_ADMIN_PASSWORD_ALT)
-    ) {
-      const userData: AuthUser = {
-        name: "Theta HSE Super Admin",
-        email: SUPER_ADMIN_EMAIL,
-        role: "Admin",
-        initials: "SA",
-        allowedModules: ALL_MODULE_LABELS,
-      };
-      setUser(userData);
-      setIsAuthenticated(true);
-      return "success";
-    }
-
-    // Emergency unblock for product admin during local/dev testing.
-    // This preserves testing flow even if Firebase password state is inconsistent.
-    if (ENABLE_DEV_PRODUCT_ADMIN_FALLBACK && PRODUCT_ADMIN_EMAILS.has(trimmedEmail) && normalizedPassword.length > 0) {
-      const userData: AuthUser = {
-        name: "Product Admin",
-        email: trimmedEmail,
-        role: "Admin",
-        initials: "PA",
-        allowedModules: ALL_MODULE_LABELS,
-      };
-      setUser(userData);
-      setIsAuthenticated(true);
-      return "success";
+    // Backend authentication — the backend owns who is a superadmin.
+    // Try this first for all users; fall through to Theta/Firebase if the
+    // user has no backend account (i.e. password_hash is null in the DB).
+    try {
+      const API_BASE = (import.meta.env.VITE_API_URL as string | undefined || "/api").replace(/\/$/, "");
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: { email: trimmedEmail, password: normalizedPassword } }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const tokenData = json.data ?? json;
+        if (tokenData?.access_token) {
+          localStorage.setItem("hse_jwt", tokenData.access_token);
+          const u = tokenData.user ?? {};
+          const displayName = u.display_name || u.email || "Admin";
+          const initials = displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+          const userData: AuthUser = {
+            name: displayName,
+            email: u.email || trimmedEmail,
+            role: "Admin",
+            initials,
+            allowedModules: ALL_MODULE_LABELS,
+            is_superadmin: Boolean(tokenData.is_superadmin ?? u.is_superadmin),
+          };
+          setUser(userData);
+          setIsAuthenticated(true);
+          localStorage.setItem("hse_auth", "true");
+          localStorage.setItem("hse_user", JSON.stringify(userData));
+          return "success";
+        }
+      } else if (res.status === 401) {
+        // Backend knows this user but credentials are wrong.
+        const json = await res.json().catch(() => ({}));
+        const code = (json.detail ?? json.data?.code ?? "").toString();
+        if (code === "INVALID_CREDENTIALS") return "invalid_credentials";
+      }
+      // 404 / 422 / 500 or no account in backend DB → fall through to Theta/Firebase
+    } catch {
+      // Backend unavailable — fall through to Theta/Firebase
     }
 
     // Handle hardcoded mock accounts
@@ -985,11 +991,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return "pending_approval";
       }
       if (thetaResult.status === "not_found") {
-        // Product admin accounts may not exist in Theta onboarding submissions.
-        // Fall through to Firebase/hardcoded paths instead of blocking login.
-        if (!PRODUCT_ADMIN_EMAILS.has(trimmedEmail)) {
-          return "user_not_found";
-        }
+        return "user_not_found";
       }
       if (thetaResult.status === "error") {
         const msg = String(thetaResult.error || thetaResult.reason || "").toLowerCase();
@@ -1141,6 +1143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     localStorage.removeItem("hse_auth");
     localStorage.removeItem("hse_user");
+    localStorage.removeItem("hse_jwt");
   };
 
   const markOnboardingSetupCompleted = useCallback(() => {
