@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes import admin, ai, integrations, mobile, shared, web, health
-from app.api.v1.routes import workflow, outputs, learning, onboarding
+from app.api.v1.routes import workflow, outputs, learning, onboarding, org_setup
 
 api_router = APIRouter()
 
@@ -16,3 +16,4 @@ api_router.include_router(workflow.router, tags=["workflow"])
 api_router.include_router(outputs.router, tags=["outputs"])
 api_router.include_router(learning.router, tags=["learning"])
 api_router.include_router(onboarding.router, prefix="/onboarding", tags=["onboarding"])
+api_router.include_router(org_setup.router, prefix="/org-setup", tags=["org-setup"])

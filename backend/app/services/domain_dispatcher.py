@@ -31,6 +31,7 @@ from app.services.invitation_service import InvitationService
 from app.services.subscription_service import SubscriptionService
 from app.services.platform_config_service import PlatformConfigService
 from app.services.notification_template_service import NotificationTemplateService
+from app.services.org_setup_service import OrgSetupService
 
 class DomainDispatcher:
     def __init__(self):
@@ -63,6 +64,7 @@ class DomainDispatcher:
             "subscriptions": SubscriptionService(db),
             "platform_config": PlatformConfigService(db),
             "notif_templates": NotificationTemplateService(db),
+            "org_setup": OrgSetupService(db),
         }
 
     def execute_special_command(
@@ -285,7 +287,31 @@ class DomainDispatcher:
             return self.mobile_sync.push(user.user_id, data.get("changes", []))
         if operation.startswith("ai_advisor_query") or operation == "mobile_ai_advisor_query":
             return self.ai.answer(data.get("question", ""), data)
-        
+
+        # ── Org Setup Commands ────────────────────────────────────────────────
+        if operation == "org_setup_step1_save":
+            return svc["org_setup"].save_step1(user, data)
+        if operation == "org_setup_step2_save":
+            return svc["org_setup"].save_step2(user, data)
+        if operation == "org_setup_step3_site_create":
+            return svc["org_setup"].create_site(user, data)
+        if operation == "org_setup_step3_bulk_upload":
+            return svc["org_setup"].bulk_upload_sites(user, data)
+        if operation == "org_setup_step4_user_create":
+            return svc["org_setup"].create_user(user, data)
+        if operation == "org_setup_step4_bulk_upload":
+            return svc["org_setup"].bulk_upload_users(user, data)
+        if operation == "org_setup_step5_save":
+            return svc["org_setup"].save_step5(user, data)
+        if operation == "org_setup_step6_upload":
+            return svc["org_setup"].upload_document(user, data)
+        if operation == "org_setup_step6a_import":
+            return svc["org_setup"].import_data(user, data)
+        if operation == "org_setup_step7_save":
+            return svc["org_setup"].save_step7(user, data)
+        if operation == "org_setup_activate":
+            return svc["org_setup"].activate(user, data)
+
         return None
 
     def execute_special_query(
@@ -491,5 +517,25 @@ class DomainDispatcher:
             return svc["superadmin"].get_incident_analytics()
         if operation == "superadmin_analytics_compliance":
             return svc["superadmin"].get_compliance_analytics()
+
+        # ── Org Setup Queries ─────────────────────────────────────────────────
+        if operation == "org_setup_progress_get":
+            return svc["org_setup"].get_progress(user)
+        if operation == "org_setup_step1_get":
+            return svc["org_setup"].get_step1(user)
+        if operation == "org_setup_step2_get":
+            return svc["org_setup"].get_step2(user)
+        if operation == "org_setup_step3_sites_list":
+            return svc["org_setup"].list_sites(user)
+        if operation == "org_setup_step4_users_list":
+            return svc["org_setup"].list_users(user)
+        if operation == "org_setup_step5_get":
+            return svc["org_setup"].get_step5(user)
+        if operation == "org_setup_step6_documents_list":
+            return svc["org_setup"].list_documents(user)
+        if operation == "org_setup_step6a_imports_list":
+            return svc["org_setup"].list_imports(user)
+        if operation == "org_setup_step7_get":
+            return svc["org_setup"].get_step7(user)
 
         return None
