@@ -16,6 +16,10 @@ env/
 .env.production
 .env.development
 
+# SQLite test databases
+*.db
+*.sqlite
+
 # Editor / OS
 .DS_Store
 *.swp
