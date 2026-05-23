@@ -5,6 +5,33 @@ import {
   BookOpen, Brain, CheckCircle2, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import { useCreateTenantMutation } from "@/features/superadmin/api/adminApi";
+import { DataIngestionPanel } from "@/features/superadmin/components/DataIngestionPanel";
+import type { StandardField } from "@/features/superadmin/components/DataIngestionPanel";
+
+// Standard field definitions used by the ingestion panel for each step
+const SITE_FIELDS: StandardField[] = [
+  { key: "site_name",    label: "Site Name",    required: true,  example: "Main Factory" },
+  { key: "site_type",    label: "Site Type",    required: false, example: "factory" },
+  { key: "city",         label: "City",         required: false, example: "London" },
+  { key: "country",      label: "Country",      required: false, example: "UK" },
+  { key: "address",      label: "Address",      required: false, example: "123 Industrial Ave" },
+  { key: "manager",      label: "Site Manager", required: false, example: "John Smith" },
+  { key: "capacity",     label: "Capacity",     required: false, example: "500" },
+];
+
+const USER_FIELDS: StandardField[] = [
+  { key: "first_name",   label: "First Name",   required: true,  example: "Jane" },
+  { key: "last_name",    label: "Last Name",    required: true,  example: "Doe" },
+  { key: "email",        label: "Email",        required: true,  example: "jane.doe@org.com" },
+  { key: "department",   label: "Department",   required: false, example: "Operations" },
+  { key: "role",         label: "Role",         required: false, example: "Site Engineer" },
+  { key: "site",         label: "Site",         required: false, example: "Main Factory" },
+  { key: "employee_id",  label: "Employee ID",  required: false, example: "EMP-001" },
+  { key: "phone",        label: "Phone",        required: false, example: "+44 7700 000000" },
+];
+
+const SITE_TEMPLATE = `site_name,site_type,city,country,address,manager,capacity\nMain Factory,factory,London,UK,123 Industrial Ave,John Smith,500\nWarehouse A,warehouse,Manchester,UK,456 Logistics Park,Sarah Lee,200\n`;
+const USER_TEMPLATE = `first_name,last_name,email,department,role,site,employee_id,phone\nJane,Doe,jane.doe@org.com,Operations,Site Engineer,Main Factory,EMP-001,+44 7700 000000\nJohn,Smith,john.smith@org.com,Safety,HSE Manager,Warehouse A,EMP-002,+44 7700 000001\n`;
 
 const STEPS = [
   { id: 1, label: "Organisation Details", icon: Building2, description: "Basic org info, branding, and contact" },
@@ -172,7 +199,7 @@ function Step3({ data, set }: { data: WizardData; set: (k: keyof WizardData, v: 
   const addSite = () => set("sites", [...data.sites, { name: "", type: "office" }]);
   const removeSite = (i: number) => set("sites", data.sites.filter((_, idx) => idx !== i));
 
-  return (
+  const manualForm = (
     <div className="space-y-4">
       {data.sites.map((site, i) => (
         <div key={i} className="flex items-center gap-3 p-4 rounded-xl border" style={{ borderColor: "#E3E9F6" }}>
@@ -182,12 +209,7 @@ function Step3({ data, set }: { data: WizardData; set: (k: keyof WizardData, v: 
           </div>
           <div className="w-36">
             <Label>Type</Label>
-            <select
-              className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-              style={{ borderColor: "#E3E9F6" }}
-              value={site.type}
-              onChange={(e) => updateSite(i, "type", e.target.value)}
-            >
+            <select className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} value={site.type} onChange={(e) => updateSite(i, "type", e.target.value)}>
               {["office", "factory", "warehouse", "field", "construction", "other"].map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
@@ -201,10 +223,28 @@ function Step3({ data, set }: { data: WizardData; set: (k: keyof WizardData, v: 
       <button type="button" onClick={addSite} className="text-sm font-medium" style={{ color: "#4A57B9" }}>+ Add another site</button>
     </div>
   );
+
+  return (
+    <DataIngestionPanel
+      entityLabel="site"
+      standardFields={SITE_FIELDS}
+      templateName="sites-template.csv"
+      templateData={SITE_TEMPLATE}
+      manualForm={manualForm}
+      onImport={async (rows, mapping) => {
+        const colToField = Object.fromEntries(Object.entries(mapping).filter(([, v]) => v).map(([k, v]) => [v, k]));
+        const imported = rows.map((row) => ({
+          name: row[colToField["site_name"]] ?? "",
+          type: row[colToField["site_type"]] ?? "office",
+        })).filter((s) => s.name.trim());
+        if (imported.length) set("sites", imported);
+      }}
+    />
+  );
 }
 
 function Step4({ data, set }: { data: WizardData; set: (k: keyof WizardData, v: unknown) => void }) {
-  return (
+  const manualForm = (
     <div className="space-y-4">
       <div>
         <Label>Subscription Plan *</Label>
@@ -225,8 +265,32 @@ function Step4({ data, set }: { data: WizardData; set: (k: keyof WizardData, v: 
       <div>
         <Label>Primary Admin Email *</Label>
         <Input value={data.admin_email} onChange={(v) => set("admin_email", v)} placeholder="admin@organisation.com" type="email" />
-        <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>An invitation will be sent to this address.</p>
+        <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>An invitation will be sent to this address after activation.</p>
       </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="p-3 rounded-xl text-xs" style={{ background: "#EEF2FB", color: "#3730A3" }}>
+        <strong>Tip:</strong> You can invite a single admin manually, or bulk-import your entire team from HRMS (Workday, BambooHR, ADP), ERP, Zoho, or a CSV export — columns are auto-mapped to our schema.
+      </div>
+      <DataIngestionPanel
+        entityLabel="user"
+        standardFields={USER_FIELDS}
+        templateName="users-template.csv"
+        templateData={USER_TEMPLATE}
+        manualForm={manualForm}
+        onImport={async (rows, mapping) => {
+          const colToField = Object.fromEntries(Object.entries(mapping).filter(([, v]) => v).map(([k, v]) => [v, k]));
+          const firstAdmin = rows[0];
+          if (firstAdmin) {
+            const email = firstAdmin[colToField["email"]] ?? "";
+            if (email) set("admin_email", email);
+          }
+          console.info("Imported", rows.length, "users with mapping", mapping);
+        }}
+      />
     </div>
   );
 }
