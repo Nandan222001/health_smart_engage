@@ -9,7 +9,7 @@ import {
   LayoutDashboard, ChevronDown, ChevronRight,
   Database, BrainCircuit, GitBranch, Eye, RefreshCw,
   Mail as MailIcon, CreditCard, TrendingUp, Bell,
-  SlidersHorizontal, ScrollText,
+  SlidersHorizontal, ScrollText, MapPin, BookMarked,
 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 
@@ -45,7 +45,22 @@ const MAIN_NAV: NavGroup[] = [
       { name: "Incidents", icon: AlertTriangle, path: "/violations" },
       { name: "Engagement", icon: Heart, path: "/engagement" },
       { name: "Settings", icon: Settings, path: "/settings" },
-      { name: "Org Setup", icon: Building2, path: "/org-setup" },
+    ],
+  },
+];
+
+const ORG_ADMIN_NAV: NavGroup[] = [
+  {
+    label: "Organisation Admin",
+    items: [
+      { name: "Org Setup",        icon: Building2,    path: "/org-setup" },
+      { name: "Sites & Zones",    icon: MapPin,        path: "/sites-zones" },
+      { name: "Users & Roles",    icon: Users,         path: "/users" },
+      { name: "Compliance",       icon: Shield,        path: "/compliance" },
+      { name: "Workflows",        icon: GitBranch,     path: "/workflow" },
+      { name: "Knowledge Centre", icon: BookMarked,    path: "/settings" },
+      { name: "AI Intelligence",  icon: BrainCircuit,  path: "/ai-intelligence" },
+      { name: "Reports",          icon: BarChart3,     path: "/analytics" },
     ],
   },
 ];
@@ -119,6 +134,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   };
 
   const visibleGroups = isSuperAdmin ? SUPERADMIN_NAV : MAIN_NAV;
+  const isOrgAdmin = !isSuperAdmin && user?.role === "Admin";
 
   return (
     <>
@@ -196,6 +212,41 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                     >
                       <item.icon className="w-[17px] h-[17px] flex-shrink-0" style={{ color: active ? '#ffffff' : '#7C869C' }} />
                       <span className="text-[13px] flex-1 text-left" style={{ color: active ? '#ffffff' : '#2F3A4F', fontWeight: active ? 600 : 500 }}>
+                        {item.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Organisation Admin section — visible only to org admins */}
+          {isOrgAdmin && ORG_ADMIN_NAV.map((group) => (
+            <div key="org-admin-nav">
+              <div className="px-3 py-1 mt-1">
+                <span className="text-[10px] tracking-[1.1px] uppercase" style={{ color: '#0E7490', fontWeight: 700 }}>
+                  {group.label}
+                </span>
+              </div>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active = isActive(item.path);
+                  const isHovered = hovered === `oa-${item.name}`;
+                  return (
+                    <button
+                      key={item.name}
+                      onClick={() => { navigate(item.path); onCloseMobile?.(); }}
+                      onMouseEnter={() => setHovered(`oa-${item.name}`)}
+                      onMouseLeave={() => setHovered(null)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200"
+                      style={active ? {
+                        background: 'linear-gradient(135deg, #0E7490 0%, #06B6D4 100%)',
+                        boxShadow: '0 6px 16px rgba(6, 182, 212, 0.25)',
+                      } : { background: isHovered ? '#ECFEFF' : 'transparent' }}
+                    >
+                      <item.icon className="w-[17px] h-[17px] flex-shrink-0" style={{ color: active ? '#ffffff' : '#0E7490' }} />
+                      <span className="text-[13px] flex-1 text-left" style={{ color: active ? '#ffffff' : '#164E63', fontWeight: active ? 600 : 500 }}>
                         {item.name}
                       </span>
                     </button>
