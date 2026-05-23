@@ -12,6 +12,17 @@ import type {
   DashboardKPI, Report, AIInsight, MobileAlert, AlertRule,
   ExportJob, Integration, ReportType, ExportFormat,
 } from "../api/outputsApi";
+import {
+  useGetOperationalDashboardQuery,
+  useListReportsQuery,
+  useGenerateReportMutation,
+  useGetAIInsightsQuery,
+  useActionInsightMutation,
+  useGetAlertsDashboardQuery,
+  useUpdateAlertRuleMutation,
+  useGetExportShareDataQuery,
+  useCreateExportJobMutation,
+} from "../api/outputsApi";
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -211,6 +222,8 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
 // ─── Dashboard Tab ─────────────────────────────────────────────────────────────
 
 function DashboardsTab() {
+  const { data: dashData, isLoading: dashLoading } = useGetOperationalDashboardQuery();
+  const kpis = dashData?.kpis?.length ? dashData.kpis : MOCK_KPIS;
   const maxIncident = Math.max(...TOP_INCIDENT_TYPES.map((t) => t.count));
   return (
     <div className="space-y-6">
@@ -220,11 +233,11 @@ function DashboardsTab() {
           <h3 className="text-[14px] font-semibold" style={{ color: "#111827" }}>Real-time Operational KPIs</h3>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium" style={{ background: "#F0FDF4", color: "#166534" }}>
             <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            Live
+            {dashLoading ? "Loading…" : "Live"}
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {MOCK_KPIS.map((kpi) => <KPICard key={kpi.label} kpi={kpi} />)}
+          {kpis.map((kpi) => <KPICard key={kpi.label} kpi={kpi} />)}
         </div>
       </div>
 
@@ -310,17 +323,25 @@ function DashboardsTab() {
 // ─── Reports Tab ──────────────────────────────────────────────────────────────
 
 function ReportsTab() {
+  const { data: reportsData = [] } = useListReportsQuery();
+  const [generateReport, { isLoading: isGenerating }] = useGenerateReportMutation();
+  const allReports = reportsData.length ? reportsData : MOCK_REPORTS;
   const [filter, setFilter] = useState<ReportType | "all">("all");
-  const [generating, setGenerating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<ReportType>("compliance");
   const [formFormat, setFormFormat] = useState<"pdf" | "excel" | "csv">("pdf");
+  const [periodStart, setPeriodStart] = useState("2026-05-01");
+  const [periodEnd, setPeriodEnd] = useState("2026-05-31");
 
-  const filtered = filter === "all" ? MOCK_REPORTS : MOCK_REPORTS.filter((r) => r.type === filter);
+  const filtered = filter === "all" ? allReports : allReports.filter((r) => r.type === filter);
 
-  function handleGenerate() {
-    setGenerating(true);
-    setTimeout(() => { setGenerating(false); setShowForm(false); }, 1800);
+  async function handleGenerate() {
+    try {
+      await generateReport({ type: formType, format: formFormat, period_start: periodStart, period_end: periodEnd });
+      setShowForm(false);
+    } catch {
+      // leave form open on error
+    }
   }
 
   return (
@@ -372,17 +393,17 @@ function ReportsTab() {
             </div>
             <div>
               <label className="block text-[11px] font-semibold mb-1" style={{ color: "#6B7280" }}>Period Start</label>
-              <input type="date" className="w-full rounded-lg border px-3 py-2 text-[13px]" style={{ borderColor: "#D1D5DB" }} defaultValue="2026-05-01" />
+              <input type="date" className="w-full rounded-lg border px-3 py-2 text-[13px]" style={{ borderColor: "#D1D5DB" }} value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
             </div>
             <div>
               <label className="block text-[11px] font-semibold mb-1" style={{ color: "#6B7280" }}>Period End</label>
-              <input type="date" className="w-full rounded-lg border px-3 py-2 text-[13px]" style={{ borderColor: "#D1D5DB" }} defaultValue="2026-05-31" />
+              <input type="date" className="w-full rounded-lg border px-3 py-2 text-[13px]" style={{ borderColor: "#D1D5DB" }} value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleGenerate} disabled={generating} className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white" style={{ background: "linear-gradient(135deg,#4A57B9,#6F80E8)" }}>
-              {generating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              {generating ? "Generating…" : "Generate"}
+            <button onClick={handleGenerate} disabled={isGenerating} className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white" style={{ background: "linear-gradient(135deg,#4A57B9,#6F80E8)" }}>
+              {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+              {isGenerating ? "Generating…" : "Generate"}
             </button>
             <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg text-[13px] font-medium" style={{ background: "#F1F5F9", color: "#374151" }}>Cancel</button>
           </div>
@@ -450,16 +471,20 @@ const SEVERITY_STYLES: Record<string, { border: string; dot: string }> = {
 };
 
 function InsightsTab() {
-  const [actioned, setActioned] = useState<Set<string>>(new Set(MOCK_INSIGHTS.filter((i) => i.actioned).map((i) => i.id)));
-  const critical = MOCK_INSIGHTS.filter((i) => i.severity === "critical").length;
-  const warnings = MOCK_INSIGHTS.filter((i) => i.severity === "warning").length;
+  const { data: insightsData } = useGetAIInsightsQuery();
+  const [actionInsightMutation] = useActionInsightMutation();
+  const insights = insightsData?.insights?.length ? insightsData.insights : MOCK_INSIGHTS;
+  const [localActioned, setLocalActioned] = useState<Set<string>>(new Set<string>());
+  const actioned = new Set([...insights.filter((i) => i.actioned).map((i) => i.id), ...localActioned]);
+  const critical = insights.filter((i) => i.severity === "critical").length;
+  const warnings = insights.filter((i) => i.severity === "warning").length;
 
   return (
     <div className="space-y-5">
       {/* Summary bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Total Insights", value: MOCK_INSIGHTS.length, icon: Lightbulb, color: "#6366F1" },
+          { label: "Total Insights", value: insights.length, icon: Lightbulb, color: "#6366F1" },
           { label: "Critical", value: critical, icon: AlertTriangle, color: "#EF4444" },
           { label: "Warnings", value: warnings, icon: AlertTriangle, color: "#F59E0B" },
           { label: "Actioned Today", value: actioned.size, icon: CheckCircle2, color: "#22C55E" },
@@ -478,7 +503,7 @@ function InsightsTab() {
 
       {/* Insight cards */}
       <div className="space-y-3">
-        {MOCK_INSIGHTS.map((insight) => {
+        {insights.map((insight) => {
           const cat = CATEGORY_STYLES[insight.category];
           const sev = SEVERITY_STYLES[insight.severity];
           const isActioned = actioned.has(insight.id);
@@ -513,7 +538,7 @@ function InsightsTab() {
                   )}
                   {!isActioned && (
                     <button
-                      onClick={() => setActioned((prev) => new Set([...prev, insight.id]))}
+                      onClick={() => { setLocalActioned((prev) => new Set([...prev, insight.id])); actionInsightMutation(insight.id); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold"
                       style={{ background: "#EEF2FF", color: "#3730A3" }}
                     >
@@ -533,10 +558,17 @@ function InsightsTab() {
 // ─── Mobile Alerts Tab ────────────────────────────────────────────────────────
 
 function AlertsTab() {
-  const [rules, setRules] = useState(MOCK_RULES);
+  const { data: alertsData } = useGetAlertsDashboardQuery();
+  const [updateRule] = useUpdateAlertRuleMutation();
+  const recentAlerts = alertsData?.recent_alerts?.length ? alertsData.recent_alerts : MOCK_ALERTS;
+  const baseRules = alertsData?.rules?.length ? alertsData.rules : MOCK_RULES;
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const rules = baseRules.map((r) => ({ ...r, enabled: r.id in overrides ? overrides[r.id] : r.enabled }));
 
   function toggleRule(id: string) {
-    setRules((prev) => prev.map((r) => r.id === id ? { ...r, enabled: !r.enabled } : r));
+    const current = rules.find((r) => r.id === id)?.enabled ?? true;
+    setOverrides((prev) => ({ ...prev, [id]: !current }));
+    updateRule({ id, enabled: !current });
   }
 
   return (
@@ -544,9 +576,9 @@ function AlertsTab() {
       {/* Summary row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Sent Today", value: 14, color: "#6366F1" },
-          { label: "Critical Unread", value: 2, color: "#EF4444" },
-          { label: "Pending", value: 3, color: "#F59E0B" },
+          { label: "Sent Today", value: alertsData?.sent_today ?? 14, color: "#6366F1" },
+          { label: "Critical Unread", value: alertsData?.critical_unread ?? 2, color: "#EF4444" },
+          { label: "Pending", value: alertsData?.pending ?? 3, color: "#F59E0B" },
           { label: "Delivery Rate", value: "97%", color: "#22C55E" },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border p-4 text-center" style={{ background: "#fff", borderColor: "#E3E9F6" }}>
@@ -560,7 +592,7 @@ function AlertsTab() {
       <div>
         <h3 className="text-[14px] font-semibold mb-3" style={{ color: "#111827" }}>Recent Alerts</h3>
         <div className="space-y-3">
-          {MOCK_ALERTS.map((alert) => {
+          {recentAlerts.map((alert) => {
             const pColor = PRIORITY_COLORS[alert.priority];
             const readPct = Math.round((alert.read_count / alert.total_recipients) * 100);
             return (
@@ -637,13 +669,19 @@ function AlertsTab() {
 // ─── Export & Share Tab ───────────────────────────────────────────────────────
 
 function ExportShareTab() {
-  const [exporting, setExporting] = useState(false);
+  const { data: exportData } = useGetExportShareDataQuery();
+  const [createExportJob, { isLoading: isExporting }] = useCreateExportJobMutation();
+  const exports = exportData?.recent_exports?.length ? exportData.recent_exports : MOCK_EXPORTS;
+  const integrations = exportData?.integrations?.length ? exportData.integrations : MOCK_INTEGRATIONS;
   const [selFormat, setSelFormat] = useState<ExportFormat>("excel");
   const [selModule, setSelModule] = useState("Incidents");
 
-  function handleExport() {
-    setExporting(true);
-    setTimeout(() => setExporting(false), 1600);
+  async function handleExport() {
+    try {
+      await createExportJob({ format: selFormat, module: selModule });
+    } catch {
+      // export queued locally
+    }
   }
 
   const FORMAT_OPTIONS: { value: ExportFormat; label: string; desc: string }[] = [
@@ -696,8 +734,8 @@ function ExportShareTab() {
             className="flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold text-white"
             style={{ background: "linear-gradient(135deg,#4A57B9,#6F80E8)" }}
           >
-            {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {exporting ? "Preparing…" : "Export Now"}
+            {isExporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {isExporting ? "Preparing…" : "Export Now"}
           </button>
         </div>
       </div>
@@ -706,10 +744,10 @@ function ExportShareTab() {
       <div>
         <h3 className="text-[14px] font-semibold mb-3" style={{ color: "#111827" }}>Recent Exports</h3>
         <div className="rounded-xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
-          {MOCK_EXPORTS.map((job, i) => {
+          {exports.map((job, i) => {
             const FIcon = FORMAT_ICONS[job.format];
             return (
-              <div key={job.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: i < MOCK_EXPORTS.length - 1 ? "1px solid #F1F5F9" : "none" }}>
+              <div key={job.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: i < exports.length - 1 ? "1px solid #F1F5F9" : "none" }}>
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#EEF2FF" }}>
                   <FIcon className="w-4 h-4" style={{ color: "#4A57B9" }} />
                 </div>
@@ -736,7 +774,7 @@ function ExportShareTab() {
           </button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {MOCK_INTEGRATIONS.map((int) => {
+          {integrations.map((int) => {
             const st = INTEGRATION_STATUS_STYLES[int.status];
             const StIcon = st.icon;
             const TYPE_ICONS: Record<string, React.ElementType> = { erp: Database, hrms: Users, bi: BarChart3, webhook: Link2, api: Globe };

@@ -7,6 +7,15 @@ import {
   Star, GitBranch as GitBranchIcon, Layers,
 } from "lucide-react";
 import type { MLModel, DetectedPattern, SafetyOutcome, PredictionMetric } from "../api/learningApi";
+import {
+  useGetLearningLoopDataQuery,
+  useListOperationalEventsQuery,
+  useListPatternsQuery,
+  useListModelsQuery,
+  useTriggerTrainingMutation,
+  usePromoteModelVersionMutation,
+  useGetSafetyOutcomesQuery,
+} from "../api/learningApi";
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -220,8 +229,11 @@ type Tab = typeof TABS[number]["id"];
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 
 function OverviewTab() {
+  const { data: loopData } = useGetLearningLoopDataQuery();
   const [activeStage, setActiveStage] = useState<number | null>(null);
-  const avgAccuracy = MOCK_MODELS.reduce((s, m) => s + m.accuracy, 0) / MOCK_MODELS.length;
+  const models = loopData?.models?.length ? loopData.models : MOCK_MODELS;
+  const summary = loopData?.summary;
+  const avgAccuracy = models.reduce((s, m) => s + m.accuracy, 0) / models.length;
   const maxAcc = Math.max(...ACCURACY_HISTORY);
   const minAcc = Math.min(...ACCURACY_HISTORY);
   const range = maxAcc - minAcc || 1;
@@ -282,10 +294,10 @@ function OverviewTab() {
       {/* Summary KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Events Ingested Today", value: 284, icon: Database, color: "#6366F1", sub: "+18% vs yesterday" },
-          { label: "Patterns Detected", value: 6, icon: BrainCircuit, color: "#8B5CF6", sub: "2 new this week" },
-          { label: "Avg Model Accuracy", value: `${avgAccuracy.toFixed(1)}%`, icon: Target, color: "#10B981", sub: "+4.1% over 30 days" },
-          { label: "Incidents Prevented (est.)", value: 34, icon: Shield, color: "#22C55E", sub: "based on predictions" },
+          { label: "Events Ingested Today", value: summary?.events_ingested_today ?? 284, icon: Database, color: "#6366F1", sub: "Operational data stream" },
+          { label: "Patterns Detected", value: summary?.patterns_detected ?? 6, icon: BrainCircuit, color: "#8B5CF6", sub: `${summary?.cycle_runs_this_month ?? 0} cycle runs this month` },
+          { label: "Avg Model Accuracy", value: `${avgAccuracy.toFixed(1)}%`, icon: Target, color: "#10B981", sub: `+${summary?.accuracy_improvement_30d?.toFixed(1) ?? "4.1"}% over 30 days` },
+          { label: "Incidents Prevented (est.)", value: summary?.incidents_prevented_estimate ?? 34, icon: Shield, color: "#22C55E", sub: "based on predictions" },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border p-4" style={{ background: "#fff", borderColor: "#E3E9F6" }}>
             <div className="flex items-start justify-between mb-3">
@@ -330,7 +342,7 @@ function OverviewTab() {
 
       {/* Model mini-cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {MOCK_MODELS.map((model) => {
+        {models.map((model) => {
           const st = MODEL_STATUS_STYLES[model.status];
           const pos = model.accuracy_delta >= 0;
           return (
@@ -369,19 +381,24 @@ function OverviewTab() {
 // ─── Data Feed Tab ────────────────────────────────────────────────────────────
 
 function DataFeedTab() {
+  const { data: eventsData = [] } = useListOperationalEventsQuery();
+  const events = eventsData.length ? eventsData : MOCK_EVENTS;
   const [filter, setFilter] = useState<string>("all");
   const sources = ["all", "incident", "audit", "permit", "capa", "hazard", "training", "workflow", "sensor"];
-  const filtered = filter === "all" ? MOCK_EVENTS : MOCK_EVENTS.filter((e) => e.source === filter);
+  const filtered = filter === "all" ? events : events.filter((e) => e.source === filter);
+  const processed = events.filter((e) => e.processed).length;
+  const pending = events.length - processed;
+  const totalFeatures = events.reduce((s, e) => s + e.features_extracted, 0);
 
   return (
     <div className="space-y-5">
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Events Today", value: 284, color: "#6366F1" },
-          { label: "Processed", value: 271, color: "#10B981" },
-          { label: "Pending", value: 13, color: "#F59E0B" },
-          { label: "Features Extracted", value: "18.4k", color: "#3B82F6" },
+          { label: "Events Today", value: events.length, color: "#6366F1" },
+          { label: "Processed", value: processed, color: "#10B981" },
+          { label: "Pending", value: pending, color: "#F59E0B" },
+          { label: "Features Extracted", value: totalFeatures > 999 ? `${(totalFeatures / 1000).toFixed(1)}k` : totalFeatures, color: "#3B82F6" },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border p-4 text-center" style={{ background: "#fff", borderColor: "#E3E9F6" }}>
             <div className="text-[22px] font-bold" style={{ color: s.color }}>{s.value}</div>
@@ -440,12 +457,14 @@ function DataFeedTab() {
 // ─── Patterns Tab ─────────────────────────────────────────────────────────────
 
 function PatternsTab() {
+  const { data: patternsData = [] } = useListPatternsQuery();
+  const patterns = patternsData.length ? patternsData : MOCK_PATTERNS;
   return (
     <div className="space-y-5">
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {Object.entries(PATTERN_TYPE_STYLES).map(([type, style]) => {
-          const count = MOCK_PATTERNS.filter((p) => p.type === type).length;
+          const count = patterns.filter((p) => p.type === type).length;
           return (
             <div key={type} className="rounded-xl border p-3 text-center" style={{ background: "#fff", borderColor: "#E3E9F6" }}>
               <div className="text-[20px] font-bold mb-1" style={{ color: style.color }}>{count}</div>
@@ -457,7 +476,7 @@ function PatternsTab() {
 
       {/* Pattern cards */}
       <div className="space-y-3">
-        {MOCK_PATTERNS.map((pattern) => {
+        {patterns.map((pattern) => {
           const pt = PATTERN_TYPE_STYLES[pattern.type];
           const confColor = pattern.confidence >= 85 ? "#22C55E" : pattern.confidence >= 70 ? "#F59E0B" : "#EF4444";
           return (
@@ -501,20 +520,28 @@ function PatternsTab() {
 // ─── Models Tab ───────────────────────────────────────────────────────────────
 
 function ModelsTab() {
+  const { data: modelsData = [] } = useListModelsQuery();
+  const [triggerTraining] = useTriggerTrainingMutation();
+  const [promoteVersion] = usePromoteModelVersionMutation();
+  const models = modelsData.length ? modelsData : MOCK_MODELS;
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [training, setTraining] = useState<Set<string>>(new Set());
+  const [localTraining, setLocalTraining] = useState<Set<string>>(new Set());
 
-  function triggerTrain(id: string) {
-    setTraining((prev) => new Set([...prev, id]));
-    setTimeout(() => setTraining((prev) => { const n = new Set(prev); n.delete(id); return n; }), 2500);
+  async function triggerTrain(id: string) {
+    setLocalTraining((prev) => new Set([...prev, id]));
+    try {
+      await triggerTraining({ model_id: id });
+    } finally {
+      setTimeout(() => setLocalTraining((prev) => { const n = new Set(prev); n.delete(id); return n; }), 2500);
+    }
   }
 
   return (
     <div className="space-y-4">
-      {MOCK_MODELS.map((model) => {
+      {models.map((model) => {
         const st = MODEL_STATUS_STYLES[model.status];
         const isExpanded = expanded === model.id;
-        const isTraining = training.has(model.id);
+        const isTraining = localTraining.has(model.id) || model.status === "training";
         const pos = model.accuracy_delta >= 0;
 
         return (
@@ -548,7 +575,7 @@ function ModelsTab() {
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); triggerTrain(model.id); }}
-                  disabled={isTraining || model.status === "training"}
+                  disabled={isTraining}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold"
                   style={{ background: isTraining ? "#F1F5F9" : "#EEF2FF", color: isTraining ? "#94A3B8" : "#3730A3" }}
                 >
@@ -593,7 +620,11 @@ function ModelsTab() {
                               <td className="px-3 py-2.5" style={{ color: "#374151" }}>{v.validation_loss}</td>
                               <td className="px-3 py-2.5">
                                 {!isCurrent && (
-                                  <button className="px-2 py-1 rounded text-[10px] font-medium" style={{ background: "#EEF2FF", color: "#3730A3" }}>Promote</button>
+                                  <button
+                                    onClick={() => promoteVersion({ model_id: model.id, version: v.version })}
+                                    className="px-2 py-1 rounded text-[10px] font-medium"
+                                    style={{ background: "#EEF2FF", color: "#3730A3" }}
+                                  >Promote</button>
                                 )}
                               </td>
                             </tr>
@@ -618,12 +649,17 @@ function ModelsTab() {
 // ─── Outcomes Tab ─────────────────────────────────────────────────────────────
 
 function OutcomesTab() {
+  const { data: loopData } = useGetLearningLoopDataQuery();
+  const { data: outcomesData = [] } = useGetSafetyOutcomesQuery();
+  const safetyOutcomes = outcomesData.length ? outcomesData : MOCK_SAFETY_OUTCOMES;
+  const predictionMetrics = loopData?.prediction_metrics?.length ? loopData.prediction_metrics : MOCK_PREDICTION_METRICS;
+  const incidentsPrevented = loopData?.summary?.incidents_prevented_estimate ?? 34;
   return (
     <div className="space-y-6">
       {/* Hero stat */}
       <div className="rounded-xl p-6 text-center" style={{ background: "linear-gradient(135deg, #4A57B9 0%, #6F80E8 100%)" }}>
         <Shield className="w-10 h-10 text-white mx-auto mb-3 opacity-80" />
-        <div className="text-[40px] font-bold text-white mb-1">34</div>
+        <div className="text-[40px] font-bold text-white mb-1">{incidentsPrevented}</div>
         <div className="text-white text-[14px] font-medium opacity-90">Estimated Incidents Prevented This Month</div>
         <div className="text-white text-[12px] opacity-70 mt-1">Based on AI predictions acted upon before incidents escalated</div>
       </div>
@@ -641,10 +677,10 @@ function OutcomesTab() {
               </tr>
             </thead>
             <tbody>
-              {MOCK_PREDICTION_METRICS.map((m, i) => {
+              {predictionMetrics.map((m, i) => {
                 const pos = m.improvement_vs_prior >= 0;
                 return (
-                  <tr key={m.model_id} style={{ borderBottom: i < MOCK_PREDICTION_METRICS.length - 1 ? "1px solid #F1F5F9" : "none" }}>
+                  <tr key={m.model_id} style={{ borderBottom: i < predictionMetrics.length - 1 ? "1px solid #F1F5F9" : "none" }}>
                     <td className="px-4 py-3 font-medium" style={{ color: "#111827" }}>{m.model_name}</td>
                     <td className="px-4 py-3" style={{ color: "#374151" }}>{m.predictions_made.toLocaleString()}</td>
                     <td className="px-4 py-3" style={{ color: "#374151" }}>{m.correct.toLocaleString()}</td>
@@ -676,7 +712,7 @@ function OutcomesTab() {
       <div>
         <h3 className="text-[14px] font-semibold mb-3" style={{ color: "#111827" }}>Safety Outcomes vs Baseline</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {MOCK_SAFETY_OUTCOMES.map((outcome) => {
+          {safetyOutcomes.map((outcome) => {
             const improved = outcome.direction === "lower_is_better"
               ? outcome.current < outcome.baseline
               : outcome.current > outcome.baseline;
