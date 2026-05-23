@@ -32,6 +32,8 @@ import { StorageLayerPage } from "@/features/superadmin/pages/StorageLayerPage";
 import { AIIntelligencePage } from "@/features/ai-intelligence/pages/AIIntelligencePage";
 // Decision & Workflow Engine (Layer 5)
 import { WorkflowEnginePage } from "@/features/workflow/pages/WorkflowEnginePage";
+// Outputs – Visibility & Intelligence (Layer 6)
+import { OutputsPage } from "@/features/outputs/pages/OutputsPage";
 // New feature pages
 import { PermitsPage } from "@/features/permits/pages/PermitsPage";
 import { IncidentsPage } from "@/features/incidents/pages/IncidentsPage";
@@ -220,6 +222,8 @@ export const router = createBrowserRouter([
       { path: "ai-intelligence", Component: AIIntelligencePage },
       // Decision & Workflow Engine Layer 5
       { path: "workflow", Component: WorkflowEnginePage },
+      // Outputs – Visibility & Intelligence Layer 6
+      { path: "outputs", Component: OutputsPage },
     ],
   },
   {
