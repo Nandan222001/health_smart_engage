@@ -28,6 +28,21 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(api_router, prefix=settings.api_v1_prefix)
 
+    @app.on_event("startup")
+    def _create_new_tables():
+        """Ensure all new SQLAlchemy models have their tables created.
+        create_all is safe to call on existing tables — it only creates missing ones."""
+        try:
+            from app.core.database import Base, engine
+            import app.models.domain        # noqa: F401
+            import app.models.tenant        # noqa: F401
+            import app.models.generic_record  # noqa: F401
+            import app.models.audit_log     # noqa: F401
+            Base.metadata.create_all(bind=engine)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Table auto-creation skipped: %s", exc)
+
     return app
 
 

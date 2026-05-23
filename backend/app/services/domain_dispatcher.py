@@ -15,6 +15,12 @@ from app.services.dashboard_service import DashboardService
 from app.services.foundation_service import FoundationService
 from app.services.vendor_service import VendorService
 from app.services.knowledge_service import KnowledgeService
+# New services
+from app.services.workflow_engine_service import WorkflowEngineService
+from app.services.ai_intelligence_service import AIIntelligenceService
+from app.services.outputs_service import OutputsService
+from app.services.learning_service import LearningService
+from app.services.superadmin_service import SuperAdminService
 
 class DomainDispatcher:
     def __init__(self):
@@ -36,7 +42,12 @@ class DomainDispatcher:
             "vendors": VendorService(db),
             "knowledge": KnowledgeService(db),
             "sync": MobileSyncService(db),
-            "notifications": NotificationService(db)
+            "notifications": NotificationService(db),
+            "workflow_engine": WorkflowEngineService(db),
+            "ai_intelligence": AIIntelligenceService(db),
+            "outputs": OutputsService(db),
+            "learning": LearningService(db),
+            "superadmin": SuperAdminService(db),
         }
 
     def execute_special_command(
@@ -157,6 +168,56 @@ class DomainDispatcher:
         if operation == "integrations_assets_upsert":
             res = svc["assets"].create_asset(user, data)
             return {"id": res.id, "status": "upserted"}
+
+        # ── Workflow Engine Commands ──────────────────────────────────────────
+        if operation == "workflow_cases_approve":
+            return svc["workflow_engine"].approve_case(
+                user, path_params.get("caseId"), path_params.get("approvalId"), data
+            )
+        if operation == "workflow_cases_reject":
+            return svc["workflow_engine"].reject_case(
+                user, path_params.get("caseId"), path_params.get("approvalId"), data
+            )
+        if operation == "workflow_cases_escalate":
+            return svc["workflow_engine"].escalate_case(user, path_params.get("caseId"), data)
+        if operation == "workflow_cases_advance":
+            return svc["workflow_engine"].advance_stage(user, path_params.get("caseId"), data)
+        if operation == "workflow_resolutions_evidence":
+            return svc["workflow_engine"].submit_evidence(user, path_params.get("resolutionId"), data)
+        if operation == "workflow_resolutions_verify":
+            return svc["workflow_engine"].verify_resolution(user, path_params.get("resolutionId"), data)
+        if operation == "workflow_alerts_acknowledge":
+            return svc["workflow_engine"].acknowledge_alert(user, path_params.get("alertId"))
+
+        # ── AI Intelligence Commands ──────────────────────────────────────────
+        if operation == "ai_intelligence_models_retrain":
+            return svc["ai_intelligence"].trigger_retraining(user, data)
+        if operation == "ai_recommendations_dismiss":
+            return svc["ai_intelligence"].dismiss_recommendation(user, path_params.get("recommendationId"))
+        if operation == "ai_recommendations_act":
+            return svc["ai_intelligence"].act_on_recommendation(user, path_params.get("recommendationId"), data)
+
+        # ── Outputs Commands ──────────────────────────────────────────────────
+        if operation == "outputs_reports_generate":
+            return svc["outputs"].generate_report(user, data)
+        if operation == "outputs_insights_action":
+            return svc["outputs"].action_insight(user, path_params.get("insightId"))
+        if operation == "outputs_alert_rules_update":
+            return svc["outputs"].update_alert_rule(user, path_params.get("ruleId"), data)
+        if operation == "outputs_exports_create":
+            return svc["outputs"].create_export(user, data)
+
+        # ── Learning Commands ─────────────────────────────────────────────────
+        if operation == "learning_models_train":
+            return svc["learning"].trigger_training(user, data)
+        if operation == "learning_models_promote":
+            return svc["learning"].promote_version(user, data)
+
+        # ── Super Admin Commands ──────────────────────────────────────────────
+        if operation == "superadmin_tenants_create":
+            return svc["superadmin"].create_tenant(data)
+        if operation == "superadmin_tenants_update":
+            return svc["superadmin"].update_tenant(path_params.get("tenantId"), data)
 
         # Original Generic Logic
         if operation == "integrations_documents_upload_url":
@@ -283,5 +344,67 @@ class DomainDispatcher:
             return {"database": "configured", "storage": "configured", "ai": "configured"}
         if operation == "ai_predictive_risk_area_get":
             return self.ai.predictive_risk(path_params.get("areaId", "unknown"))
-        
+
+        # ── Workflow Engine Queries ───────────────────────────────────────────
+        if operation == "workflows_dashboard":
+            return svc["workflow_engine"].get_dashboard(user)
+        if operation == "workflows_cases_list":
+            return svc["workflow_engine"].list_cases(user, path_params)
+        if operation == "workflows_cases_get":
+            return svc["workflow_engine"].get_case(user, path_params.get("caseId"))
+
+        # ── AI Intelligence Queries ───────────────────────────────────────────
+        if operation == "ai_compliance_benchmarking":
+            return svc["ai_intelligence"].get_compliance_benchmarking(user)
+        if operation == "ai_risk_scoring":
+            return svc["ai_intelligence"].get_risk_scoring(user)
+        if operation == "ai_kpi_intelligence":
+            return svc["ai_intelligence"].get_kpi_intelligence(user)
+        if operation == "ai_pirs":
+            return svc["ai_intelligence"].get_pirs(user)
+        if operation == "ai_recommendations":
+            return svc["ai_intelligence"].get_recommendations(user)
+        if operation == "ai_work_oversight":
+            return svc["ai_intelligence"].get_work_oversight(user)
+        if operation == "ai_leadership_intelligence":
+            return svc["ai_intelligence"].get_leadership_intelligence(user)
+        if operation == "ai_continuous_learning_summary":
+            return svc["ai_intelligence"].get_continuous_learning_summary(user)
+
+        # ── Outputs Queries ───────────────────────────────────────────────────
+        if operation == "outputs_dashboard":
+            return svc["outputs"].get_dashboard(user)
+        if operation == "outputs_reports_list":
+            return svc["outputs"].list_reports(user, path_params.get("type"))
+        if operation == "outputs_insights_list":
+            return svc["outputs"].get_insights(user)
+        if operation == "outputs_alerts_dashboard":
+            return svc["outputs"].get_alerts_dashboard(user)
+        if operation == "outputs_exports_list":
+            return svc["outputs"].get_exports(user)
+
+        # ── Learning Queries ──────────────────────────────────────────────────
+        if operation == "learning_loop_summary":
+            return svc["learning"].get_loop_summary(user)
+        if operation == "learning_events_list":
+            return svc["learning"].list_events(user, path_params)
+        if operation == "learning_patterns_list":
+            return svc["learning"].list_patterns(user)
+        if operation == "learning_models_list":
+            return svc["learning"].list_models(user)
+        if operation == "learning_outcomes_list":
+            return svc["learning"].get_outcomes(user)
+
+        # ── Super Admin Queries ───────────────────────────────────────────────
+        if operation in ("superadmin_dashboard", "admin_superadmin_dashboard"):
+            return svc["superadmin"].get_dashboard()
+        if operation in ("superadmin_tenants_list", "admin_tenants_list"):
+            return svc["superadmin"].list_tenants()
+        if operation in ("superadmin_tenants_get", "admin_tenants_get"):
+            return svc["superadmin"].get_tenant(path_params.get("tenantId"))
+        if operation in ("superadmin_users_list", "admin_superadmin_users_list"):
+            return svc["superadmin"].list_all_users()
+        if operation == "admin_storage_metrics":
+            return svc["superadmin"].get_storage_metrics()
+
         return None
