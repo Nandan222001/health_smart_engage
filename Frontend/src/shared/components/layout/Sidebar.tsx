@@ -45,6 +45,7 @@ const MAIN_NAV: NavGroup[] = [
       { name: "Incidents", icon: AlertTriangle, path: "/violations" },
       { name: "Engagement", icon: Heart, path: "/engagement" },
       { name: "Settings", icon: Settings, path: "/settings" },
+      { name: "Org Setup", icon: Building2, path: "/org-setup" },
     ],
   },
 ];

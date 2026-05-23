@@ -52,6 +52,7 @@ import { EmployeesPage } from "@/features/employees/pages/EmployeesPage";
 import { TrainingPage } from "@/features/training/pages/TrainingPage";
 import { AuditsPage } from "@/features/audits/pages/AuditsPage";
 import { HazardsPage } from "@/features/hazards/pages/HazardsPage";
+import { OrgSetupWizardPage } from "@/features/org-setup/pages/OrgSetupWizardPage";
 import type { ComponentType } from "react";
 
 function RouteErrorFallback() {
@@ -245,6 +246,8 @@ export const router = createBrowserRouter([
       { path: "outputs", Component: OutputsPage },
       // Continuous Learning Loop Layer 7
       { path: "learning", Component: ContinuousLearningPage },
+      // Org Admin Setup Wizard
+      { path: "org-setup", Component: OrgSetupWizardPage },
     ],
   },
   {
