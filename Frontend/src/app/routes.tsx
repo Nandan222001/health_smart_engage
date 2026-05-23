@@ -34,6 +34,8 @@ import { AIIntelligencePage } from "@/features/ai-intelligence/pages/AIIntellige
 import { WorkflowEnginePage } from "@/features/workflow/pages/WorkflowEnginePage";
 // Outputs – Visibility & Intelligence (Layer 6)
 import { OutputsPage } from "@/features/outputs/pages/OutputsPage";
+// Continuous Learning Loop (Layer 7)
+import { ContinuousLearningPage } from "@/features/learning/pages/ContinuousLearningPage";
 // New feature pages
 import { PermitsPage } from "@/features/permits/pages/PermitsPage";
 import { IncidentsPage } from "@/features/incidents/pages/IncidentsPage";
@@ -224,6 +226,8 @@ export const router = createBrowserRouter([
       { path: "workflow", Component: WorkflowEnginePage },
       // Outputs – Visibility & Intelligence Layer 6
       { path: "outputs", Component: OutputsPage },
+      // Continuous Learning Loop Layer 7
+      { path: "learning", Component: ContinuousLearningPage },
     ],
   },
   {
