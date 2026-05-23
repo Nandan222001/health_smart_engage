@@ -7,6 +7,7 @@ import {
   LogOut, Shield, Settings, X, type LucideIcon,
   FileText, UserCheck, GraduationCap, ShieldAlert,
   LayoutDashboard, Globe, ChevronDown, ChevronRight,
+  Database, BrainCircuit,
 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 
@@ -30,7 +31,8 @@ const MAIN_NAV: NavGroup[] = [
       { name: "People", icon: Users, path: "/users" },
       { name: "Risk", icon: CircleAlert, path: "/root-cause-analysis" },
       { name: "Work", icon: Briefcase, path: "/actions" },
-      { name: "Intelligence", icon: Lightbulb, path: "/ai-agent" },
+      { name: "AI Agent",        icon: Lightbulb,    path: "/ai-agent" },
+      { name: "AI Intelligence", icon: BrainCircuit, path: "/ai-intelligence" },
       { name: "Compliance", icon: ClipboardCheck, path: "/compliance" },
       { name: "Reports", icon: BarChart3, path: "/analytics" },
       { name: "Vendors", icon: Building2, path: "/vendors" },
@@ -61,10 +63,11 @@ const SUPERADMIN_NAV: NavGroup[] = [
     label: "Super Admin",
     superAdminOnly: true,
     items: [
-      { name: "SA Dashboard", icon: LayoutDashboard, path: "/superadmin" },
-      { name: "Tenants", icon: Globe, path: "/superadmin/tenants" },
-      { name: "Users", icon: Users, path: "/superadmin/users" },
-      { name: "Onboarding Wizard", icon: Shield, path: "/superadmin/onboarding-wizard" },
+      { name: "SA Dashboard",      icon: LayoutDashboard, path: "/superadmin" },
+      { name: "Tenants",           icon: Globe,           path: "/superadmin/tenants" },
+      { name: "Users",             icon: Users,           path: "/superadmin/users" },
+      { name: "Onboarding Wizard", icon: Shield,          path: "/superadmin/onboarding-wizard" },
+      { name: "Storage Layer",     icon: Database,        path: "/superadmin/storage" },
     ],
   },
 ];
