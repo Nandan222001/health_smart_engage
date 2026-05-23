@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     ai_endpoint: str = ""
     ai_api_key_secret_name: str = "ai-api-key"
 
+    sendgrid_api_key: str = ""
+    sendgrid_from_email: str = "noreply@hse-platform.com"
+    sendgrid_from_name: str = "HSE Platform"
+    frontend_base_url: str = "http://localhost:5173"
+
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def parse_allowed_origins(cls, value: str | list[str]) -> list[str]:

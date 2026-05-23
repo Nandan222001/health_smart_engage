@@ -33,7 +33,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (!isAuthenticated || forceLoginView) return;
-    navigate(isSuperAdmin ? "/auth/onboarding/admin" : "/", { replace: true });
+    navigate(isSuperAdmin ? "/superadmin" : "/", { replace: true });
   }, [isAuthenticated, isSuperAdmin, navigate, forceLoginView]);
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export function LoginPage() {
       }
 
       if (result === "success") {
-        navigate(isSuperAdmin ? "/auth/onboarding/admin" : "/", { replace: true });
+        navigate(isSuperAdmin ? "/superadmin" : "/", { replace: true });
       } else if (result === "pending_approval") {
         setInfoMessage(
           authMode === "signup"

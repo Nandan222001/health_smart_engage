@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import bcrypt as _bcrypt_lib
 from jose import jwt
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,16 @@ from app.core.config import settings
 from app.core.exceptions import AppError
 from app.models.domain import User
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _hash_password(password: str) -> str:
+    return _bcrypt_lib.hashpw(password.encode(), _bcrypt_lib.gensalt()).decode()
+
+
+def _verify_password(password: str, hashed: str) -> bool:
+    try:
+        return _bcrypt_lib.checkpw(password.encode(), hashed.encode())
+    except Exception:
+        return False
 
 
 class AuthService:
@@ -21,8 +30,9 @@ class AuthService:
     def login(self, email: str, password: str) -> dict:
         user = self._get_user_by_email(email)
         if not user or not user.password_hash:
-            raise AppError("INVALID_CREDENTIALS", "Invalid email or password", 401)
-        if not _pwd.verify(password, user.password_hash):
+            # 404 lets the frontend fall through to Theta/Firebase for non-backend users
+            raise AppError("USER_NOT_FOUND", "No account found", 404)
+        if not _verify_password(password, user.password_hash):
             raise AppError("INVALID_CREDENTIALS", "Invalid email or password", 401)
         if user.status == "revoked":
             raise AppError("ACCOUNT_REVOKED", "Account has been revoked", 403)
@@ -45,14 +55,14 @@ class AuthService:
         user = self.db.scalars(select(User).where(User.id == user_id)).first()
         if not user:
             raise AppError("USER_NOT_FOUND", "User not found", 404)
-        user.password_hash = _pwd.hash(password)
+        user.password_hash = _hash_password(password)
         self.db.flush()
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
     def hash_password(password: str) -> str:
-        return _pwd.hash(password)
+        return _hash_password(password)
 
     def _get_user_by_email(self, email: str):
         return self.db.scalars(

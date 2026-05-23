@@ -892,12 +892,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return "success";
         }
       } else if (res.status === 401) {
-        // Backend knows this user but credentials are wrong.
+        // Backend knows this user but credentials are wrong — stop here, don't try Theta.
         const json = await res.json().catch(() => ({}));
-        const code = (json.detail ?? json.data?.code ?? "").toString();
+        const code = (json.code ?? json.detail ?? json.data?.code ?? "").toString();
         if (code === "INVALID_CREDENTIALS") return "invalid_credentials";
+        return "invalid_credentials";
       }
-      // 404 / 422 / 500 or no account in backend DB → fall through to Theta/Firebase
+      // 404 = user not in backend DB → fall through to Theta/Firebase
+      // 422 / 500 → fall through
     } catch {
       // Backend unavailable — fall through to Theta/Firebase
     }
@@ -914,7 +916,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         trimmedEmail === SUPER_ADMIN_EMAIL
         && (normalizedPassword === SUPER_ADMIN_PASSWORD || normalizedPassword === SUPER_ADMIN_PASSWORD_ALT)
       ) {
-        const userData: AuthUser = { name: "Theta HSE Super Admin", email: SUPER_ADMIN_EMAIL, role: "Admin", initials: "SA", allowedModules: ALL_MODULE_LABELS };
+        const userData: AuthUser = { name: "Theta HSE Super Admin", email: SUPER_ADMIN_EMAIL, role: "Admin", initials: "SA", allowedModules: ALL_MODULE_LABELS, is_superadmin: true };
         setUser(userData);
         setIsAuthenticated(true);
         return "success";
@@ -1138,7 +1140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    signOut(auth);
+    try { signOut(auth); } catch { /* Firebase unavailable — proceed with local cleanup */ }
     setIsAuthenticated(false);
     setUser(null);
     localStorage.removeItem("hse_auth");

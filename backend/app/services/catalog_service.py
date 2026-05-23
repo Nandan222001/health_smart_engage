@@ -80,7 +80,9 @@ class CatalogEndpointService:
         self.db.commit()
         if special is not None:
             special["recordId"] = record.id
-            special["status"] = record.status
+            # Don't overwrite domain-level status (e.g. invitation.status = "pending")
+            if "status" not in special:
+                special["status"] = record.status
             return special
         return {
             "operation": operation,

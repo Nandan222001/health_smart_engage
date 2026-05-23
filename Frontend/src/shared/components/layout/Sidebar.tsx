@@ -6,10 +6,10 @@ import {
   FolderClosed, AlertTriangle, Heart,
   LogOut, Shield, Settings, X, type LucideIcon,
   FileText, UserCheck, GraduationCap, ShieldAlert,
-  LayoutDashboard, Globe, ChevronDown, ChevronRight,
+  LayoutDashboard, ChevronDown, ChevronRight,
   Database, BrainCircuit, GitBranch, Eye, RefreshCw,
   Mail as MailIcon, CreditCard, TrendingUp, Bell,
-  SlidersHorizontal, ScrollText, Wand2,
+  SlidersHorizontal, ScrollText,
 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 
@@ -69,7 +69,6 @@ const SUPERADMIN_NAV: NavGroup[] = [
     superAdminOnly: true,
     items: [
       { name: "SA Dashboard",        icon: LayoutDashboard,   path: "/superadmin" },
-      { name: "Tenants",             icon: Globe,             path: "/superadmin/tenants" },
       { name: "Invitations",         icon: MailIcon,          path: "/superadmin/invitations" },
       { name: "Users",               icon: Users,             path: "/superadmin/users" },
       { name: "Roles & Permissions", icon: Shield,            path: "/superadmin/roles" },
@@ -78,7 +77,6 @@ const SUPERADMIN_NAV: NavGroup[] = [
       { name: "Notifications",       icon: Bell,              path: "/superadmin/notifications" },
       { name: "System Settings",     icon: SlidersHorizontal, path: "/superadmin/settings" },
       { name: "Audit Logs",          icon: ScrollText,        path: "/superadmin/audit-logs" },
-      { name: "Onboarding Wizard",   icon: Wand2,             path: "/superadmin/onboarding-wizard" },
       { name: "Storage Layer",       icon: Database,          path: "/superadmin/storage" },
     ],
   },
@@ -115,14 +113,11 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   };
 
   const isActive = (path: string) => {
-    if (path === "/") return location.pathname === "/";
+    if (path === "/" || path === "/superadmin") return location.pathname === path;
     return location.pathname.startsWith(path.split("?")[0]);
   };
 
-  const visibleGroups = [
-    ...MAIN_NAV,
-    ...(isSuperAdmin ? SUPERADMIN_NAV : []),
-  ];
+  const visibleGroups = isSuperAdmin ? SUPERADMIN_NAV : MAIN_NAV;
 
   return (
     <>
@@ -209,8 +204,8 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
             </div>
           ))}
 
-          {/* Operations collapsible section */}
-          <div>
+          {/* Operations collapsible section — hidden for super admins */}
+          {!isSuperAdmin && <div>
             <button
               onClick={() => setOpsExpanded(!opsExpanded)}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all"
@@ -249,7 +244,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                 })}
               </div>
             )}
-          </div>
+          </div>}
         </nav>
 
         {/* User Profile */}
