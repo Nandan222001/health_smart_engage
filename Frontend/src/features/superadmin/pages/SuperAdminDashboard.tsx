@@ -1,5 +1,8 @@
 import { useNavigate } from "react-router";
-import { Building2, Users, ClipboardList, Activity, ArrowRight, CheckCircle2, Clock, XCircle } from "lucide-react";
+import {
+  Building2, Users, ClipboardList, Activity, ArrowRight, CheckCircle2, Clock, XCircle,
+  Globe, Mail as MailIcon, Shield, CreditCard, TrendingUp, Bell, SlidersHorizontal,
+} from "lucide-react";
 import { useListTenantsQuery } from "@/features/superadmin/api/adminApi";
 import { useGetOnboardingProcessingQueueQuery } from "@/features/onboarding/api/onboardingApi";
 
@@ -139,10 +142,14 @@ export function SuperAdminDashboard() {
       {/* Quick nav */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Tenant Management", path: "/superadmin/tenants", icon: Building2 },
-          { label: "User Management", path: "/superadmin/users", icon: Users },
-          { label: "Onboarding Queue", path: "/superadmin/queue", icon: ClipboardList },
-          { label: "System Settings", path: "/superadmin/settings", icon: Activity },
+          { label: "Tenant Management",   path: "/superadmin/tenants",       icon: Globe },
+          { label: "Invitations",         path: "/superadmin/invitations",   icon: MailIcon },
+          { label: "Users",               path: "/superadmin/users",         icon: Users },
+          { label: "Roles & Permissions", path: "/superadmin/roles",         icon: Shield },
+          { label: "Subscriptions",       path: "/superadmin/subscriptions", icon: CreditCard },
+          { label: "Platform Analytics",  path: "/superadmin/analytics",     icon: TrendingUp },
+          { label: "Notifications",       path: "/superadmin/notifications", icon: Bell },
+          { label: "System Settings",     path: "/superadmin/settings",      icon: SlidersHorizontal },
         ].map(({ label, path, icon: Icon }) => (
           <button
             key={path}
@@ -151,7 +158,7 @@ export function SuperAdminDashboard() {
             style={{ borderColor: "#E3E9F6" }}
           >
             <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "#EEF2FB" }}>
-              <Icon className="w-4.5 h-4.5" style={{ color: "#4A57B9" }} />
+              <Icon className="w-4 h-4" style={{ color: "#4A57B9" }} />
             </div>
             <span className="text-sm font-semibold" style={{ color: "#111827" }}>{label}</span>
           </button>
