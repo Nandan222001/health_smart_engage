@@ -1,6 +1,11 @@
 from typing import Any
 from sqlalchemy.orm import Session
 from app.core.security import CurrentUser
+
+
+def _to_dict(obj) -> dict:
+    """Serialize a SQLAlchemy model instance to a plain dict, stripping internal state."""
+    return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
 from app.services.ai_service import AiService
 from app.services.file_storage_service import FileStorageService
 from app.services.mobile_sync_service import MobileSyncService
@@ -92,10 +97,10 @@ class DomainDispatcher:
             return {"id": res.id, "status": res.status}
 
         # Foundation Commands
-        if operation == "admin_organisation_nodes_create":
+        if operation in ("admin_org_nodes_create", "admin_organisation_nodes_create"):
             res = svc["foundation"].create_organisation_node(user, data)
             return {"id": res.id}
-        if operation == "admin_users_invitations_create":
+        if operation in ("admin_user_invitations_create", "admin_users_invitations_create"):
             res = svc["foundation"].invite_user(user, data)
             return {"id": res.id, "status": res.status}
         if operation == "admin_roles_create":
@@ -261,21 +266,21 @@ class DomainDispatcher:
         # Vendor Queries
         if operation == "vendors_list":
             items = svc["vendors"].list_vendors(user)
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
         if operation == "vendors_get":
             res = svc["vendors"].get_vendor(user, path_params.get("vendorId"))
-            return res.__dict__
+            return _to_dict(res)
 
         # Foundation Queries
-        if operation == "admin_organisation_nodes_list":
+        if operation in ("admin_org_nodes_list", "admin_organisation_nodes_list"):
             items = svc["foundation"].list_organisation_nodes(user)
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
         if operation == "admin_users_list":
             items = svc["foundation"].list_users(user)
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
         if operation == "admin_roles_list":
             items = svc["foundation"].list_roles(user)
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
 
         # Dashboard Queries
         if operation == "dashboard_executive_safety":
@@ -308,37 +313,37 @@ class DomainDispatcher:
         # Compliance Queries
         if operation == "capas_list":
             items = svc["compliance"].list_capas(user, {})
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
         if operation == "capas_get":
             res = svc["compliance"].get_capa(user, path_params.get("capaId"))
-            return res.__dict__
+            return _to_dict(res)
 
         # Knowledge Queries
         if operation == "mobile_knowledge_search":
             items = svc["knowledge"].list_documents(user)
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
         if operation == "mobile_knowledge_document":
             res = svc["knowledge"].get_document(user, path_params.get("documentId"))
-            return res.__dict__
+            return _to_dict(res)
 
         # Queries
         if operation in ["permits_list", "mobile_permits_list"]:
             items = svc["permits"].list_permits(user, {})
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
         if operation in ["permits_get", "mobile_permits_get"]:
             res = svc["permits"].get_permit(user, path_params.get("permitId"))
-            return res.__dict__
+            return _to_dict(res)
         if operation == "permits_conflicts":
             items = svc["permits"].get_conflicts(user, path_params.get("permitId"))
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
         
         if operation == "employees_list":
             items = svc["people"].list_employees(user, {})
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
         
         if operation == "assets_list":
             items = svc["assets"].list_assets(user, {})
-            return {"items": [i.__dict__ for i in items]}
+            return {"items": [_to_dict(i) for i in items]}
 
         if operation == "health_dependencies":
             return {"database": "configured", "storage": "configured", "ai": "configured"}
