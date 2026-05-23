@@ -242,22 +242,13 @@ const FORM_STEPS = 5;
 const INFO_STEP_INDEX = 5;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^\+[1-9]\d{6,14}$/;
-const PRODUCT_ADMIN_EMAILS = new Set(
-	[
-		'thetahsesuperadmin@gmail.com',
-		...String(import.meta.env.VITE_PRODUCT_ADMIN_EMAILS ?? '')
-			.split(',')
-			.map((value) => value.trim().toLowerCase())
-			.filter(Boolean),
-	],
-);
 
 /* ─── Main Component ─── */
 export function OnboardingPage() {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const [searchParams] = useSearchParams();
-	const { isAuthenticated, user, signup, login, logout } = useAuth();
+	const { isAuthenticated, user, isSuperAdmin, signup, login, logout } = useAuth();
 	const isUpgradeMode = searchParams.get('upgrade') === '1';
 	const targetPlanParam = searchParams.get('target_plan');
 
@@ -266,7 +257,6 @@ export function OnboardingPage() {
 	const [currentStep, setCurrentStep] = useState(0);
 	const [view, setView] = useState<'form' | 'admin' | 'tracker'>('form');
 	const [submissionSuccess, setSubmissionSuccess] = useState<{ onboardingUuid: string; orgCode: string; tempPassword?: string } | null>(null);
-	const isSuperAdmin = Boolean(PRODUCT_ADMIN_EMAILS.has(user?.email?.trim().toLowerCase() || ''));
 
 	const resolveRequestedView = () => {
 		const normalizedPath = location.pathname.replace(/\/+$/, '').toLowerCase();

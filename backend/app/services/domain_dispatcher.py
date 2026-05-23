@@ -26,6 +26,11 @@ from app.services.ai_intelligence_service import AIIntelligenceService
 from app.services.outputs_service import OutputsService
 from app.services.learning_service import LearningService
 from app.services.superadmin_service import SuperAdminService
+from app.services.auth_service import AuthService
+from app.services.invitation_service import InvitationService
+from app.services.subscription_service import SubscriptionService
+from app.services.platform_config_service import PlatformConfigService
+from app.services.notification_template_service import NotificationTemplateService
 
 class DomainDispatcher:
     def __init__(self):
@@ -53,6 +58,11 @@ class DomainDispatcher:
             "outputs": OutputsService(db),
             "learning": LearningService(db),
             "superadmin": SuperAdminService(db),
+            "auth": AuthService(db),
+            "invitations": InvitationService(db),
+            "subscriptions": SubscriptionService(db),
+            "platform_config": PlatformConfigService(db),
+            "notif_templates": NotificationTemplateService(db),
         }
 
     def execute_special_command(
@@ -65,6 +75,12 @@ class DomainDispatcher:
     ) -> dict[str, Any] | None:
         data = payload.get("data", payload)
         svc = self._get_services(db) if db else {}
+
+        # Auth Commands
+        if operation == "auth_login":
+            return svc["auth"].login(data.get("email", ""), data.get("password", ""))
+        if operation == "auth_logout":
+            return {"message": "Logged out successfully"}
 
         # Mobile Specific Commands
         if operation == "mobile_notification_read":
@@ -224,6 +240,38 @@ class DomainDispatcher:
         if operation == "superadmin_tenants_update":
             return svc["superadmin"].update_tenant(path_params.get("tenantId"), data)
 
+        # Invitations
+        if operation == "superadmin_invitations_create":
+            return svc["invitations"].create_invitation(user, data)
+        if operation == "superadmin_invitations_update":
+            return svc["invitations"].update_invitation(path_params.get("invitationId"), data)
+        if operation == "superadmin_invitations_resend":
+            return svc["invitations"].resend_invitation(path_params.get("invitationId"))
+        if operation == "superadmin_invitations_cancel":
+            return svc["invitations"].cancel_invitation(path_params.get("invitationId"))
+
+        # Subscription plans
+        if operation == "superadmin_plans_create":
+            return svc["subscriptions"].create_plan(data)
+        if operation == "superadmin_plans_update":
+            return svc["subscriptions"].update_plan(path_params.get("planId"), data)
+        if operation == "superadmin_tenant_subscription":
+            return svc["subscriptions"].assign_to_tenant(path_params.get("tenantId"), data)
+
+        # Notification templates
+        if operation == "superadmin_notif_templates_create":
+            return svc["notif_templates"].create_template(data)
+        if operation == "superadmin_notif_templates_update":
+            return svc["notif_templates"].update_template(path_params.get("templateId"), data)
+        if operation == "superadmin_notif_templates_delete":
+            return svc["notif_templates"].delete_template(path_params.get("templateId"))
+
+        # Security/compliance config
+        if operation == "superadmin_security_policy_update":
+            return svc["platform_config"].update_security_policy(data)
+        if operation == "superadmin_compliance_config_update":
+            return svc["platform_config"].update_compliance_config(data)
+
         # Original Generic Logic
         if operation == "integrations_documents_upload_url":
             file_name = data.get("fileName") or data.get("file_name") or "upload.bin"
@@ -248,6 +296,10 @@ class DomainDispatcher:
         db: Session = None
     ) -> dict[str, Any] | None:
         svc = self._get_services(db) if db else {}
+
+        # Auth Queries
+        if operation == "auth_me":
+            return svc["auth"].me(user.user_id, user.tenant_id)
 
         # Mobile Specific Queries
         if operation == "mobile_profile":
@@ -411,5 +463,33 @@ class DomainDispatcher:
             return svc["superadmin"].list_all_users()
         if operation == "admin_storage_metrics":
             return svc["superadmin"].get_storage_metrics()
+
+        # Invitations
+        if operation == "superadmin_invitations_list":
+            return svc["invitations"].list_invitations()
+        if operation == "superadmin_invitations_get":
+            return svc["invitations"].get_invitation(path_params.get("invitationId"))
+
+        # Subscription plans
+        if operation == "superadmin_plans_list":
+            return svc["subscriptions"].list_plans()
+
+        # Notification templates
+        if operation == "superadmin_notif_templates_list":
+            return svc["notif_templates"].list_templates()
+
+        # Security/compliance
+        if operation == "superadmin_security_policy_get":
+            return svc["platform_config"].get_security_policy()
+        if operation == "superadmin_compliance_config_get":
+            return svc["platform_config"].get_compliance_config()
+
+        # Analytics
+        if operation == "superadmin_analytics":
+            return svc["superadmin"].get_platform_analytics()
+        if operation == "superadmin_analytics_incidents":
+            return svc["superadmin"].get_incident_analytics()
+        if operation == "superadmin_analytics_compliance":
+            return svc["superadmin"].get_compliance_analytics()
 
         return None

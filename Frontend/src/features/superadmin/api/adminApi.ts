@@ -93,6 +93,85 @@ interface AuditLog {
   metadata?: Record<string, unknown>;
 }
 
+interface OrgInvitation {
+  id: string;
+  org_name: string;
+  admin_name: string;
+  admin_email: string;
+  subscription_plan: string;
+  allowed_modules: string[];
+  status: string;
+  expiry_date?: string;
+  created_at: string;
+  token?: string;
+}
+
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  code: string;
+  price_monthly: number;
+  price_annual: number;
+  max_users: number;
+  max_sites: number;
+  allowed_modules: string[];
+  is_active: boolean;
+  created_at: string;
+}
+
+interface SuperAdminNotifTemplate {
+  id: string;
+  name: string;
+  channel: string;
+  event_type: string;
+  subject?: string;
+  body_template: string;
+  variables: string[];
+  is_active: boolean;
+}
+
+interface SecurityPolicy {
+  password_min_length: number;
+  mfa_required: boolean;
+  session_timeout_minutes: number;
+  max_login_attempts: number;
+  ip_whitelist: string[];
+  audit_retention_days: number;
+}
+
+interface ComplianceConfig {
+  active_standards: string[];
+  auto_audit_schedule: string;
+  require_evidence_upload: boolean;
+  capa_sla_days: number;
+  finding_escalation_days: number;
+}
+
+interface PlatformAnalytics {
+  total_tenants: number;
+  active_tenants: number;
+  total_users: number;
+  total_incidents: number;
+  total_violations: number;
+  total_audits: number;
+  compliance_rate: number;
+  incidents_this_month: number;
+  new_tenants_this_month: number;
+  tenant_growth: { month: string; count: number }[];
+  top_incidents_by_type: { type: string; count: number }[];
+}
+
+interface SuperAdminUser {
+  id: string;
+  email: string;
+  display_name: string;
+  role?: string;
+  is_superadmin: boolean;
+  status: string;
+  tenant_id?: string;
+  tenant_name?: string;
+}
+
 export const adminApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Tenants
@@ -236,6 +315,81 @@ export const adminApi = baseApi.injectEndpoints({
     getAdminAuditLog: builder.query<AuditLog, string>({
       query: (eventId) => `/admin/audit-logs/${eventId}`,
     }),
+
+    // Superadmin invitations
+    listSuperAdminInvitations: builder.query<OrgInvitation[], void>({
+      query: () => "/admin/superadmin/invitations",
+      providesTags: ["Onboarding"],
+    }),
+    createSuperAdminInvitation: builder.mutation<OrgInvitation, Partial<OrgInvitation>>({
+      query: (body) => ({ url: "/admin/superadmin/invitations", method: "POST", body }),
+      invalidatesTags: ["Onboarding"],
+    }),
+    resendSuperAdminInvitation: builder.mutation<{ message: string }, string>({
+      query: (id) => ({ url: `/admin/superadmin/invitations/${id}/resend`, method: "POST" }),
+      invalidatesTags: ["Onboarding"],
+    }),
+    cancelSuperAdminInvitation: builder.mutation<{ message: string }, string>({
+      query: (id) => ({ url: `/admin/superadmin/invitations/${id}/cancel`, method: "POST" }),
+      invalidatesTags: ["Onboarding"],
+    }),
+
+    // Subscription plans
+    listSubscriptionPlans: builder.query<SubscriptionPlan[], void>({
+      query: () => "/admin/superadmin/subscription-plans",
+      providesTags: ["Tenant"],
+    }),
+    createSubscriptionPlan: builder.mutation<SubscriptionPlan, Partial<SubscriptionPlan>>({
+      query: (body) => ({ url: "/admin/superadmin/subscription-plans", method: "POST", body }),
+      invalidatesTags: ["Tenant"],
+    }),
+    updateSubscriptionPlan: builder.mutation<SubscriptionPlan, { planId: string; body: Partial<SubscriptionPlan> }>({
+      query: ({ planId, body }) => ({ url: `/admin/superadmin/subscription-plans/${planId}`, method: "PATCH", body }),
+      invalidatesTags: ["Tenant"],
+    }),
+    assignTenantSubscription: builder.mutation<{ message: string }, { tenantId: string; planId: string }>({
+      query: ({ tenantId, planId }) => ({ url: `/admin/superadmin/tenants/${tenantId}/subscription`, method: "POST", body: { plan_id: planId } }),
+      invalidatesTags: ["Tenant"],
+    }),
+
+    // Superadmin notification templates
+    listSuperAdminNotifTemplates: builder.query<SuperAdminNotifTemplate[], void>({
+      query: () => "/admin/superadmin/notification-templates",
+    }),
+    createSuperAdminNotifTemplate: builder.mutation<SuperAdminNotifTemplate, Partial<SuperAdminNotifTemplate>>({
+      query: (body) => ({ url: "/admin/superadmin/notification-templates", method: "POST", body }),
+    }),
+    updateSuperAdminNotifTemplate: builder.mutation<SuperAdminNotifTemplate, { templateId: string; body: Partial<SuperAdminNotifTemplate> }>({
+      query: ({ templateId, body }) => ({ url: `/admin/superadmin/notification-templates/${templateId}`, method: "PATCH", body }),
+    }),
+    deleteSuperAdminNotifTemplate: builder.mutation<void, string>({
+      query: (id) => ({ url: `/admin/superadmin/notification-templates/${id}`, method: "DELETE" }),
+    }),
+
+    // Security & compliance
+    getSecurityPolicy: builder.query<SecurityPolicy, void>({
+      query: () => "/admin/superadmin/security-policy",
+    }),
+    updateSecurityPolicy: builder.mutation<SecurityPolicy, Partial<SecurityPolicy>>({
+      query: (body) => ({ url: "/admin/superadmin/security-policy", method: "PUT", body }),
+    }),
+    getComplianceConfig: builder.query<ComplianceConfig, void>({
+      query: () => "/admin/superadmin/compliance-config",
+    }),
+    updateComplianceConfig: builder.mutation<ComplianceConfig, Partial<ComplianceConfig>>({
+      query: (body) => ({ url: "/admin/superadmin/compliance-config", method: "PUT", body }),
+    }),
+
+    // Platform analytics
+    getPlatformAnalytics: builder.query<PlatformAnalytics, void>({
+      query: () => "/admin/superadmin/analytics",
+    }),
+
+    // Cross-tenant users
+    listSuperAdminUsers: builder.query<SuperAdminUser[], void>({
+      query: () => "/admin/superadmin/users",
+      providesTags: ["User"],
+    }),
   }),
 });
 
@@ -272,4 +426,22 @@ export const {
   useResolveDataQualityIssueMutation,
   useListAdminAuditLogsQuery,
   useGetAdminAuditLogQuery,
+  useListSuperAdminInvitationsQuery,
+  useCreateSuperAdminInvitationMutation,
+  useResendSuperAdminInvitationMutation,
+  useCancelSuperAdminInvitationMutation,
+  useListSubscriptionPlansQuery,
+  useCreateSubscriptionPlanMutation,
+  useUpdateSubscriptionPlanMutation,
+  useAssignTenantSubscriptionMutation,
+  useListSuperAdminNotifTemplatesQuery,
+  useCreateSuperAdminNotifTemplateMutation,
+  useUpdateSuperAdminNotifTemplateMutation,
+  useDeleteSuperAdminNotifTemplateMutation,
+  useGetSecurityPolicyQuery,
+  useUpdateSecurityPolicyMutation,
+  useGetComplianceConfigQuery,
+  useUpdateComplianceConfigMutation,
+  useGetPlatformAnalyticsQuery,
+  useListSuperAdminUsersQuery,
 } = adminApi;

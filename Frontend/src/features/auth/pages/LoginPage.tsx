@@ -9,21 +9,11 @@ import { auth } from "@/config/firebase";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { resetThetaPasswordDirect, submitOnboardingAccessRequest } from "@/services/api";
 
-const SUPER_ADMIN_EMAIL = "thetahsesuperadmin@gmail.com";
-const PRODUCT_ADMIN_EMAILS = new Set(
-  [
-    SUPER_ADMIN_EMAIL,
-    ...String(import.meta.env.VITE_PRODUCT_ADMIN_EMAILS ?? "")
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean),
-  ],
-);
 
 export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login, signup, loginWithGoogle, isAuthenticated, user, logout } = useAuth();
+  const { login, signup, loginWithGoogle, isAuthenticated, isSuperAdmin, user, logout } = useAuth();
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -34,7 +24,6 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [infoMessage, setInfoMessage] = useState("");
-  const isProductAdminEmail = PRODUCT_ADMIN_EMAILS.has(email.trim().toLowerCase());
   const forceLoginView = searchParams.get("force") === "1";
 
   useEffect(() => {
@@ -44,10 +33,8 @@ export function LoginPage() {
 
   useEffect(() => {
     if (!isAuthenticated || forceLoginView) return;
-    const normalizedUserEmail = user?.email?.trim().toLowerCase() || "";
-    const isProductAdminUser = PRODUCT_ADMIN_EMAILS.has(normalizedUserEmail);
-    navigate(isProductAdminUser ? "/auth/onboarding/admin" : "/", { replace: true });
-  }, [isAuthenticated, user?.email, navigate, forceLoginView]);
+    navigate(isSuperAdmin ? "/auth/onboarding/admin" : "/", { replace: true });
+  }, [isAuthenticated, isSuperAdmin, navigate, forceLoginView]);
 
   useEffect(() => {
     const mode = (searchParams.get("mode") || "").toLowerCase();
@@ -74,7 +61,7 @@ export function LoginPage() {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedOrgCode = orgCode.trim().toUpperCase();
     if (authMode === "signup") {
-      if (!isProductAdminEmail && !normalizedOrgCode) {
+      if (!isSuperAdmin && !normalizedOrgCode) {
         setError("Please enter your organization code to create account.");
         return;
       }
@@ -92,7 +79,7 @@ export function LoginPage() {
     try {
       let result;
       if (authMode === "signup") {
-        if (isProductAdminEmail) {
+        if (isSuperAdmin) {
           result = await signup(email, password);
         } else {
           try {
@@ -125,11 +112,7 @@ export function LoginPage() {
       }
 
       if (result === "success") {
-        if (PRODUCT_ADMIN_EMAILS.has(email.trim().toLowerCase())) {
-          navigate("/auth/onboarding/admin", { replace: true });
-        } else {
-          navigate("/", { replace: true });
-        }
+        navigate(isSuperAdmin ? "/auth/onboarding/admin" : "/", { replace: true });
       } else if (result === "pending_approval") {
         setInfoMessage(
           authMode === "signup"
@@ -162,7 +145,7 @@ export function LoginPage() {
         );
       } else {
         if (authMode === "signin") {
-          if (isProductAdminEmail) {
+          if (isSuperAdmin) {
             setError("Unable to sign in to admin web access right now. Please verify credentials and try again.");
           } else {
             setError("Unable to sign in right now. Please verify credentials and try again. If this is your first login, use 'Forgot with Theta' to set/reset password.");
@@ -175,7 +158,7 @@ export function LoginPage() {
       const rawMessage = err instanceof Error ? err.message : "";
       const msg = rawMessage.toLowerCase();
       if (authMode === "signin") {
-        if (isProductAdminEmail) {
+        if (isSuperAdmin) {
           setError("Unable to sign in to admin web access right now. Please verify credentials and try again.");
         } else {
           setError("Unable to sign in right now. Please verify credentials and try again. If this is your first login, use 'Forgot with Theta' to set/reset password.");
@@ -462,7 +445,7 @@ export function LoginPage() {
               />
             </div>
 
-            {authMode === "signup" && !isProductAdminEmail && (
+            {authMode === "signup" && !isSuperAdmin && (
               <div>
                 <label
                   className="block mb-1.5 text-[13px]"

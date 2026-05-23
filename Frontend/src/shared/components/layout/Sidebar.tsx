@@ -8,6 +8,8 @@ import {
   FileText, UserCheck, GraduationCap, ShieldAlert,
   LayoutDashboard, Globe, ChevronDown, ChevronRight,
   Database, BrainCircuit, GitBranch, Eye, RefreshCw,
+  Mail as MailIcon, CreditCard, TrendingUp, Bell,
+  SlidersHorizontal, ScrollText, Wand2,
 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 
@@ -66,11 +68,18 @@ const SUPERADMIN_NAV: NavGroup[] = [
     label: "Super Admin",
     superAdminOnly: true,
     items: [
-      { name: "SA Dashboard",      icon: LayoutDashboard, path: "/superadmin" },
-      { name: "Tenants",           icon: Globe,           path: "/superadmin/tenants" },
-      { name: "Users",             icon: Users,           path: "/superadmin/users" },
-      { name: "Onboarding Wizard", icon: Shield,          path: "/superadmin/onboarding-wizard" },
-      { name: "Storage Layer",     icon: Database,        path: "/superadmin/storage" },
+      { name: "SA Dashboard",        icon: LayoutDashboard,   path: "/superadmin" },
+      { name: "Tenants",             icon: Globe,             path: "/superadmin/tenants" },
+      { name: "Invitations",         icon: MailIcon,          path: "/superadmin/invitations" },
+      { name: "Users",               icon: Users,             path: "/superadmin/users" },
+      { name: "Roles & Permissions", icon: Shield,            path: "/superadmin/roles" },
+      { name: "Subscriptions",       icon: CreditCard,        path: "/superadmin/subscriptions" },
+      { name: "Platform Analytics",  icon: TrendingUp,        path: "/superadmin/analytics" },
+      { name: "Notifications",       icon: Bell,              path: "/superadmin/notifications" },
+      { name: "System Settings",     icon: SlidersHorizontal, path: "/superadmin/settings" },
+      { name: "Audit Logs",          icon: ScrollText,        path: "/superadmin/audit-logs" },
+      { name: "Onboarding Wizard",   icon: Wand2,             path: "/superadmin/onboarding-wizard" },
+      { name: "Storage Layer",       icon: Database,          path: "/superadmin/storage" },
     ],
   },
 ];

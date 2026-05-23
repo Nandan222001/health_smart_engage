@@ -28,6 +28,15 @@ import { SuperAdminDashboard } from "@/features/superadmin/pages/SuperAdminDashb
 import { TenantListPage } from "@/features/superadmin/pages/TenantListPage";
 import { OnboardingWizardPage } from "@/features/superadmin/pages/OnboardingWizardPage";
 import { StorageLayerPage } from "@/features/superadmin/pages/StorageLayerPage";
+import { InvitationsPage } from "@/features/superadmin/pages/InvitationsPage";
+import { TenantDetailPage } from "@/features/superadmin/pages/TenantDetailPage";
+import { RolesPermissionsPage } from "@/features/superadmin/pages/RolesPermissionsPage";
+import { SubscriptionsPage } from "@/features/superadmin/pages/SubscriptionsPage";
+import { PlatformAnalyticsPage } from "@/features/superadmin/pages/PlatformAnalyticsPage";
+import { NotificationsEnginePage } from "@/features/superadmin/pages/NotificationsEnginePage";
+import { SystemSettingsPage } from "@/features/superadmin/pages/SystemSettingsPage";
+import { PlatformAuditLogsPage } from "@/features/superadmin/pages/PlatformAuditLogsPage";
+import { SuperAdminUsersPage } from "@/features/superadmin/pages/SuperAdminUsersPage";
 // AI Intelligence (Layer 4)
 import { AIIntelligencePage } from "@/features/ai-intelligence/pages/AIIntelligencePage";
 // Decision & Workflow Engine (Layer 5)
@@ -218,8 +227,16 @@ export const router = createBrowserRouter([
       { path: "superadmin", Component: SuperAdminDashboard },
       { path: "superadmin/tenants", Component: TenantListPage },
       { path: "superadmin/onboarding-wizard", Component: OnboardingWizardPage },
-      { path: "superadmin/users", Component: UsersPage },
+      { path: "superadmin/users", Component: SuperAdminUsersPage },
       { path: "superadmin/storage", Component: StorageLayerPage },
+      { path: "superadmin/invitations", Component: InvitationsPage },
+      { path: "superadmin/roles", Component: RolesPermissionsPage },
+      { path: "superadmin/subscriptions", Component: SubscriptionsPage },
+      { path: "superadmin/analytics", Component: PlatformAnalyticsPage },
+      { path: "superadmin/notifications", Component: NotificationsEnginePage },
+      { path: "superadmin/settings", Component: SystemSettingsPage },
+      { path: "superadmin/audit-logs", Component: PlatformAuditLogsPage },
+      { path: "superadmin/tenants/:tenantId", Component: TenantDetailPage },
       // AI Intelligence Layer 4
       { path: "ai-intelligence", Component: AIIntelligencePage },
       // Decision & Workflow Engine Layer 5

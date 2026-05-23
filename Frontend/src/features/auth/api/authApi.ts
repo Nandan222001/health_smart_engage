@@ -1,24 +1,29 @@
 import { baseApi } from "@/services/api/baseApi";
 
-interface AuthLoginResponse {
+export interface AuthLoginResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
+  is_superadmin: boolean;
   user: {
     id: string;
     email: string;
+    display_name: string;
     roles: string[];
     permissions: string[];
     tenant_id?: string;
+    is_superadmin: boolean;
   };
 }
 
-interface AuthMeResponse {
-  user_id: string;
+export interface AuthMeResponse {
+  id: string;
   email: string;
+  display_name: string;
   roles: string[];
   permissions: string[];
   tenant_id?: string;
+  is_superadmin: boolean;
 }
 
 export const authApi = baseApi.injectEndpoints({

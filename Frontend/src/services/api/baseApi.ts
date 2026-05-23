@@ -8,11 +8,18 @@ export const baseApi = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: API_BASE_URL,
     prepareHeaders: async (headers) => {
-      try {
-        const token = await auth.currentUser?.getIdToken();
-        if (token) headers.set("Authorization", `Bearer ${token}`);
-      } catch {
-        // Firebase token unavailable — proceed without auth header
+      // Prefer the HSE backend JWT (set when logging in via the backend auth endpoint).
+      // Fall back to Firebase token for Firebase-authenticated users (regular org admins).
+      const hseJwt = localStorage.getItem("hse_jwt");
+      if (hseJwt) {
+        headers.set("Authorization", `Bearer ${hseJwt}`);
+      } else {
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          if (token) headers.set("Authorization", `Bearer ${token}`);
+        } catch {
+          // Firebase token unavailable — proceed without auth header
+        }
       }
       try {
         const stored = localStorage.getItem("hse_user");

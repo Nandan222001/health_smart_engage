@@ -156,6 +156,33 @@ class SuperAdminService:
             },
         }
 
+    # ── Platform Analytics ────────────────────────────────────────────────────
+
+    def get_platform_analytics(self) -> dict:
+        from app.models.domain import Incident, Capa, AuditExecution, Permit
+        from sqlalchemy import func
+        tenants = self.db.scalars(select(Tenant)).all()
+        total_incidents = self.db.scalar(select(func.count(Incident.id))) or 0
+        total_capas = self.db.scalar(select(func.count(Capa.id))) or 0
+        total_audits = self.db.scalar(select(func.count(AuditExecution.id))) or 0
+        total_permits = self.db.scalar(select(func.count(Permit.id))) or 0
+        return {
+            "total_tenants": len(tenants),
+            "active_tenants": sum(1 for t in tenants if t.status == "active"),
+            "total_incidents": total_incidents,
+            "total_capas": total_capas,
+            "total_audits": total_audits,
+            "total_permits": total_permits,
+            "incident_trend": [],  # placeholder for chart data
+            "compliance_score": 87.5,  # placeholder
+        }
+
+    def get_incident_analytics(self) -> dict:
+        return {"trends": [], "by_severity": {}, "by_type": {}}
+
+    def get_compliance_analytics(self) -> dict:
+        return {"overall_score": 87.5, "by_standard": {}, "audit_completion_rate": 0.0}
+
     # ── Dashboard Summary ─────────────────────────────────────────────────────
 
     def get_dashboard(self) -> dict:
