@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.services.auth_service import AuthService
 from app.schemas.auth import OrganizationRegisterRequest, LoginRequest
-from app.helpers.response import ok, accepted  # Import your response helpers
+from app.helpers.response import ok
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -36,6 +36,24 @@ def register_organization(
             detail=str(e)
         )
 
+@router.post("/super-admin/login")
+def super_admin_login(
+    request: LoginRequest,
+    db: Session = Depends(get_db)
+):
+    """Login for the system super admin account"""
+    try:
+        auth_service = AuthService(db)
+        result = auth_service.login_super_admin(
+            email=request.email,
+            password=request.password
+        )
+        return result["data"]
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        )
 @router.post("/login")
 def login(
     request: LoginRequest,

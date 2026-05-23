@@ -1,7 +1,7 @@
 """create organization table
 
 Revision ID: 0002
-Revises: 
+Revises: 0001_initial
 Create Date: 2026-05-22
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = '0002'
-down_revision = None
+down_revision = '0001_initial'
 branch_labels = None
 depends_on = None
 

@@ -60,4 +60,5 @@ __all__ = [
     "User",
     "Vendor",
     "VendorDocument",
+    "SuperAdmin",
 ]

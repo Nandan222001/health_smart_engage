@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.repositories.organization_repository import OrganizationRepository
 from app.repositories.user_repository import UserRepository
+from app.repositories.super_admin_repository import SuperAdminRepository
 from app.core.security import verify_password, create_access_token
 from app.schemas.auth import TokenData
 from datetime import timedelta
@@ -136,3 +137,37 @@ class AuthService:
             }
         
         raise ValueError("Invalid email or password")
+
+    def login_super_admin(self, email: str, password: str):
+        super_admin = SuperAdminRepository(self.db).get_by_email(email)
+        if not super_admin or not verify_password(password, super_admin.password_hash):
+            raise ValueError("Invalid super admin email or password")
+
+        token_data = TokenData(
+            sub=str(super_admin.id),
+            email=super_admin.email,
+            user_type="super_admin",
+            user_id=super_admin.id,
+            roles=["System Admin"],
+            permissions=["admin:*"]
+        )
+
+        access_token = create_access_token(
+            token_data.dict(exclude_none=True),
+            expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+        )
+
+        return {
+            "operation": "auth_super_admin_login",
+            "group": "shared",
+            "recordId": str(uuid4()),
+            "status": "accepted",
+            "data": {
+                "access_token": access_token,
+                "token_type": "bearer",
+                "user_type": "super_admin",
+                "email": super_admin.email,
+                "name": super_admin.name,
+                "expires_in": settings.access_token_expire_minutes
+            }
+        }
