@@ -29,3 +29,9 @@ class OrganizationRepository:
             Organization.organization_code == code,
             Organization.is_active == True
         ).first()
+
+    def get_by_id(self, organization_id: int) -> Organization | None:
+        return self.db.query(Organization).filter(
+            Organization.id == organization_id,
+            Organization.is_active == True
+        ).first()

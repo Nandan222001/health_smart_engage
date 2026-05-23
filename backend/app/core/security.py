@@ -88,7 +88,7 @@ def get_current_user(
             tenant_id=tenant_id or "local-tenant",
             roles=("System Admin",),
             permissions=("admin:*",),
-            user_type="user",
+            user_type="super_admin",
             email="local@example.com",
         )
 
@@ -183,6 +183,18 @@ def get_current_organization_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only organization admins can access this resource",
+        )
+    return current_user
+
+
+def get_current_super_admin(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> CurrentUser:
+    """Dependency to ensure the current user is a super admin"""
+    if current_user.user_type != "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super admins can access this resource",
         )
     return current_user
 

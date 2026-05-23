@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, t
 import { auth, googleProvider, db } from "@/config/firebase";
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, fetchSignInMethodsForEmail, User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { getOnboardingAccessProfile, loginWithThetaCredentials } from "@/services/api";
+import { getOnboardingAccessProfile, loginWithThetaCredentials, loginSuperAdmin } from "@/services/api";
 import { env } from "@/config/env";
 
 export type LoginResult =
@@ -643,6 +643,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     localStorage.removeItem("hse_auth");
     localStorage.removeItem("hse_user");
+    localStorage.removeItem("hse_api_token");
   }, []);
 
   const currentUserAllowedModules = useMemo<UiModuleLabel[]>(() => {
@@ -709,7 +710,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const resolvedRole = mapOnboardingRoleToUserRole(profile.user_role);
             if (!isWebAllowedOnboardingRole(resolvedRole)) {
               clearLocalAuthState();
-              await signOut(auth);
+              if (auth) await signOut(auth);
               return "denied";
             }
 
@@ -748,12 +749,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (profile.found && !profile.approved) {
             const approvalState = String(profile.approval_state ?? profile.status ?? "").toLowerCase();
             clearLocalAuthState();
-            await signOut(auth);
+            if (auth) await signOut(auth);
             return approvalState === "archived" ? "denied" : "pending";
           }
         } catch (profileErr) {
           console.warn("Onboarding access profile lookup failed, falling back to Firestore approval:", profileErr);
         }
+      }
+
+      // If Firestore `db` is not available, fall back to minimal user data.
+      if (!db) {
+        const name = firebaseUser.displayName || (firebaseUser.email?.split("@")[0] ?? "User");
+        const initials = name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+        const userData: AuthUser = { name, email: firebaseUser.email ?? "", role: "Auditor", initials };
+        setUser(userData);
+        setIsAuthenticated(true);
+        localStorage.setItem("hse_auth", "true");
+        localStorage.setItem("hse_user", JSON.stringify(userData));
+        return "approved";
       }
 
       const ref = doc(db, "app_users", firebaseUser.uid);
@@ -762,7 +775,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!snap.exists() || (!snap.data().approved && !isPrivilegedAdmin)) {
         await setDoc(ref, {
           email: firebaseUser.email ?? "",
-          displayName: isPrivilegedAdmin ? "Product Admin" : (firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "User"),
+          displayName: isPrivilegedAdmin
+            ? "Product Admin"
+            : (firebaseUser.displayName ?? (firebaseUser.email?.split("@")[0] ?? "User")),
           photoURL: firebaseUser.photoURL ?? null,
           role: isPrivilegedAdmin ? "Admin" : null,
           approved: isPrivilegedAdmin,
@@ -771,7 +786,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (!isPrivilegedAdmin) {
           clearLocalAuthState();
-          await signOut(auth);
+          if (auth) await signOut(auth);
           return "pending";
         }
       }
@@ -791,7 +806,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Firestore user check failed:", err);
       if (!isPrivilegedAdmin) {
         clearLocalAuthState();
-        await signOut(auth);
+        if (auth) await signOut(auth);
       }
       return "denied";
     }
@@ -801,6 +816,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (localStorage.getItem("hse_auth") !== "true") {
       setIsAuthenticated(false);
       setUser(null);
+    }
+
+    // Guard: if Firebase `auth` is not available (e.g. missing config), skip
+    // subscribing to onAuthStateChanged to avoid runtime TypeErrors.
+    if (!auth) {
+      // eslint-disable-next-line no-console
+      console.warn('[auth] Firebase auth is not initialized; skipping onAuthStateChanged subscription.');
+      return;
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
@@ -931,6 +954,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const isAdminCreds = ENABLE_DEV_TEST_ACCOUNTS && trimmedEmail === ADMIN_EMAIL && password === ADMIN_PASSWORD;
+    const isProductAdminLogin = PRODUCT_ADMIN_EMAILS.has(trimmedEmail);
+
+    if (isProductAdminLogin) {
+      try {
+        const data = await loginSuperAdmin(trimmedEmail, normalizedPassword);
+        const name = String(data.name ?? "Super Admin");
+        const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+        const userData: AuthUser = {
+          name,
+          email: trimmedEmail,
+          role: "Admin",
+          initials,
+          allowedModules: ALL_MODULE_LABELS,
+        };
+
+        setUser(userData);
+        setIsAuthenticated(true);
+        localStorage.setItem("hse_auth", "true");
+        localStorage.setItem("hse_user", JSON.stringify(userData));
+        localStorage.setItem("hse_api_token", data.access_token);
+        return "success";
+      } catch (err) {
+        const msg = String(err instanceof Error ? err.message : err).toLowerCase();
+        if (msg.includes("network") || msg.includes("fetch") || msg.includes("timeout")) {
+          return "network_error";
+        }
+        return "invalid_credentials";
+      }
+    }
 
     try {
       const thetaResult = await loginWithThetaCredentials(trimmedEmail, normalizedPassword, orgCode);
@@ -1008,6 +1060,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       let cred;
+      if (!auth) {
+        console.warn('[auth] Firebase auth not initialized; cannot perform Firebase login fallback.');
+        return "error";
+      }
       try {
         cred = await signInWithEmailAndPassword(auth, trimmedEmail, password);
       } catch (err: unknown) {
@@ -1038,20 +1094,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // First-time non-Google path:
           // If onboarding is approved but no email/password sign-in method exists,
           // force user to set password manually via Create account.
-          try {
-            const signInMethods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
-            if (signInMethods.length > 0) {
+            try {
+              if (!auth) return "invalid_credentials";
+              const signInMethods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
+              if (signInMethods.length > 0) {
+                return "invalid_credentials";
+              }
+
+              const profile = await getOnboardingAccessProfile(trimmedEmail, orgCode);
+              if (profile?.found && profile?.approved) {
+                return "password_setup_required";
+              }
+              return "invalid_credentials";
+            } catch {
               return "invalid_credentials";
             }
-
-            const profile = await getOnboardingAccessProfile(trimmedEmail, orgCode);
-            if (profile?.found && profile?.approved) {
-              return "password_setup_required";
-            }
-            return "invalid_credentials";
-          } catch {
-            return "invalid_credentials";
-          }
         } else {
           throw err;
         }
@@ -1081,6 +1138,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithGoogle = async (): Promise<LoginResult> => {
     try {
+      if (!auth) {
+        console.warn('[auth] Firebase auth not initialized; Google login unavailable.');
+        return "error";
+      }
       const result = await signInWithPopup(auth, googleProvider);
       const access = await resolveFirestoreUser(result.user);
       if (access === "approved") return "success";
@@ -1103,6 +1164,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      if (!auth) {
+        console.warn('[auth] Firebase auth not initialized; signup unavailable.');
+        return "error";
+      }
       const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const access = await resolveFirestoreUser(cred.user);
       if (access === "approved") return "success";
@@ -1133,11 +1198,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    signOut(auth);
+    if (auth) signOut(auth).catch((e) => console.warn('SignOut failed:', e));
     setIsAuthenticated(false);
     setUser(null);
     localStorage.removeItem("hse_auth");
     localStorage.removeItem("hse_user");
+    localStorage.removeItem("hse_api_token");
   };
 
   const markOnboardingSetupCompleted = useCallback(() => {

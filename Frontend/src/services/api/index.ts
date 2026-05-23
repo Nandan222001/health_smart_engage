@@ -17,6 +17,11 @@ async function buildHeaders(options?: RequestInit): Promise<HeadersInit> {
     const token = await auth.currentUser?.getIdToken();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
+    } else {
+      const backendToken = localStorage.getItem('hse_api_token');
+      if (backendToken) {
+        headers.Authorization = `Bearer ${backendToken}`;
+      }
     }
   } catch (error) {
     console.warn('Unable to resolve Firebase token for API request:', error);
@@ -930,6 +935,35 @@ export async function loginWithThetaCredentials(
     throw new Error(err);
   }
   return data;
+}
+
+export async function loginSuperAdmin(
+  email: string,
+  password: string,
+): Promise<{
+  access_token: string;
+  token_type: string;
+  user_type: string;
+  email: string;
+  name?: string;
+  expires_in?: number;
+}> {
+  const payload = {
+    email: email.trim().toLowerCase(),
+    password,
+  };
+
+  return apiFetch<{
+    access_token: string;
+    token_type: string;
+    user_type: string;
+    email: string;
+    name?: string;
+    expires_in?: number;
+  }>('/auth/super-admin/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function submitOnboardingAccessRequest(

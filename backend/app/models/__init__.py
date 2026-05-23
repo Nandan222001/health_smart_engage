@@ -28,6 +28,7 @@ from app.models.domain import (
     VendorDocument,
 )
 from app.models.generic_record import GenericRecord
+from app.models.organization_details import OrganizationDetails
 from app.models.tenant import Tenant
 
 __all__ = [
@@ -49,6 +50,7 @@ __all__ = [
     "KnowledgeDocument",
     "MobileSyncItem",
     "OrganisationNode",
+    "OrganizationDetails",
     "Permit",
     "PermitApproval",
     "PredictiveRiskScore",

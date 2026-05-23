@@ -7,7 +7,12 @@ class OrganizationRegisterRequest(BaseModel):
     confirm_password: str
     organization_code: str = Field(..., min_length=3, max_length=50)
     name: Optional[str] = None
-    
+    organization_name: Optional[str] = None
+    country: Optional[str] = None
+    industry_type: Optional[str] = None
+    sites: Optional[int] = None
+    logo_url: Optional[str] = None
+
     @validator('confirm_password')
     def passwords_match(cls, v, values):
         if 'password' in values and v != values['password']:

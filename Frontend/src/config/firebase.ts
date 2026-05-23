@@ -1,5 +1,5 @@
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+import { initializeApp, FirebaseApp } from "firebase/app";
+// import { getAnalytics } from "firebase/analytics"; // temporarily disabled to avoid Installations errors
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -13,18 +13,31 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID as string,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase only when required config exists
+const hasCoreConfig = Boolean(
+  firebaseConfig.projectId && firebaseConfig.apiKey && firebaseConfig.appId
+);
 
-// Initialize Analytics (only in browser environment)
-let analytics;
-if (typeof window !== 'undefined') {
-  analytics = getAnalytics(app);
+let app: FirebaseApp | null = null;
+if (hasCoreConfig) {
+  try {
+    app = initializeApp(firebaseConfig);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[firebase] initializeApp failed:', err);
+    app = null;
+  }
+} else {
+  // eslint-disable-next-line no-console
+  console.warn('[firebase] Missing core Firebase config (projectId/apiKey/appId). Skipping initialization.');
 }
 
-export const auth = getAuth(app);
+// Analytics temporarily disabled to avoid Installations error when projectId missing
+const analytics: null = null;
+
+export const auth = app ? getAuth(app) : null;
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
+export const db = app ? getFirestore(app) : null;
 
 export { analytics };
 export default app;

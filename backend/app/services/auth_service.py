@@ -14,7 +14,18 @@ class AuthService:
         self.org_repo = OrganizationRepository(db)
         self.user_repo = UserRepository(db)
     
-    def register_organization(self, email: str, password: str, organization_code: str, name: str = None):
+    def register_organization(
+        self,
+        email: str,
+        password: str,
+        organization_code: str,
+        name: str | None = None,
+        organization_name: str | None = None,
+        country: str | None = None,
+        industry_type: str | None = None,
+        sites: int | None = None,
+        logo_url: str | None = None,
+    ):
         # Check if org already exists
         existing_org = self.org_repo.get_by_email(email)
         if existing_org:
@@ -27,6 +38,19 @@ class AuthService:
         
         # Create organization
         org = self.org_repo.create(email, password, organization_code, name)
+
+        # Create organization details when provided
+        details_payload = {
+            "organization_id": org.id,
+            "organization_name": organization_name or org.name,
+            "country": country,
+            "industry_type": industry_type,
+            "sites": sites,
+            "logo_url": logo_url,
+        }
+        details_payload = {k: v for k, v in details_payload.items() if v is not None}
+        if len(details_payload) > 1:
+            OrganizationDetailsRepository(self.db).create(details_payload)
         
         # Generate token with roles and permissions
         token_data = TokenData(

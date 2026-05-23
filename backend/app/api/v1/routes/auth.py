@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.security import get_current_super_admin, CurrentUser
 from app.services.auth_service import AuthService
 from app.schemas.auth import OrganizationRegisterRequest, LoginRequest
 from app.helpers.response import ok
@@ -10,18 +11,23 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 @router.post("/register")
 def register_organization(
     request: OrganizationRegisterRequest,
+    current_user: CurrentUser = Depends(get_current_super_admin),
     db: Session = Depends(get_db)
 ):
-    """Register a new organization"""
+    """Super admin creates a new organization and its initial organization admin account"""
     try:
         auth_service = AuthService(db)
         result = auth_service.register_organization(
             email=request.email,
             password=request.password,
             organization_code=request.organization_code,
-            name=request.name
+            name=request.name,
+            organization_name=request.organization_name,
+            country=request.country,
+            industry_type=request.industry_type,
+            sites=request.sites,
+            logo_url=request.logo_url,
         )
-        # Use your 'ok' helper with status code 201 for creation
         return ok(
             data=result["data"],
             message="Organization registered successfully",
