@@ -23,6 +23,26 @@ import { NearMissPage } from "@/features/near-miss/pages/NearMissPage";
 import { RiskPage } from "@/features/risk/pages/RiskPage";
 import { AssetsPage } from "@/features/assets/pages/AssetsPage";
 import { OnboardingPage } from "@/features/auth/pages/OnboardingPage";
+// Super Admin
+import { SuperAdminDashboard } from "@/features/superadmin/pages/SuperAdminDashboard";
+import { TenantListPage } from "@/features/superadmin/pages/TenantListPage";
+import { OnboardingWizardPage } from "@/features/superadmin/pages/OnboardingWizardPage";
+import { StorageLayerPage } from "@/features/superadmin/pages/StorageLayerPage";
+// AI Intelligence (Layer 4)
+import { AIIntelligencePage } from "@/features/ai-intelligence/pages/AIIntelligencePage";
+// Decision & Workflow Engine (Layer 5)
+import { WorkflowEnginePage } from "@/features/workflow/pages/WorkflowEnginePage";
+// Outputs – Visibility & Intelligence (Layer 6)
+import { OutputsPage } from "@/features/outputs/pages/OutputsPage";
+// Continuous Learning Loop (Layer 7)
+import { ContinuousLearningPage } from "@/features/learning/pages/ContinuousLearningPage";
+// New feature pages
+import { PermitsPage } from "@/features/permits/pages/PermitsPage";
+import { IncidentsPage } from "@/features/incidents/pages/IncidentsPage";
+import { EmployeesPage } from "@/features/employees/pages/EmployeesPage";
+import { TrainingPage } from "@/features/training/pages/TrainingPage";
+import { AuditsPage } from "@/features/audits/pages/AuditsPage";
+import { HazardsPage } from "@/features/hazards/pages/HazardsPage";
 import type { ComponentType } from "react";
 
 function RouteErrorFallback() {
@@ -187,6 +207,27 @@ export const router = createBrowserRouter([
       { path: "near-miss", Component: NearMissRoute },
       { path: "root-cause-analysis", Component: RootCauseAnalysisRoute },
       { path: "equipment-certification", Component: EquipmentCertificationRoute },
+      // New operational pages
+      { path: "permits", Component: PermitsPage },
+      { path: "incidents", Component: IncidentsPage },
+      { path: "employees", Component: EmployeesPage },
+      { path: "training", Component: TrainingPage },
+      { path: "audits", Component: AuditsPage },
+      { path: "hazards", Component: HazardsPage },
+      // Super Admin pages
+      { path: "superadmin", Component: SuperAdminDashboard },
+      { path: "superadmin/tenants", Component: TenantListPage },
+      { path: "superadmin/onboarding-wizard", Component: OnboardingWizardPage },
+      { path: "superadmin/users", Component: UsersPage },
+      { path: "superadmin/storage", Component: StorageLayerPage },
+      // AI Intelligence Layer 4
+      { path: "ai-intelligence", Component: AIIntelligencePage },
+      // Decision & Workflow Engine Layer 5
+      { path: "workflow", Component: WorkflowEnginePage },
+      // Outputs – Visibility & Intelligence Layer 6
+      { path: "outputs", Component: OutputsPage },
+      // Continuous Learning Loop Layer 7
+      { path: "learning", Component: ContinuousLearningPage },
     ],
   },
   {

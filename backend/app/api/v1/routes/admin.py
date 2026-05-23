@@ -45,6 +45,14 @@ ENDPOINTS = [
     ("GET", "/admin/audit-logs/{eventId}", "admin_audit_logs_get", "Get audit event"),
     ("POST", "/admin/master-data/imports", "admin_master_data_imports_create", "Import master data"),
     ("GET", "/admin/master-data/imports/{importId}", "admin_master_data_imports_get", "Import status"),
+    # Super Admin
+    ("GET",   "/admin/storage/metrics",           "admin_storage_metrics",        "Storage layer metrics"),
+    ("GET",   "/admin/superadmin/dashboard",      "superadmin_dashboard",         "Super admin dashboard"),
+    ("GET",   "/admin/superadmin/tenants",        "superadmin_tenants_list",      "List all tenants"),
+    ("POST",  "/admin/superadmin/tenants",        "superadmin_tenants_create",    "Create tenant"),
+    ("GET",   "/admin/superadmin/tenants/{tenantId}", "superadmin_tenants_get",   "Get tenant"),
+    ("PATCH", "/admin/superadmin/tenants/{tenantId}", "superadmin_tenants_update","Update tenant"),
+    ("GET",   "/admin/superadmin/users",          "superadmin_users_list",        "List all users cross-tenant"),
 ]
 
 register_catalog_routes(router, "admin", ENDPOINTS)

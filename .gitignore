@@ -1,0 +1,26 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.development
+
+# SQLite test databases
+*.db
+*.sqlite
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo

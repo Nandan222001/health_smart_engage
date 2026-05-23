@@ -16,9 +16,13 @@ class FoundationService:
         return self.repo.list(OrganisationNode, user.tenant_id, filters)
 
     def create_organisation_node(self, user: CurrentUser, data: dict) -> OrganisationNode:
-        if "id" not in data:
-            data["id"] = str(uuid.uuid4())
-        return self.repo.create(OrganisationNode, user.tenant_id, data)
+        payload = {k: v for k, v in data.items()}
+        payload.setdefault("id", str(uuid.uuid4()))
+        # Frontend sends "type"; model column is "node_type"
+        if "type" in payload and "node_type" not in payload:
+            payload["node_type"] = payload.pop("type")
+        payload.setdefault("node_type", "site")
+        return self.repo.create(OrganisationNode, user.tenant_id, payload)
 
     def update_organisation_node(self, user: CurrentUser, node_id: str, data: dict) -> OrganisationNode:
         return self.repo.update(OrganisationNode, user.tenant_id, node_id, data)
@@ -28,10 +32,19 @@ class FoundationService:
         return self.repo.list(User, user.tenant_id, filters)
 
     def invite_user(self, user: CurrentUser, data: dict) -> User:
-        data["status"] = "invited"
-        if "id" not in data:
-            data["id"] = str(uuid.uuid4())
-        return self.repo.create(User, user.tenant_id, data)
+        if not data.get("email"):
+            raise AppError("VALIDATION_ERROR", "email is required", 400)
+        payload = {k: v for k, v in data.items()}
+        payload["status"] = "invited"
+        payload.setdefault("id", str(uuid.uuid4()))
+        # Normalise "name" → "display_name" (frontend sends "name")
+        if "name" in payload and "display_name" not in payload:
+            payload["display_name"] = payload.pop("name")
+        payload.setdefault("display_name", payload.get("email", "User"))
+        # Drop unsupported fields (e.g. "role" — stored separately)
+        for field in ("role", "roles"):
+            payload.pop(field, None)
+        return self.repo.create(User, user.tenant_id, payload)
 
     def revoke_user(self, user: CurrentUser, user_id: str) -> User:
         return self.repo.update(User, user.tenant_id, user_id, {"status": "revoked"})
