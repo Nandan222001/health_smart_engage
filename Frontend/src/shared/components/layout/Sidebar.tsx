@@ -7,7 +7,7 @@ import {
   LogOut, Shield, Settings, X, type LucideIcon,
   FileText, UserCheck, GraduationCap, ShieldAlert,
   LayoutDashboard, Globe, ChevronDown, ChevronRight,
-  Database, BrainCircuit,
+  Database, BrainCircuit, GitBranch,
 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 
@@ -33,6 +33,7 @@ const MAIN_NAV: NavGroup[] = [
       { name: "Work", icon: Briefcase, path: "/actions" },
       { name: "AI Agent",        icon: Lightbulb,    path: "/ai-agent" },
       { name: "AI Intelligence", icon: BrainCircuit, path: "/ai-intelligence" },
+      { name: "Workflow",        icon: GitBranch,    path: "/workflow" },
       { name: "Compliance", icon: ClipboardCheck, path: "/compliance" },
       { name: "Reports", icon: BarChart3, path: "/analytics" },
       { name: "Vendors", icon: Building2, path: "/vendors" },

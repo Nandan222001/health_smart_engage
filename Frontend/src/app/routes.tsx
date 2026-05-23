@@ -30,6 +30,8 @@ import { OnboardingWizardPage } from "@/features/superadmin/pages/OnboardingWiza
 import { StorageLayerPage } from "@/features/superadmin/pages/StorageLayerPage";
 // AI Intelligence (Layer 4)
 import { AIIntelligencePage } from "@/features/ai-intelligence/pages/AIIntelligencePage";
+// Decision & Workflow Engine (Layer 5)
+import { WorkflowEnginePage } from "@/features/workflow/pages/WorkflowEnginePage";
 // New feature pages
 import { PermitsPage } from "@/features/permits/pages/PermitsPage";
 import { IncidentsPage } from "@/features/incidents/pages/IncidentsPage";
@@ -216,6 +218,8 @@ export const router = createBrowserRouter([
       { path: "superadmin/storage", Component: StorageLayerPage },
       // AI Intelligence Layer 4
       { path: "ai-intelligence", Component: AIIntelligencePage },
+      // Decision & Workflow Engine Layer 5
+      { path: "workflow", Component: WorkflowEnginePage },
     ],
   },
   {
