@@ -583,6 +583,7 @@ function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan | null {
 interface AuthContextType {
   isAuthenticated: boolean;
   user: AuthUser | null;
+  isSuperAdmin: boolean;
   /** All KPI objects the current user is allowed to view */
   accessibleKPIs: KPI[];
   /** Check at runtime whether this user can see a specific KPI by id */
@@ -601,6 +602,7 @@ interface AuthContextType {
 const defaultAuthContextValue: AuthContextType = {
   isAuthenticated: false,
   user: null,
+  isSuperAdmin: false,
   accessibleKPIs: [],
   canViewKPI: () => false,
   canAccessModuleLabel: () => false,
@@ -681,6 +683,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isOnboardingScopedUser = Boolean(user?.onboardingScoped);
+  const isSuperAdmin = Boolean(user?.email && PRODUCT_ADMIN_EMAILS.has(user.email.toLowerCase()));
 
   const mapOnboardingRoleToUserRole = (rawRole: string | undefined): UserRole => {
     const normalized = (rawRole || "").trim().toLowerCase();
@@ -1154,7 +1157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, accessibleKPIs, canViewKPI, canAccessModuleLabel, isOnboardingScopedUser, login, signup, loginWithGoogle, logout, markOnboardingSetupCompleted, subscriptionPlan, setSubscriptionPlan }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, isSuperAdmin, accessibleKPIs, canViewKPI, canAccessModuleLabel, isOnboardingScopedUser, login, signup, loginWithGoogle, logout, markOnboardingSetupCompleted, subscriptionPlan, setSubscriptionPlan }}>
       {children}
     </AuthContext.Provider>
   );

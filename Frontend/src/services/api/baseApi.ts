@@ -16,9 +16,10 @@ export const baseApi = createApi({
       }
       try {
         const stored = localStorage.getItem("hse_user");
-        const user = stored ? (JSON.parse(stored) as { email?: string; role?: string }) : null;
+        const user = stored ? (JSON.parse(stored) as { email?: string; role?: string; orgCode?: string }) : null;
         if (user?.email) headers.set("X-User-Email", user.email);
         if (user?.role) headers.set("X-User-Role", user.role);
+        if (user?.orgCode) headers.set("X-Tenant-Id", user.orgCode);
       } catch {
         // localStorage unavailable — proceed without custom headers
       }
@@ -26,30 +27,14 @@ export const baseApi = createApi({
     },
   }),
   tagTypes: [
-    "Site",
-    "Zone",
-    "Shift",
-    "Camera",
-    "RFIDReader",
-    "EdgeDevice",
-    "User",
-    "Worker",
-    "Violation",
-    "Action",
-    "Rule",
-    "PPEType",
-    "Contractor",
-    "AccessLog",
-    "SLAConfig",
-    "ComplianceStandard",
-    "AuditTrail",
-    "Dashboard",
-    "NearMiss",
-    "RCA",
-    "EquipmentCert",
-    "Checklist",
-    "Analytics",
-    "Onboarding",
+    "Site", "Zone", "Shift", "Camera", "RFIDReader", "EdgeDevice",
+    "User", "Worker", "Violation", "Action", "Rule", "PPEType",
+    "Contractor", "AccessLog", "SLAConfig", "ComplianceStandard",
+    "AuditTrail", "Dashboard", "NearMiss", "RCA", "EquipmentCert",
+    "Checklist", "Analytics", "Onboarding",
+    "Tenant", "OrgNode", "Role", "Permission", "Workflow",
+    "Employee", "Training", "Vendor", "Asset", "Permit",
+    "Audit", "CAPA", "Risk", "Hazard", "Incident",
   ],
   endpoints: () => ({}),
 });
