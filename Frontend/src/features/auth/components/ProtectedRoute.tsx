@@ -25,10 +25,9 @@ export function ProtectedRoute({
   void hideForOnboardingScoped;
 
   const setupRequired = Boolean(user?.onboardingSetupRequired && !user?.onboardingSetupCompleted);
-  // Allow one landing on dashboard to show onboarding setup prompt after login.
-  // All other pages remain gated until setup is completed.
-  if (setupRequired && location.pathname !== "/users" && location.pathname !== "/") {
-    return <Navigate to="/users" replace />;
+  // First-time invited org admins must complete org setup before accessing any other page.
+  if (setupRequired && location.pathname !== "/org-setup") {
+    return <Navigate to="/org-setup" replace />;
   }
 
   return <>{children}</>;

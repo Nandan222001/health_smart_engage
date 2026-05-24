@@ -260,8 +260,6 @@ export const router = createBrowserRouter([
       { path: "outputs", Component: OutputsPage },
       // Continuous Learning Loop Layer 7
       { path: "learning", Component: ContinuousLearningPage },
-      // Org Admin Setup Wizard
-      { path: "org-setup", Component: OrgSetupWizardPage },
     ],
   },
   {

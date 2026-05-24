@@ -33,8 +33,14 @@ export function LoginPage() {
 
   useEffect(() => {
     if (!isAuthenticated || forceLoginView) return;
-    navigate(isSuperAdmin ? "/superadmin" : "/", { replace: true });
-  }, [isAuthenticated, isSuperAdmin, navigate, forceLoginView]);
+    if (isSuperAdmin) {
+      navigate("/superadmin", { replace: true });
+    } else if (user?.onboardingSetupRequired && !user?.onboardingSetupCompleted) {
+      navigate("/org-setup", { replace: true });
+    } else {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthenticated, isSuperAdmin, user?.onboardingSetupRequired, user?.onboardingSetupCompleted, navigate, forceLoginView]);
 
   useEffect(() => {
     const mode = (searchParams.get("mode") || "").toLowerCase();
