@@ -12,4 +12,5 @@ azure-identity==1.19.0
 azure-keyvault-secrets==4.9.0
 azure-storage-blob==12.24.0
 httpx==0.28.1
+sendgrid==6.12.5
 pytest==8.3.4
