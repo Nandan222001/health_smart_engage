@@ -9,7 +9,8 @@ import {
   LayoutDashboard, ChevronDown, ChevronRight,
   Database, BrainCircuit, GitBranch, Eye, RefreshCw,
   Mail as MailIcon, CreditCard, TrendingUp, Bell,
-  SlidersHorizontal, ScrollText, MapPin, ShieldCheck,
+  SlidersHorizontal, ScrollText, MapPin, ShieldCheck, BookMarked,
+  HelpCircle,
 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 
@@ -49,45 +50,20 @@ const MAIN_NAV: NavGroup[] = [
   },
 ];
 
-const ADMIN_NAV: NavGroup[] = [
+const ORG_ADMIN_NAV: NavGroup[] = [
   {
-    label: "Organisation",
+    label: "Organisation Admin",
     items: [
-      { name: "Home", icon: House, path: "/" },
-      { name: "Invitations", icon: MailIcon, path: "/admin/invitations" },
-      { name: "Sites", icon: MapPin, path: "/sites-zones" },
-      { name: "Departments", icon: Building2, path: "/admin/departments" },
-      { name: "HSE Managers", icon: ShieldCheck, path: "/admin/hse-managers" },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { name: "Guide", icon: BookOpenText, path: "/checklists" },
-      { name: "Risk", icon: CircleAlert, path: "/root-cause-analysis" },
-      { name: "Work", icon: Briefcase, path: "/actions" },
-      { name: "Compliance", icon: ClipboardCheck, path: "/compliance" },
-      { name: "Incidents", icon: AlertTriangle, path: "/violations" },
-      { name: "Vendors", icon: Building2, path: "/vendors" },
-      { name: "Assets", icon: FolderClosed, path: "/equipment-certification" },
-    ],
-  },
-  {
-    label: "Intelligence",
-    items: [
-      { name: "AI Agent", icon: Lightbulb, path: "/ai-agent" },
-      { name: "AI Intelligence", icon: BrainCircuit, path: "/ai-intelligence" },
-      { name: "Workflow", icon: GitBranch, path: "/workflow" },
-      { name: "Outputs", icon: Eye, path: "/outputs" },
-      { name: "Learning Loop", icon: RefreshCw, path: "/learning" },
-      { name: "Reports", icon: BarChart3, path: "/analytics" },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { name: "Engagement", icon: Heart, path: "/engagement" },
-      { name: "Settings", icon: Settings, path: "/settings" },
+      { name: "Org Setup",        icon: Building2,    path: "/org-setup" },
+      { name: "Sites & Zones",    icon: MapPin,        path: "/sites-zones" },
+      { name: "Invitations",      icon: MailIcon,      path: "/admin/invitations" },
+      { name: "Departments",      icon: Building2,     path: "/admin/departments" },
+      { name: "HSE Managers",     icon: ShieldCheck,   path: "/admin/hse-managers" },
+      { name: "Compliance",       icon: Shield,        path: "/compliance" },
+      { name: "Workflows",        icon: GitBranch,     path: "/workflow" },
+      { name: "Knowledge Centre", icon: BookMarked,    path: "/settings" },
+      { name: "AI Intelligence",  icon: BrainCircuit,  path: "/ai-intelligence" },
+      { name: "Reports",          icon: BarChart3,     path: "/analytics" },
     ],
   },
 ];
@@ -125,6 +101,168 @@ const SUPERADMIN_NAV: NavGroup[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Org Admin — 13 collapsible groups
+// ---------------------------------------------------------------------------
+
+interface OrgAdminSubItem { name: string; path: string; }
+interface OrgAdminGroup  { icon: LucideIcon; items: OrgAdminSubItem[]; }
+
+const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
+  "Home": {
+    icon: House,
+    items: [
+      { name: "Dashboard",        path: "/" },
+      { name: "Overview",         path: "/overview" },
+      { name: "Real-Time KPIs",   path: "/kpis" },
+      { name: "Notifications",    path: "/notifications" },
+      { name: "Recent Activities",path: "/activities" },
+    ],
+  },
+  "People": {
+    icon: Users,
+    items: [
+      { name: "Users",                path: "/users" },
+      { name: "Workers",              path: "/employees" },
+      { name: "Supervisors",          path: "/employees?type=supervisor" },
+      { name: "HSE Managers",         path: "/employees?type=hse-manager" },
+      { name: "Auditors",             path: "/employees?type=auditor" },
+      { name: "Contractors",          path: "/vendors" },
+      { name: "Roles & Permissions",  path: "/users" },
+      { name: "Training & Competency",path: "/training" },
+      { name: "Shift Management",     path: "/shift-management" },
+    ],
+  },
+  "Vendors": {
+    icon: Building2,
+    items: [
+      { name: "Vendor List",      path: "/vendors" },
+      { name: "Contractor Mgmt", path: "/vendors" },
+      { name: "Vendor Compliance",path: "/vendors" },
+      { name: "Certifications",   path: "/vendors" },
+      { name: "Vendor Risk Score",path: "/vendors" },
+    ],
+  },
+  "Assets": {
+    icon: FolderClosed,
+    items: [
+      { name: "Asset Register",         path: "/equipment-certification" },
+      { name: "Asset Categories",       path: "/equipment-certification" },
+      { name: "Maintenance Logs",       path: "/equipment-certification" },
+      { name: "Equipment Inspections",  path: "/equipment-certification" },
+      { name: "Asset Risk Mapping",     path: "/equipment-certification" },
+    ],
+  },
+  "Compliance": {
+    icon: ClipboardCheck,
+    items: [
+      { name: "Compliance Dashboard", path: "/compliance" },
+      { name: "Standards & Policies", path: "/policies" },
+      { name: "Audit Management",     path: "/audits" },
+      { name: "Inspections",          path: "/audits" },
+      { name: "CAPA",                 path: "/audits" },
+      { name: "Regulatory Tracking",  path: "/compliance" },
+      { name: "Documentation",        path: "/compliance" },
+    ],
+  },
+  "Risk": {
+    icon: ShieldAlert,
+    items: [
+      { name: "Risk Assessments",  path: "/root-cause-analysis" },
+      { name: "Hazard Register",   path: "/hazards" },
+      { name: "Near Miss Reports", path: "/near-miss" },
+      { name: "Incident Management",path: "/incidents" },
+      { name: "Risk Matrix",       path: "/root-cause-analysis" },
+      { name: "High-Risk Areas",   path: "/root-cause-analysis" },
+      { name: "Predictive Risk AI",path: "/ai-intelligence" },
+    ],
+  },
+  "Work": {
+    icon: Briefcase,
+    items: [
+      { name: "Permit To Work (PTW)",path: "/permits" },
+      { name: "Permit Requests",    path: "/permits" },
+      { name: "Approval Queue",     path: "/permits" },
+      { name: "Active Work Permits",path: "/permits" },
+      { name: "Workflow Management",path: "/workflow" },
+      { name: "Escalation Rules",   path: "/workflow" },
+      { name: "Site Operations",    path: "/sites-zones" },
+    ],
+  },
+  "Incidents": {
+    icon: AlertTriangle,
+    items: [
+      { name: "Incident Reports",    path: "/incidents" },
+      { name: "Near Misses",         path: "/near-miss" },
+      { name: "Unsafe Acts",         path: "/violations" },
+      { name: "Unsafe Conditions",   path: "/violations" },
+      { name: "Investigation",       path: "/incidents" },
+      { name: "Root Cause Analysis", path: "/root-cause-analysis" },
+      { name: "Corrective Actions",  path: "/actions" },
+      { name: "Incident Analytics",  path: "/analytics" },
+    ],
+  },
+  "Intelligence": {
+    icon: BrainCircuit,
+    items: [
+      { name: "AI Dashboard",             path: "/ai-intelligence" },
+      { name: "AI Assistant",             path: "/ai-agent" },
+      { name: "Risk Predictions",         path: "/ai-intelligence" },
+      { name: "Compliance Intelligence",  path: "/ai-intelligence" },
+      { name: "Safety Recommendations",   path: "/ai-intelligence" },
+      { name: "Trend Analysis",           path: "/ai-intelligence" },
+      { name: "Benchmarking",             path: "/ai-intelligence" },
+      { name: "AI Knowledge Search",      path: "/ai-agent" },
+    ],
+  },
+  "Data Management": {
+    icon: Database,
+    items: [
+      { name: "Excel Upload",    path: "/data-management" },
+      { name: "CSV Import",      path: "/data-management" },
+      { name: "API Integrations",path: "/settings" },
+      { name: "Import History",  path: "/data-management" },
+      { name: "Validation Logs", path: "/data-management" },
+      { name: "Sync Status",     path: "/data-management" },
+    ],
+  },
+  "Reports": {
+    icon: BarChart3,
+    items: [
+      { name: "KPI Reports",        path: "/analytics" },
+      { name: "Incident Reports",   path: "/analytics" },
+      { name: "Audit Reports",      path: "/analytics" },
+      { name: "Compliance Reports", path: "/analytics" },
+      { name: "Risk Reports",       path: "/analytics" },
+      { name: "Workforce Reports",  path: "/analytics" },
+      { name: "Management Reports", path: "/analytics" },
+    ],
+  },
+  "Settings": {
+    icon: Settings,
+    items: [
+      { name: "Organization Settings", path: "/settings" },
+      { name: "Site Settings",         path: "/settings" },
+      { name: "Workflow Settings",     path: "/settings" },
+      { name: "Approval Matrix",       path: "/settings" },
+      { name: "Notification Settings", path: "/settings" },
+      { name: "Security Settings",     path: "/settings" },
+      { name: "API Settings",          path: "/settings" },
+    ],
+  },
+  "Help": {
+    icon: HelpCircle,
+    items: [
+      { name: "Help Center",         path: "/help" },
+      { name: "Documentation",       path: "/help" },
+      { name: "Raise Support Ticket",path: "/help" },
+      { name: "Contact Support",     path: "/help" },
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------
+
 interface SidebarProps {
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
@@ -136,19 +274,40 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   const { user, isSuperAdmin, logout } = useAuth();
   const [hovered, setHovered] = useState<string | null>(null);
   const [opsExpanded, setOpsExpanded] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const orgLabel = (user?.companyName || user?.orgCode || "").trim();
+
+  const isOrgAdmin = !isSuperAdmin && user?.role === "Admin";
 
   useEffect(() => {
     onCloseMobile?.();
   }, [location.pathname, onCloseMobile]);
 
-  // Auto-expand ops section if on an ops route
+  // Auto-expand ops section if on an ops route (for non-org-admin users)
   useEffect(() => {
-    const opsPaths = ["/employees", "/permits", "/incidents", "/hazards", "/training", "/audits"];
-    if (opsPaths.some((p) => location.pathname.startsWith(p))) {
-      setOpsExpanded(true);
+    if (!isOrgAdmin) {
+      const opsPaths = ["/employees", "/permits", "/incidents", "/hazards", "/training", "/audits"];
+      if (opsPaths.some((p) => location.pathname.startsWith(p))) {
+        setOpsExpanded(true);
+      }
     }
-  }, [location.pathname]);
+  }, [location.pathname, isOrgAdmin]);
+
+  // Auto-expand the org admin group containing the current active route
+  useEffect(() => {
+    if (!isOrgAdmin) return;
+    const pathname = location.pathname;
+    for (const [groupName, group] of Object.entries(ORG_ADMIN_GROUPS)) {
+      const match = group.items.some((item) => {
+        const base = item.path.split("?")[0];
+        return base === "/" ? pathname === "/" : pathname.startsWith(base);
+      });
+      if (match) {
+        setExpandedGroups((prev) => ({ ...prev, [groupName]: true }));
+        break;
+      }
+    }
+  }, [location.pathname, isOrgAdmin]);
 
   const handleLogout = () => {
     logout();
@@ -160,8 +319,16 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
     return location.pathname.startsWith(path.split("?")[0]);
   };
 
-  const isOrgAdmin = !isSuperAdmin && user?.role === "Admin";
-  const visibleGroups = isSuperAdmin ? SUPERADMIN_NAV : isOrgAdmin ? ADMIN_NAV : MAIN_NAV;
+  const isSubItemActive = (path: string) => {
+    const base = path.split("?")[0];
+    return base === "/" ? location.pathname === "/" : location.pathname.startsWith(base);
+  };
+
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
+  };
+
+  const visibleGroups = isSuperAdmin ? SUPERADMIN_NAV : MAIN_NAV;
 
   return (
     <>
@@ -211,8 +378,65 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
-          {/* Main groups */}
-          {visibleGroups.map((group) => (
+
+          {/* Org Admin — 13 collapsible groups */}
+          {isOrgAdmin && Object.entries(ORG_ADMIN_GROUPS).map(([groupName, group]) => {
+            const isOpen = !!expandedGroups[groupName];
+            const GroupIcon = group.icon;
+            const groupHasActive = group.items.some((item) => isSubItemActive(item.path));
+            return (
+              <div key={groupName}>
+                <button
+                  onClick={() => toggleGroup(groupName)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all"
+                  style={{ background: isOpen || groupHasActive ? '#EEF2FB' : 'transparent' }}
+                >
+                  <GroupIcon className="w-[17px] h-[17px]" style={{ color: '#7C869C' }} />
+                  <span className="text-[13px] flex-1 text-left font-medium" style={{ color: '#2F3A4F' }}>{groupName}</span>
+                  {isOpen
+                    ? <ChevronDown className="w-3.5 h-3.5" style={{ color: '#94A3B8' }} />
+                    : <ChevronRight className="w-3.5 h-3.5" style={{ color: '#94A3B8' }} />}
+                </button>
+
+                {isOpen && (
+                  <div className="mt-0.5 space-y-0.5 pl-3">
+                    {group.items.map((item) => {
+                      const active = isSubItemActive(item.path);
+                      const hovKey = `oa-${groupName}-${item.name}`;
+                      const isHovered = hovered === hovKey;
+                      return (
+                        <button
+                          key={`${groupName}-${item.name}`}
+                          onClick={() => { navigate(item.path); onCloseMobile?.(); }}
+                          onMouseEnter={() => setHovered(hovKey)}
+                          onMouseLeave={() => setHovered(null)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all"
+                          style={active ? {
+                            background: 'linear-gradient(135deg, #4A57B9 0%, #6F80E8 100%)',
+                            boxShadow: '0 4px 12px rgba(79,94,190,0.22)',
+                          } : { background: isHovered ? '#EEF2FB' : 'transparent' }}
+                        >
+                          <div
+                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                            style={{ background: active ? '#fff' : '#CBD5E1' }}
+                          />
+                          <span
+                            className="text-[12px] flex-1 text-left"
+                            style={{ color: active ? '#fff' : '#374151', fontWeight: active ? 600 : 400 }}
+                          >
+                            {item.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Main groups — shown to non-org-admin users (and superadmins via SUPERADMIN_NAV) */}
+          {!isOrgAdmin && visibleGroups.map((group) => (
             <div key={group.label ?? "main-nav"}>
               {group.label && (
                 <div className="px-3 py-1">
@@ -248,7 +472,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
             </div>
           ))}
 
-          {/* Operations collapsible section — hidden for super admins and org admins */}
+          {/* Operations collapsible section — hidden for superadmins and org admins */}
           {!isSuperAdmin && !isOrgAdmin && <div>
             <button
               onClick={() => setOpsExpanded(!opsExpanded)}

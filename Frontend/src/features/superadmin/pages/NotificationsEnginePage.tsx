@@ -53,9 +53,9 @@ export function NotificationsEnginePage() {
     setForm({
       name: t.name,
       channel: t.channel,
-      event_type: t.event_type,
+      event_type: t.event_type ?? "",
       subject: t.subject ?? "",
-      body_template: t.body_template,
+      body_template: t.body_template ?? (t as unknown as Record<string, string>).body ?? "",
     });
     setShowForm(true);
   };

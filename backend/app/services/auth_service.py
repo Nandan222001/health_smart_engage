@@ -50,12 +50,17 @@ class AuthService:
             raise AppError("INVALID_CREDENTIALS", "Invalid email or password", 401)
         if user.status == "revoked":
             raise AppError("ACCOUNT_REVOKED", "Account has been revoked", 403)
+        first_login = user.status == "invited"
+        if first_login:
+            user.status = "active"
+            self.db.flush()
         token = self._create_token(user)
         return {
             "access_token": token,
             "token_type": "bearer",
             "expires_in": settings.access_token_expire_minutes * 60,
             "is_superadmin": user.is_superadmin,
+            "first_login": first_login,
             "user": self._serialize(user),
         }
 
@@ -110,6 +115,7 @@ class AuthService:
         else:
             roles = []
             permissions = []
+
 
         claims = {
             "sub": user.id,

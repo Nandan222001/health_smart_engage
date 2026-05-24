@@ -26,8 +26,11 @@ export function RolesPermissionsPage() {
     if (!role) return;
     setSelectedRoleId(roleId);
     const map: Record<string, boolean> = {};
+    const permKeys = Array.isArray(role.permissions)
+      ? (role.permissions as string[])
+      : Object.keys((role.permissions as Record<string, unknown>) ?? {});
     permissions.forEach((p) => {
-      map[p.id] = role.permissions.includes(p.id);
+      map[p.id] = permKeys.includes(p.id);
     });
     setCheckedPerms(map);
   };

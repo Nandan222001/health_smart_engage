@@ -34,26 +34,28 @@ export function SystemSettingsPage() {
 
   useEffect(() => {
     if (secPolicy) {
+      const p = secPolicy as unknown as Record<string, unknown>;
       setSec({
-        password_min_length: secPolicy.password_min_length,
-        mfa_required: secPolicy.mfa_required,
-        session_timeout_minutes: secPolicy.session_timeout_minutes,
-        max_login_attempts: secPolicy.max_login_attempts,
-        audit_retention_days: secPolicy.audit_retention_days,
-        ip_whitelist: secPolicy.ip_whitelist,
+        password_min_length: (p.min_password_length ?? p.password_min_length ?? 8) as number,
+        mfa_required: (p.mfa_required ?? false) as boolean,
+        session_timeout_minutes: (p.session_timeout_minutes ?? 60) as number,
+        max_login_attempts: (p.max_login_attempts ?? 5) as number,
+        audit_retention_days: (p.audit_log_retention_days ?? p.audit_retention_days ?? 365) as number,
+        ip_whitelist: (p.ip_whitelist ?? []) as string[],
       });
     }
   }, [secPolicy]);
 
   useEffect(() => {
     if (compConfig) {
-      setComp({
-        active_standards: compConfig.active_standards,
-        auto_audit_schedule: compConfig.auto_audit_schedule,
-        require_evidence_upload: compConfig.require_evidence_upload,
-        capa_sla_days: compConfig.capa_sla_days,
-        finding_escalation_days: compConfig.finding_escalation_days,
-      });
+      const c = compConfig as unknown as Record<string, unknown>;
+      setComp((prev) => ({
+        active_standards: ((c.active_standards ?? c.standards ?? []) as string[]),
+        auto_audit_schedule: (c.auto_audit_schedule ?? prev.auto_audit_schedule) as string,
+        require_evidence_upload: (c.require_evidence_upload ?? prev.require_evidence_upload) as boolean,
+        capa_sla_days: (c.capa_sla_days ?? prev.capa_sla_days) as number,
+        finding_escalation_days: (c.finding_escalation_days ?? prev.finding_escalation_days) as number,
+      }));
     }
   }, [compConfig]);
 

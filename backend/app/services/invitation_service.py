@@ -76,12 +76,11 @@ class InvitationService:
         self.db.add(tenant)
 
         # 3. Create org admin user with generated password
-        user_id = str(uuid.uuid4())
         org_user = User(
-            id=user_id,
+            id=str(uuid.uuid4()),
             email=admin_email,
             display_name=admin_name,
-            status="active",
+            status="invited",
             tenant_id=tenant_id,
             password_hash=_hash(password),
             is_superadmin=False,
@@ -94,7 +93,7 @@ class InvitationService:
             org_name=org_name,
             admin_name=admin_name,
             admin_email=admin_email,
-            subscription_plan=None,
+            subscription_plan=data.get("subscription_plan", "starter"),
             allowed_modules=data.get("allowed_modules", []),
             expiry_date=expiry,
             token=token,
@@ -106,7 +105,7 @@ class InvitationService:
         self.db.add(inv)
         self.db.flush()
 
-        # 5. Send email with credentials
+        # 5. Send email with credentials (SendGrid → SMTP fallback)
         send_invitation_email(
             admin_email=admin_email,
             admin_name=admin_name,
@@ -131,7 +130,6 @@ class InvitationService:
         if not inv:
             raise AppError("NOT_FOUND", "Invitation not found", 404)
 
-        # Generate a new password and update the user account
         new_password = _generate_password()
         new_token = secrets.token_urlsafe(32)
 
@@ -141,12 +139,13 @@ class InvitationService:
         if org_user:
             org_user.password_hash = _hash(new_password)
         else:
-            # User was never created (invitation sent before user-creation code was deployed).
-            # Create the tenant if it also doesn't exist, then create the user.
+            # User was never created — create tenant if needed, then user
             from app.models.tenant import Tenant as TenantModel
-            tenant = self.db.scalars(
-                select(TenantModel).where(TenantModel.id == inv.tenant_id)
-            ).first() if inv.tenant_id else None
+            tenant = (
+                self.db.scalars(select(TenantModel).where(TenantModel.id == inv.tenant_id)).first()
+                if inv.tenant_id
+                else None
+            )
             if not tenant:
                 tenant_id = str(uuid.uuid4())
                 tenant = TenantModel(
@@ -158,16 +157,15 @@ class InvitationService:
                 )
                 self.db.add(tenant)
                 inv.tenant_id = tenant_id
-            new_user = User(
+            self.db.add(User(
                 id=str(uuid.uuid4()),
                 email=inv.admin_email,
                 display_name=inv.admin_name,
-                status="active",
+                status="invited",
                 tenant_id=inv.tenant_id,
                 password_hash=_hash(new_password),
                 is_superadmin=False,
-            )
-            self.db.add(new_user)
+            ))
 
         inv.token = new_token
         inv.expiry_date = datetime.now(timezone.utc) + timedelta(days=7)
@@ -180,7 +178,11 @@ class InvitationService:
             token=new_token,
             password=new_password,
         )
-        return {"message": "Invitation resent" if email_sent else "User created but email failed — check server logs", "id": inv.id, "email_sent": email_sent}
+        return {
+            "message": "Invitation resent" if email_sent else "User updated but email failed — check server logs",
+            "id": inv.id,
+            "email_sent": email_sent,
+        }
 
     def cancel_invitation(self, invitation_id: str) -> dict:
         inv = self.db.scalars(select(OrgInvitation).where(OrgInvitation.id == invitation_id)).first()
