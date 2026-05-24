@@ -929,11 +929,13 @@ function Step6({
   const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("name", docForm.name || file.name);
-    fd.append("type", docForm.type);
-    await uploadKnowledge(fd);
+    const sizeKB = Math.round(file.size / 1024);
+    await uploadKnowledge({
+      name: docForm.name || file.name,
+      type: docForm.type,
+      size: sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)}MB` : `${sizeKB}KB`,
+      fileName: file.name,
+    });
     setDocForm({ name: "", type: "" });
     refetchDocs();
     if (docFileRef.current) docFileRef.current.value = "";
@@ -947,11 +949,7 @@ function Step6({
     }
     const file = e?.target.files?.[0];
     if (!file) return;
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("dataType", selectedDataType);
-    fd.append("method", importMethod);
-    await importData(fd);
+    await importData({ dataType: selectedDataType, method: importMethod, fileName: file.name });
     refetchImports();
     if (importFileRef.current) importFileRef.current.value = "";
   };

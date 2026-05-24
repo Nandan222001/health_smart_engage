@@ -1,5 +1,7 @@
 import { baseApi } from "@/services/api/baseApi";
 
+const cmd = (body: unknown) => ({ data: body });
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface OrgSetupProgress {
@@ -63,6 +65,13 @@ export interface KnowledgeDocument {
   type: string;
   uploadedAt: string;
   size: string;
+}
+
+export interface KnowledgeDocumentInput {
+  name: string;
+  type: string;
+  size?: string;
+  fileName?: string;
 }
 
 export interface DataImport {
@@ -133,15 +142,15 @@ export const orgSetupApi = baseApi.injectEndpoints({
 
     // Mutations
     saveOrgSetupStep1: builder.mutation<void, Partial<Step1Data>>({
-      query: (data) => ({ url: "/org-setup/step1", method: "POST", body: data }),
+      query: (data) => ({ url: "/org-setup/step1", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
     saveOrgSetupStep2: builder.mutation<void, Partial<Step2Data>>({
-      query: (data) => ({ url: "/org-setup/step2", method: "POST", body: data }),
+      query: (data) => ({ url: "/org-setup/step2", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
     createOrgSetupSite: builder.mutation<Site, Omit<Site, "id">>({
-      query: (data) => ({ url: "/org-setup/step3/site", method: "POST", body: data }),
+      query: (data) => ({ url: "/org-setup/step3/site", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
     bulkUploadOrgSetupSites: builder.mutation<void, FormData>({
@@ -149,7 +158,7 @@ export const orgSetupApi = baseApi.injectEndpoints({
       invalidatesTags: ["OrgSetup"],
     }),
     createOrgSetupUser: builder.mutation<OrgUser, Omit<OrgUser, "id">>({
-      query: (data) => ({ url: "/org-setup/step4/user", method: "POST", body: data }),
+      query: (data) => ({ url: "/org-setup/step4/user", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
     bulkUploadOrgSetupUsers: builder.mutation<void, FormData>({
@@ -157,23 +166,23 @@ export const orgSetupApi = baseApi.injectEndpoints({
       invalidatesTags: ["OrgSetup"],
     }),
     saveOrgSetupStep5: builder.mutation<void, Partial<Step5Data>>({
-      query: (data) => ({ url: "/org-setup/step5", method: "POST", body: data }),
+      query: (data) => ({ url: "/org-setup/step5", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
-    uploadOrgSetupKnowledge: builder.mutation<KnowledgeDocument, FormData>({
-      query: (data) => ({ url: "/org-setup/step6/upload", method: "POST", body: data }),
+    uploadOrgSetupKnowledge: builder.mutation<KnowledgeDocument, KnowledgeDocumentInput>({
+      query: (data) => ({ url: "/org-setup/step6/upload", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
-    importOrgSetupData: builder.mutation<DataImport, FormData | Record<string, unknown>>({
-      query: (data) => ({ url: "/org-setup/step6a/import", method: "POST", body: data }),
+    importOrgSetupData: builder.mutation<DataImport, Record<string, unknown>>({
+      query: (data) => ({ url: "/org-setup/step6a/import", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
     saveOrgSetupStep7: builder.mutation<void, Partial<Step7Data>>({
-      query: (data) => ({ url: "/org-setup/step7", method: "POST", body: data }),
+      query: (data) => ({ url: "/org-setup/step7", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
     activateOrganization: builder.mutation<{ success: boolean }, ActivateOrgData>({
-      query: (data) => ({ url: "/org-setup/activate", method: "POST", body: data }),
+      query: (data) => ({ url: "/org-setup/activate", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
   }),
