@@ -1,21 +1,44 @@
-import logging
 import secrets
+import string
 import uuid
 from datetime import datetime, timedelta, timezone
+
+import bcrypt as _bcrypt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app.core.exceptions import AppError
 from app.core.security import CurrentUser
+from app.models.auth import User
 from app.models.invitations import OrgInvitation
-from app.services.email_service import get_email_service
+from app.models.tenant import Tenant
+from app.services.email_service import send_invitation_email
 
-logger = logging.getLogger(__name__)
+
+def _generate_password() -> str:
+    """Generate a human-readable secure password: Hse@<8 alphanum chars>"""
+    chars = string.ascii_letters + string.digits
+    return "Hse@" + "".join(secrets.choice(chars) for _ in range(8))
+
+
+def _hash(password: str) -> str:
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+
+def _org_code(org_name: str) -> str:
+    """Derive a short uppercase org code from the org name."""
+    words = org_name.upper().split()
+    if len(words) >= 2:
+        code = "".join(w[0] for w in words[:4])
+    else:
+        code = org_name.upper()[:4]
+    suffix = secrets.token_hex(2).upper()
+    return f"{code}-{suffix}"
 
 
 class InvitationService:
     def __init__(self, db: Session):
         self.db = db
-        self._email = get_email_service()
 
     def list_invitations(self, filters: dict = None) -> dict:
         stmt = select(OrgInvitation).order_by(OrgInvitation.created_at.desc())
@@ -31,26 +54,67 @@ class InvitationService:
         return self._serialize(inv)
 
     def create_invitation(self, user: CurrentUser, data: dict) -> dict:
+        admin_email = data["admin_email"].lower().strip()
+        admin_name = data["admin_name"]
+        org_name = data["org_name"]
+        expiry_days = int(data.get("expiry_days", 7))
+
+        # 1. Generate credentials
+        password = _generate_password()
         token = secrets.token_urlsafe(32)
-        expiry = datetime.now(timezone.utc) + timedelta(days=int(data.get("expiry_days", 7)))
+        expiry = datetime.now(timezone.utc) + timedelta(days=expiry_days)
+
+        # 2. Create tenant
+        tenant_id = str(uuid.uuid4())
+        tenant = Tenant(
+            id=tenant_id,
+            name=org_name,
+            status="active",
+            org_code=_org_code(org_name),
+            contact_email=admin_email,
+        )
+        self.db.add(tenant)
+
+        # 3. Create org admin user with generated password
+        org_user = User(
+            id=str(uuid.uuid4()),
+            email=admin_email,
+            display_name=admin_name,
+            status="active",
+            tenant_id=tenant_id,
+            password_hash=_hash(password),
+            is_superadmin=False,
+        )
+        self.db.add(org_user)
+
+        # 4. Create the invitation record linked to the tenant
         inv = OrgInvitation(
             id=str(uuid.uuid4()),
-            org_name=data["org_name"],
-            admin_name=data["admin_name"],
-            admin_email=data["admin_email"].lower().strip(),
-            subscription_plan=data.get("subscription_plan", "starter"),
+            org_name=org_name,
+            admin_name=admin_name,
+            admin_email=admin_email,
+            subscription_plan=None,
             allowed_modules=data.get("allowed_modules", []),
             expiry_date=expiry,
             token=token,
             status="pending",
             invited_by=user.user_id,
+            tenant_id=tenant_id,
             notes=data.get("notes"),
         )
         self.db.add(inv)
         self.db.flush()
-        result = self._serialize(inv)
-        self._send_invitation_email(inv)
-        return result
+
+        # 5. Send email with credentials (SendGrid → SMTP fallback)
+        send_invitation_email(
+            admin_email=admin_email,
+            admin_name=admin_name,
+            org_name=org_name,
+            token=token,
+            password=password,
+        )
+
+        return self._serialize(inv)
 
     def update_invitation(self, invitation_id: str, data: dict) -> dict:
         inv = self.db.scalars(select(OrgInvitation).where(OrgInvitation.id == invitation_id)).first()
@@ -65,11 +129,60 @@ class InvitationService:
         inv = self.db.scalars(select(OrgInvitation).where(OrgInvitation.id == invitation_id)).first()
         if not inv:
             raise AppError("NOT_FOUND", "Invitation not found", 404)
-        inv.token = secrets.token_urlsafe(32)
+
+        new_password = _generate_password()
+        new_token = secrets.token_urlsafe(32)
+
+        org_user = self.db.scalars(
+            select(User).where(User.email == inv.admin_email)
+        ).first()
+        if org_user:
+            org_user.password_hash = _hash(new_password)
+        else:
+            # User was never created — create tenant if needed, then user
+            from app.models.tenant import Tenant as TenantModel
+            tenant = (
+                self.db.scalars(select(TenantModel).where(TenantModel.id == inv.tenant_id)).first()
+                if inv.tenant_id
+                else None
+            )
+            if not tenant:
+                tenant_id = str(uuid.uuid4())
+                tenant = TenantModel(
+                    id=tenant_id,
+                    name=inv.org_name,
+                    status="active",
+                    org_code=_org_code(inv.org_name),
+                    contact_email=inv.admin_email,
+                )
+                self.db.add(tenant)
+                inv.tenant_id = tenant_id
+            self.db.add(User(
+                id=str(uuid.uuid4()),
+                email=inv.admin_email,
+                display_name=inv.admin_name,
+                status="active",
+                tenant_id=inv.tenant_id,
+                password_hash=_hash(new_password),
+                is_superadmin=False,
+            ))
+
+        inv.token = new_token
         inv.expiry_date = datetime.now(timezone.utc) + timedelta(days=7)
         inv.status = "pending"
-        self._send_invitation_email(inv)
-        return {"message": "Invitation resent", "id": inv.id}
+
+        email_sent = send_invitation_email(
+            admin_email=inv.admin_email,
+            admin_name=inv.admin_name,
+            org_name=inv.org_name,
+            token=new_token,
+            password=new_password,
+        )
+        return {
+            "message": "Invitation resent" if email_sent else "User updated but email failed — check server logs",
+            "id": inv.id,
+            "email_sent": email_sent,
+        }
 
     def cancel_invitation(self, invitation_id: str) -> dict:
         inv = self.db.scalars(select(OrgInvitation).where(OrgInvitation.id == invitation_id)).first()
@@ -78,42 +191,6 @@ class InvitationService:
         inv.status = "cancelled"
         return {"message": "Invitation cancelled", "id": inv.id}
 
-    def _send_invitation_email(self, inv: OrgInvitation) -> None:
-        subject = f"You're invited to set up {inv.org_name} on HSE Platform"
-        html_body = f"""
-<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
-  <h2 style="color:#111827">Welcome to HSE Platform</h2>
-  <p style="color:#374151">Hi <strong>{inv.admin_name}</strong>,</p>
-  <p style="color:#374151">
-    You have been invited to set up <strong>{inv.org_name}</strong> on the HSE Safety,
-    Compliance &amp; Intelligence Platform.
-  </p>
-  <p style="color:#374151">
-    Your invitation token: <code style="background:#F3F7FF;padding:4px 8px;border-radius:4px">{inv.token}</code>
-  </p>
-  <p style="color:#6B7280;font-size:13px">
-    This invitation expires on {inv.expiry_date.strftime('%d %b %Y') if inv.expiry_date else 'N/A'}.
-  </p>
-  <hr style="border:none;border-top:1px solid #E3E9F6;margin:24px 0"/>
-  <p style="color:#9CA3AF;font-size:12px">HSE Platform · automated notification</p>
-</div>
-"""
-        text_body = (
-            f"Hi {inv.admin_name},\n\n"
-            f"You have been invited to set up {inv.org_name} on the HSE Platform.\n"
-            f"Invitation token: {inv.token}\n"
-            f"Expires: {inv.expiry_date.strftime('%d %b %Y') if inv.expiry_date else 'N/A'}\n"
-        )
-        try:
-            self._email.send_email(
-                to=inv.admin_email,
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
-            )
-        except Exception as exc:
-            logger.error("Failed to send invitation email to %s: %s", inv.admin_email, exc)
-
     @staticmethod
     def _serialize(inv: OrgInvitation) -> dict:
         return {
@@ -121,7 +198,7 @@ class InvitationService:
             "org_name": inv.org_name,
             "admin_name": inv.admin_name,
             "admin_email": inv.admin_email,
-            "subscription_plan": inv.subscription_plan,
+            "subscription_plan": inv.subscription_plan or "",
             "allowed_modules": inv.allowed_modules or [],
             "expiry_date": inv.expiry_date.isoformat() if inv.expiry_date else None,
             "token": inv.token,

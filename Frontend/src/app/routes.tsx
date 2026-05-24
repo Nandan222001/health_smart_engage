@@ -52,6 +52,13 @@ import { EmployeesPage } from "@/features/employees/pages/EmployeesPage";
 import { TrainingPage } from "@/features/training/pages/TrainingPage";
 import { AuditsPage } from "@/features/audits/pages/AuditsPage";
 import { HazardsPage } from "@/features/hazards/pages/HazardsPage";
+import { OrgSetupWizardPage } from "@/features/org-setup/pages/OrgSetupWizardPage";
+import { OverviewPage } from "@/features/overview/pages/OverviewPage";
+import { KPIsPage } from "@/features/kpis/pages/KPIsPage";
+import { ActivitiesPage } from "@/features/activities/pages/ActivitiesPage";
+import { ShiftManagementPage } from "@/features/shift-management/pages/ShiftManagementPage";
+import { DataManagementPage } from "@/features/data-management/pages/DataManagementPage";
+import { HelpPage } from "@/features/help/pages/HelpPage";
 import type { ComponentType } from "react";
 
 function RouteErrorFallback() {
@@ -223,6 +230,14 @@ export const router = createBrowserRouter([
       { path: "training", Component: TrainingPage },
       { path: "audits", Component: AuditsPage },
       { path: "hazards", Component: HazardsPage },
+      // Organisation Admin pages
+      { path: "org-setup", Component: OrgSetupWizardPage },
+      { path: "overview", Component: OverviewPage },
+      { path: "kpis", Component: KPIsPage },
+      { path: "activities", Component: ActivitiesPage },
+      { path: "shift-management", Component: ShiftManagementPage },
+      { path: "data-management", Component: DataManagementPage },
+      { path: "help", Component: HelpPage },
       // Super Admin pages
       { path: "superadmin", Component: SuperAdminDashboard },
       { path: "superadmin/tenants", Component: TenantListPage },
@@ -245,6 +260,8 @@ export const router = createBrowserRouter([
       { path: "outputs", Component: OutputsPage },
       // Continuous Learning Loop Layer 7
       { path: "learning", Component: ContinuousLearningPage },
+      // Org Admin Setup Wizard
+      { path: "org-setup", Component: OrgSetupWizardPage },
     ],
   },
   {

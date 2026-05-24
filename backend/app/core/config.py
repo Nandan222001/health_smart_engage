@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     ai_endpoint: str = ""
     ai_api_key_secret_name: str = "ai-api-key"
 
+    frontend_base_url: str = Field(default="http://localhost:5173", validation_alias="FRONTEND_BASE_URL")
+
     # SendGrid (preferred) — set SENDGRID_API_KEY to enable
     sendgrid_api_key: str = Field(default="", validation_alias="SENDGRID_API_KEY")
     sendgrid_from_email: str = Field(default="noreply@hse-platform.com", validation_alias="SENDGRID_FROM_EMAIL")

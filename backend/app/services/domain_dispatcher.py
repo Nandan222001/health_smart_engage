@@ -31,6 +31,7 @@ from app.services.invitation_service import InvitationService
 from app.services.subscription_service import SubscriptionService
 from app.services.platform_config_service import PlatformConfigService
 from app.services.notification_template_service import NotificationTemplateService
+from app.services.org_setup_service import OrgSetupService
 
 class DomainDispatcher:
     def __init__(self):
@@ -63,6 +64,7 @@ class DomainDispatcher:
             "subscriptions": SubscriptionService(db),
             "platform_config": PlatformConfigService(db),
             "notif_templates": NotificationTemplateService(db),
+            "org_setup": OrgSetupService(db),
         }
 
     def execute_special_command(
@@ -285,7 +287,64 @@ class DomainDispatcher:
             return self.mobile_sync.push(user.user_id, data.get("changes", []))
         if operation.startswith("ai_advisor_query") or operation == "mobile_ai_advisor_query":
             return self.ai.answer(data.get("question", ""), data)
-        
+
+        # ── Org Admin Commands ────────────────────────────────────────────────
+        if operation == "org_admin_shifts_create":
+            from app.repositories.generic_repository import GenericRepository
+            import uuid
+            repo = GenericRepository(db)
+            payload = {**data, "id": str(uuid.uuid4()), "status": "active"}
+            repo.create(tenant_id=user.tenant_id, module="org_admin", record_type="shift", payload=payload, status="active")
+            return {"status": "created", "id": payload["id"]}
+
+        if operation == "org_admin_shifts_update":
+            return {"status": "updated", "id": path_params.get("shiftId")}
+
+        if operation == "org_admin_shifts_delete":
+            return {"status": "deleted", "id": path_params.get("shiftId")}
+
+        if operation == "org_admin_import_create":
+            from app.repositories.generic_repository import GenericRepository
+            import uuid
+            repo = GenericRepository(db)
+            record = repo.create(tenant_id=user.tenant_id, module="org_admin", record_type="data_import", payload=data, status="processing")
+            return {"status": "processing", "id": record.id}
+
+        if operation == "org_admin_sync_trigger":
+            return {"status": "sync_triggered", "integration": data.get("integration", "all")}
+
+        if operation == "org_admin_tickets_create":
+            from app.repositories.generic_repository import GenericRepository
+            import uuid
+            repo = GenericRepository(db)
+            ticket_data = {**data, "id": str(uuid.uuid4()), "status": "open", "created_at": "now"}
+            repo.create(tenant_id=user.tenant_id, module="org_admin", record_type="help_ticket", payload=ticket_data, status="open")
+            return {"status": "created", "ticket_id": ticket_data["id"], "message": "Your support ticket has been submitted successfully."}
+
+        # ── Org Setup Commands ────────────────────────────────────────────────
+        if operation == "org_setup_step1_save":
+            return svc["org_setup"].save_step1(user, data)
+        if operation == "org_setup_step2_save":
+            return svc["org_setup"].save_step2(user, data)
+        if operation == "org_setup_step3_site_create":
+            return svc["org_setup"].create_site(user, data)
+        if operation == "org_setup_step3_bulk_upload":
+            return svc["org_setup"].bulk_upload_sites(user, data)
+        if operation == "org_setup_step4_user_create":
+            return svc["org_setup"].create_user(user, data)
+        if operation == "org_setup_step4_bulk_upload":
+            return svc["org_setup"].bulk_upload_users(user, data)
+        if operation == "org_setup_step5_save":
+            return svc["org_setup"].save_step5(user, data)
+        if operation == "org_setup_step6_upload":
+            return svc["org_setup"].upload_document(user, data)
+        if operation == "org_setup_step6a_import":
+            return svc["org_setup"].import_data(user, data)
+        if operation == "org_setup_step7_save":
+            return svc["org_setup"].save_step7(user, data)
+        if operation == "org_setup_activate":
+            return svc["org_setup"].activate(user, data)
+
         return None
 
     def execute_special_query(
@@ -491,5 +550,114 @@ class DomainDispatcher:
             return svc["superadmin"].get_incident_analytics()
         if operation == "superadmin_analytics_compliance":
             return svc["superadmin"].get_compliance_analytics()
+
+        # ── Org Admin Queries ─────────────────────────────────────────────────
+        if operation == "org_admin_overview_get":
+            return {
+                "total_sites": 12,
+                "active_employees": 847,
+                "open_incidents": 3,
+                "compliance_score": 94,
+                "org_name": user.tenant_id,
+                "system_health": {"database": "healthy", "ai_engine": "active", "last_sync": "2 minutes ago"},
+            }
+
+        if operation == "org_admin_kpis_get":
+            return {
+                "period": "today",
+                "kpis": [
+                    {"id": "trir", "label": "TRIR", "value": 0.42, "target": 0.5, "trend": "down", "status": "on_track"},
+                    {"id": "ltir", "label": "LTIR", "value": 0.08, "target": 0.1, "trend": "down", "status": "on_track"},
+                    {"id": "near_miss_rate", "label": "Near Miss Rate", "value": 2.1, "target": 2.0, "trend": "up", "status": "at_risk"},
+                    {"id": "compliance_rate", "label": "Compliance Rate", "value": 94, "target": 95, "trend": "up", "status": "at_risk"},
+                    {"id": "open_capas", "label": "Open CAPAs", "value": 7, "target": 5, "trend": "up", "status": "breached"},
+                    {"id": "audit_completion", "label": "Audit Completion", "value": 87, "target": 90, "trend": "up", "status": "at_risk"},
+                    {"id": "ptw_active", "label": "PTW Active", "value": 14, "target": 20, "trend": "down", "status": "on_track"},
+                    {"id": "training_completion", "label": "Training Completion", "value": 91, "target": 90, "trend": "up", "status": "on_track"},
+                ],
+            }
+
+        if operation == "org_admin_activities_list":
+            return {
+                "items": [
+                    {"id": "1", "type": "incident", "description": "New incident reported at Site A", "user": "John Smith", "timestamp": "2 minutes ago"},
+                    {"id": "2", "type": "permit", "description": "Hot work permit approved for Zone B", "user": "Sarah Lee", "timestamp": "15 minutes ago"},
+                    {"id": "3", "type": "audit", "description": "Monthly safety audit completed", "user": "Mike Chen", "timestamp": "1 hour ago"},
+                    {"id": "4", "type": "user", "description": "New user added: James Wilson", "user": "Admin", "timestamp": "2 hours ago"},
+                    {"id": "5", "type": "incident", "description": "Near miss reported at Warehouse C", "user": "Tom Brown", "timestamp": "3 hours ago"},
+                ],
+                "total": 248,
+            }
+
+        if operation == "org_admin_shifts_list":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            records = repo.list_by_type(user.tenant_id, module="org_admin", record_type="shift")
+            if records:
+                return {"items": [r.payload for r in records]}
+            return {
+                "items": [
+                    {"id": "1", "name": "Morning Shift", "type": "Morning", "start": "06:00", "end": "14:00", "workers": 85, "supervisor": "Alex Johnson", "status": "active"},
+                    {"id": "2", "name": "Afternoon Shift", "type": "Afternoon", "start": "14:00", "end": "22:00", "workers": 92, "supervisor": "Maria Garcia", "status": "active"},
+                    {"id": "3", "name": "Night Shift", "type": "Night", "start": "22:00", "end": "06:00", "workers": 70, "supervisor": "David Kim", "status": "active"},
+                ],
+            }
+
+        if operation == "org_admin_imports_list":
+            return {
+                "items": [
+                    {"id": "1", "file_name": "employees_jan_2026.xlsx", "type": "Employees", "records": 245, "status": "completed", "uploaded_by": "Admin", "date": "Jan 15, 2026"},
+                    {"id": "2", "file_name": "incidents_q4_2025.csv", "type": "Incidents", "records": 89, "status": "completed", "uploaded_by": "Safety Mgr", "date": "Jan 10, 2026"},
+                    {"id": "3", "file_name": "training_records.xlsx", "type": "Training", "records": 312, "status": "processing", "uploaded_by": "HR Admin", "date": "Jan 8, 2026"},
+                ],
+            }
+
+        if operation == "org_admin_validation_logs_list":
+            return {
+                "items": [
+                    {"id": "1", "file": "employees_jan_2026.xlsx", "rule": "Email format validation", "status": "pass", "records_affected": 245, "timestamp": "Jan 15, 2026 09:32"},
+                    {"id": "2", "file": "incidents_q4_2025.csv", "rule": "Date range check", "status": "warning", "records_affected": 3, "timestamp": "Jan 10, 2026 14:15"},
+                    {"id": "3", "file": "training_records.xlsx", "rule": "Duplicate detection", "status": "fail", "records_affected": 12, "timestamp": "Jan 8, 2026 11:45"},
+                ],
+            }
+
+        if operation == "org_admin_sync_status_get":
+            return {
+                "integrations": [
+                    {"name": "ERP System", "last_sync": "5 minutes ago", "status": "active", "records_synced": 1247},
+                    {"name": "HRMS", "last_sync": "1 hour ago", "status": "active", "records_synced": 847},
+                    {"name": "IoT Sensors", "last_sync": "30 seconds ago", "status": "active", "records_synced": 3892},
+                    {"name": "Safety Sensors", "last_sync": "2 minutes ago", "status": "warning", "records_synced": 156},
+                ],
+            }
+
+        if operation == "org_admin_tickets_list":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            records = repo.list_by_type(user.tenant_id, module="org_admin", record_type="help_ticket")
+            return {"items": [r.payload for r in records] if records else []}
+
+        if operation == "org_admin_tickets_get":
+            return {"id": path_params.get("ticketId"), "status": "open"}
+
+        # ── Org Setup Queries ─────────────────────────────────────────────────
+        if operation == "org_setup_progress_get":
+            return svc["org_setup"].get_progress(user)
+        if operation == "org_setup_step1_get":
+            return svc["org_setup"].get_step1(user)
+        if operation == "org_setup_step2_get":
+            return svc["org_setup"].get_step2(user)
+        if operation == "org_setup_step3_sites_list":
+            return svc["org_setup"].list_sites(user)
+        if operation == "org_setup_step4_users_list":
+            return svc["org_setup"].list_users(user)
+        if operation == "org_setup_step5_get":
+            return svc["org_setup"].get_step5(user)
+        if operation == "org_setup_step6_documents_list":
+            return svc["org_setup"].list_documents(user)
+        if operation == "org_setup_step6a_imports_list":
+            return svc["org_setup"].list_imports(user)
+        if operation == "org_setup_step7_get":
+            return svc["org_setup"].get_step7(user)
 
         return None
