@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router";
+import { useAuth } from "@/app/context/AuthContext";
 import {
   CheckCircle2,
   Circle,
@@ -1262,6 +1263,7 @@ function Step8({
   completedSteps: number[];
 }) {
   const navigate = useNavigate();
+  const { markOnboardingSetupCompleted } = useAuth();
   const [activateOrg, { isLoading }] = useActivateOrganizationMutation();
   const { data: sites = [] } = useGetOrgSetupStep3SitesQuery();
   const { data: users = [] } = useGetOrgSetupStep4UsersQuery();
@@ -1300,7 +1302,7 @@ function Step8({
           <button
             className={primaryBtnCls + " mx-auto"}
             style={{ ...primaryBtnStyle, padding: "12px 32px" }}
-            onClick={() => navigate("/")}
+            onClick={() => { markOnboardingSetupCompleted(); navigate("/"); }}
           >
             Go to Dashboard <ChevronRight className="w-4 h-4" />
           </button>
