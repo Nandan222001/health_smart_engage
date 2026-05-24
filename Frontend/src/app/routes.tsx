@@ -23,6 +23,10 @@ import { NearMissPage } from "@/features/near-miss/pages/NearMissPage";
 import { RiskPage } from "@/features/risk/pages/RiskPage";
 import { AssetsPage } from "@/features/assets/pages/AssetsPage";
 import { OnboardingPage } from "@/features/auth/pages/OnboardingPage";
+// Org Admin pages
+import { OrgInvitationsPage } from "@/features/admin/pages/OrgInvitationsPage";
+import { DepartmentsPage } from "@/features/admin/pages/DepartmentsPage";
+import { HSEManagersPage } from "@/features/admin/pages/HSEManagersPage";
 // Super Admin
 import { SuperAdminDashboard } from "@/features/superadmin/pages/SuperAdminDashboard";
 import { TenantListPage } from "@/features/superadmin/pages/TenantListPage";
@@ -223,6 +227,10 @@ export const router = createBrowserRouter([
       { path: "training", Component: TrainingPage },
       { path: "audits", Component: AuditsPage },
       { path: "hazards", Component: HazardsPage },
+      // Org Admin pages
+      { path: "admin/invitations", Component: OrgInvitationsPage },
+      { path: "admin/departments", Component: DepartmentsPage },
+      { path: "admin/hse-managers", Component: HSEManagersPage },
       // Super Admin pages
       { path: "superadmin", Component: SuperAdminDashboard },
       { path: "superadmin/tenants", Component: TenantListPage },

@@ -8,6 +8,20 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.exceptions import AppError
 from app.models.domain import User
+from app.models.invitations import OrgInvitation
+from app.models.tenant import Tenant
+
+# Full permission set granted to org-level admins
+_ORG_ADMIN_PERMISSIONS = [
+    "admin:read", "admin:write",
+    "web:read", "web:write", "web:approve",
+    "permits:write", "permits:approve",
+    "audit:write", "capa:write",
+    "reports:export",
+    "vendors:read", "vendors:write",
+    "assets:write", "training:write",
+    "knowledge:write", "incidents:confidential",
+]
 
 
 def _hash_password(password: str) -> str:
@@ -69,11 +83,34 @@ class AuthService:
             select(User).where(User.email == email.strip().lower())
         ).first()
 
+    def _is_org_admin(self, user: User) -> bool:
+        """Org admin = non-superadmin whose email appears in OrgInvitation OR is the tenant contact."""
+        email = user.email.lower()
+        # Primary: email in OrgInvitation table (standard invitation flow)
+        if self.db.scalars(
+            select(OrgInvitation).where(OrgInvitation.admin_email == email)
+        ).first():
+            return True
+        # Fallback: email matches their tenant's contact_email (direct-creation / dev setup)
+        tenant = self.db.scalars(
+            select(Tenant).where(Tenant.id == user.tenant_id)
+        ).first()
+        return bool(tenant and (tenant.contact_email or "").lower() == email)
+
     def _create_token(self, user: User) -> str:
         now = datetime.now(timezone.utc)
         expire = now + timedelta(minutes=settings.access_token_expire_minutes)
-        roles = ["System Admin"] if user.is_superadmin else []
-        permissions = ["admin:*"] if user.is_superadmin else []
+
+        if user.is_superadmin:
+            roles = ["System Admin"]
+            permissions = ["admin:*"]
+        elif self._is_org_admin(user):
+            roles = ["Admin"]
+            permissions = _ORG_ADMIN_PERMISSIONS
+        else:
+            roles = []
+            permissions = []
+
         claims = {
             "sub": user.id,
             "email": user.email,
@@ -88,8 +125,16 @@ class AuthService:
         }
         return jwt.encode(claims, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
-    @staticmethod
-    def _serialize(user: User) -> dict:
+    def _serialize(self, user: User) -> dict:
+        if user.is_superadmin:
+            roles = ["System Admin"]
+            permissions = ["admin:*"]
+        elif self._is_org_admin(user):
+            roles = ["Admin"]
+            permissions = _ORG_ADMIN_PERMISSIONS
+        else:
+            roles = []
+            permissions = []
         return {
             "id": user.id,
             "email": user.email,
@@ -97,6 +142,6 @@ class AuthService:
             "tenant_id": user.tenant_id,
             "status": user.status,
             "is_superadmin": user.is_superadmin,
-            "roles": ["System Admin"] if user.is_superadmin else [],
-            "permissions": ["admin:*"] if user.is_superadmin else [],
+            "roles": roles,
+            "permissions": permissions,
         }

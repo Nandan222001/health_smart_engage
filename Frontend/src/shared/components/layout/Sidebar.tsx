@@ -9,7 +9,7 @@ import {
   LayoutDashboard, ChevronDown, ChevronRight,
   Database, BrainCircuit, GitBranch, Eye, RefreshCw,
   Mail as MailIcon, CreditCard, TrendingUp, Bell,
-  SlidersHorizontal, ScrollText,
+  SlidersHorizontal, ScrollText, MapPin, ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 
@@ -43,6 +43,49 @@ const MAIN_NAV: NavGroup[] = [
       { name: "Vendors", icon: Building2, path: "/vendors" },
       { name: "Assets", icon: FolderClosed, path: "/equipment-certification" },
       { name: "Incidents", icon: AlertTriangle, path: "/violations" },
+      { name: "Engagement", icon: Heart, path: "/engagement" },
+      { name: "Settings", icon: Settings, path: "/settings" },
+    ],
+  },
+];
+
+const ADMIN_NAV: NavGroup[] = [
+  {
+    label: "Organisation",
+    items: [
+      { name: "Home", icon: House, path: "/" },
+      { name: "Invitations", icon: MailIcon, path: "/admin/invitations" },
+      { name: "Sites", icon: MapPin, path: "/sites-zones" },
+      { name: "Departments", icon: Building2, path: "/admin/departments" },
+      { name: "HSE Managers", icon: ShieldCheck, path: "/admin/hse-managers" },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { name: "Guide", icon: BookOpenText, path: "/checklists" },
+      { name: "Risk", icon: CircleAlert, path: "/root-cause-analysis" },
+      { name: "Work", icon: Briefcase, path: "/actions" },
+      { name: "Compliance", icon: ClipboardCheck, path: "/compliance" },
+      { name: "Incidents", icon: AlertTriangle, path: "/violations" },
+      { name: "Vendors", icon: Building2, path: "/vendors" },
+      { name: "Assets", icon: FolderClosed, path: "/equipment-certification" },
+    ],
+  },
+  {
+    label: "Intelligence",
+    items: [
+      { name: "AI Agent", icon: Lightbulb, path: "/ai-agent" },
+      { name: "AI Intelligence", icon: BrainCircuit, path: "/ai-intelligence" },
+      { name: "Workflow", icon: GitBranch, path: "/workflow" },
+      { name: "Outputs", icon: Eye, path: "/outputs" },
+      { name: "Learning Loop", icon: RefreshCw, path: "/learning" },
+      { name: "Reports", icon: BarChart3, path: "/analytics" },
+    ],
+  },
+  {
+    label: "System",
+    items: [
       { name: "Engagement", icon: Heart, path: "/engagement" },
       { name: "Settings", icon: Settings, path: "/settings" },
     ],
@@ -117,7 +160,8 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
     return location.pathname.startsWith(path.split("?")[0]);
   };
 
-  const visibleGroups = isSuperAdmin ? SUPERADMIN_NAV : MAIN_NAV;
+  const isOrgAdmin = !isSuperAdmin && user?.role === "Admin";
+  const visibleGroups = isSuperAdmin ? SUPERADMIN_NAV : isOrgAdmin ? ADMIN_NAV : MAIN_NAV;
 
   return (
     <>
@@ -204,8 +248,8 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
             </div>
           ))}
 
-          {/* Operations collapsible section — hidden for super admins */}
-          {!isSuperAdmin && <div>
+          {/* Operations collapsible section — hidden for super admins and org admins */}
+          {!isSuperAdmin && !isOrgAdmin && <div>
             <button
               onClick={() => setOpsExpanded(!opsExpanded)}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all"

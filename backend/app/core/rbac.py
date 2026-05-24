@@ -5,6 +5,17 @@ from app.core.security import CurrentUser
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "System Admin": {"admin:*"},
+    # Org-level admin (created by super admin via invitation)
+    "Admin": {
+        "admin:read", "admin:write",
+        "web:read", "web:write", "web:approve",
+        "permits:write", "permits:approve",
+        "audit:write", "capa:write",
+        "reports:export",
+        "vendors:read", "vendors:write",
+        "assets:write", "training:write",
+        "knowledge:write", "incidents:confidential",
+    },
     "IT Admin": {"admin:read", "admin:write", "integrations:write", "shared:read"},
     "Safety Manager": {"web:write", "mobile:write", "ai:read", "reports:export"},
     "Compliance Manager": {"web:write", "reports:export", "audit:write", "capa:write"},

@@ -1,10 +1,26 @@
+import secrets
+import string
+import uuid
 from typing import Any
+
+import bcrypt as _bcrypt
 from sqlalchemy.orm import Session
+
+from app.core.exceptions import AppError
 from app.core.security import CurrentUser
 from app.models.domain import OrganisationNode, User, Role
 from app.repositories.domain_repository import DomainRepository
-from app.core.exceptions import AppError
-import uuid
+from app.services.email_service import send_user_invitation_email
+
+
+def _generate_password() -> str:
+    chars = string.ascii_letters + string.digits
+    return "Hse@" + "".join(secrets.choice(chars) for _ in range(8))
+
+
+def _hash_password(password: str) -> str:
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
 
 class FoundationService:
     def __init__(self, db: Session):
@@ -34,17 +50,36 @@ class FoundationService:
     def invite_user(self, user: CurrentUser, data: dict) -> User:
         if not data.get("email"):
             raise AppError("VALIDATION_ERROR", "email is required", 400)
+
+        # Generate login credentials
+        password = _generate_password()
+
         payload = {k: v for k, v in data.items()}
         payload["status"] = "invited"
         payload.setdefault("id", str(uuid.uuid4()))
+        payload["password_hash"] = _hash_password(password)
+
         # Normalise "name" → "display_name" (frontend sends "name")
         if "name" in payload and "display_name" not in payload:
             payload["display_name"] = payload.pop("name")
         payload.setdefault("display_name", payload.get("email", "User"))
-        # Drop unsupported fields (e.g. "role" — stored separately)
-        for field in ("role", "roles"):
-            payload.pop(field, None)
-        return self.repo.create(User, user.tenant_id, payload)
+
+        # Capture role/site for the email then drop from DB payload
+        role_label = str(payload.pop("role", "") or payload.pop("roles", "") or "Team Member")
+        site_label = str(payload.pop("site", "") or "")
+
+        created_user = self.repo.create(User, user.tenant_id, payload)
+
+        # Send invitation email with generated credentials
+        send_user_invitation_email(
+            user_email=created_user.email,
+            user_name=created_user.display_name,
+            role=role_label,
+            site=site_label,
+            password=password,
+        )
+
+        return created_user
 
     def revoke_user(self, user: CurrentUser, user_id: str) -> User:
         return self.repo.update(User, user.tenant_id, user_id, {"status": "revoked"})
