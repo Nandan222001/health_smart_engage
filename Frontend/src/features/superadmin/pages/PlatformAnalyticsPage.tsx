@@ -33,12 +33,12 @@ export function PlatformAnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <KPICard label="Total Tenants" value={data.total_tenants} />
-        <KPICard label="Active Tenants" value={data.active_tenants} />
-        <KPICard label="Total Users" value={data.total_users} />
-        <KPICard label="Total Incidents" value={data.total_incidents} />
-        <KPICard label="Compliance Rate" value={`${data.compliance_rate}%`} />
-        <KPICard label="New Tenants" value={data.new_tenants_this_month} sub="This month" />
+        <KPICard label="Total Tenants" value={data.total_tenants ?? 0} />
+        <KPICard label="Active Tenants" value={data.active_tenants ?? 0} />
+        <KPICard label="Total Users" value={(data as Record<string, unknown>).total_users as number ?? 0} />
+        <KPICard label="Total Incidents" value={data.total_incidents ?? 0} />
+        <KPICard label="Compliance Score" value={`${(data as Record<string, unknown>).compliance_score ?? data.compliance_rate ?? 0}%`} />
+        <KPICard label="New Tenants" value={(data as Record<string, unknown>).new_tenants_this_month as number ?? 0} sub="This month" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -54,12 +54,12 @@ export function PlatformAnalyticsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.tenant_growth.length === 0 ? (
+              {((data as Record<string, unknown>).tenant_growth as {month:string;count:number}[] ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={2} className="px-5 py-6 text-center text-sm" style={{ color: "#9CA3AF" }}>No data</td>
                 </tr>
               ) : (
-                data.tenant_growth.map((row) => (
+                ((data as Record<string, unknown>).tenant_growth as {month:string;count:number}[] ?? []).map((row) => (
                   <tr key={row.month} className="border-t hover:bg-gray-50" style={{ borderColor: "#F3F4F6" }}>
                     <td className="px-5 py-3.5 font-medium" style={{ color: "#111827" }}>{row.month}</td>
                     <td className="px-5 py-3.5" style={{ color: "#374151" }}>{row.count}</td>
@@ -82,12 +82,12 @@ export function PlatformAnalyticsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.top_incidents_by_type.length === 0 ? (
+              {((data as Record<string, unknown>).top_incidents_by_type as {type:string;count:number}[] ?? (data as Record<string, unknown>).incident_trend as {type:string;count:number}[] ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={2} className="px-5 py-6 text-center text-sm" style={{ color: "#9CA3AF" }}>No data</td>
                 </tr>
               ) : (
-                data.top_incidents_by_type.map((row) => (
+                ((data as Record<string, unknown>).top_incidents_by_type as {type:string;count:number}[] ?? (data as Record<string, unknown>).incident_trend as {type:string;count:number}[] ?? []).map((row) => (
                   <tr key={row.type} className="border-t hover:bg-gray-50" style={{ borderColor: "#F3F4F6" }}>
                     <td className="px-5 py-3.5 font-medium" style={{ color: "#111827" }}>{row.type}</td>
                     <td className="px-5 py-3.5" style={{ color: "#374151" }}>{row.count}</td>
@@ -102,15 +102,15 @@ export function PlatformAnalyticsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
           <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#9CA3AF" }}>Total Violations</div>
-          <div className="text-3xl font-bold" style={{ color: "#EF4444" }}>{data.total_violations}</div>
+          <div className="text-3xl font-bold" style={{ color: "#EF4444" }}>{(data as Record<string, unknown>).total_violations as number ?? 0}</div>
         </div>
         <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
           <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#9CA3AF" }}>Total Audits</div>
-          <div className="text-3xl font-bold" style={{ color: "#4A57B9" }}>{data.total_audits}</div>
+          <div className="text-3xl font-bold" style={{ color: "#4A57B9" }}>{data.total_audits ?? 0}</div>
         </div>
         <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
           <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#9CA3AF" }}>Incidents This Month</div>
-          <div className="text-3xl font-bold" style={{ color: "#F59E0B" }}>{data.incidents_this_month}</div>
+          <div className="text-3xl font-bold" style={{ color: "#F59E0B" }}>{(data as Record<string, unknown>).incidents_this_month as number ?? 0}</div>
         </div>
       </div>
     </div>
