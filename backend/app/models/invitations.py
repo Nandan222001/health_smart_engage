@@ -11,7 +11,7 @@ class OrgInvitation(Base):
     org_name: Mapped[str] = mapped_column(String(255), nullable=False)
     admin_name: Mapped[str] = mapped_column(String(255), nullable=False)
     admin_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    subscription_plan: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    subscription_plan: Mapped[str] = mapped_column(String(64), nullable=False, default="starter")
     allowed_modules: Mapped[dict] = mapped_column(JSON, default=list)
     expiry_date: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     token: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)

@@ -93,7 +93,7 @@ class InvitationService:
             org_name=org_name,
             admin_name=admin_name,
             admin_email=admin_email,
-            subscription_plan=None,
+            subscription_plan=data.get("subscription_plan", "starter"),
             allowed_modules=data.get("allowed_modules", []),
             expiry_date=expiry,
             token=token,
