@@ -77,8 +77,12 @@ class AuthService:
     def _create_token(self, user: User) -> str:
         now = datetime.now(timezone.utc)
         expire = now + timedelta(minutes=settings.access_token_expire_minutes)
-        roles = ["System Admin"] if user.is_superadmin else []
-        permissions = ["admin:*"] if user.is_superadmin else []
+        roles = ["System Admin"] if user.is_superadmin else ["Org Admin"]
+        permissions = (
+            ["admin:*"]
+            if user.is_superadmin
+            else ["org_setup:read", "org_setup:write", "web:read", "web:write"]
+        )
         claims = {
             "sub": user.id,
             "email": user.email,
