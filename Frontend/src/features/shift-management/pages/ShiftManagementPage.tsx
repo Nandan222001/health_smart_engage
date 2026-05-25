@@ -1,38 +1,25 @@
 import { useState } from "react";
-import { Plus, Clock, Users, CalendarClock, X } from "lucide-react";
+import { Plus, Clock, Users, CalendarClock, X, Trash2, Loader2 } from "lucide-react";
+import {
+  useListShiftsQuery,
+  useCreateShiftMutation,
+  useDeleteShiftMutation,
+  type Shift,
+} from "@/features/shift-management/api/shiftApi";
 
-type ShiftType = "Morning" | "Afternoon" | "Night";
-type ShiftStatus = "Active" | "Scheduled" | "Completed";
-
-interface Shift {
-  id: number;
-  name: string;
-  type: ShiftType;
-  startTime: string;
-  endTime: string;
-  workers: number;
-  supervisor: string;
-  status: ShiftStatus;
-}
-
-const INITIAL_SHIFTS: Shift[] = [
-  { id: 1, name: "Alpha Morning", type: "Morning", startTime: "06:00", endTime: "14:00", workers: 84, supervisor: "James Carter", status: "Active" },
-  { id: 2, name: "Beta Afternoon", type: "Afternoon", startTime: "14:00", endTime: "22:00", workers: 91, supervisor: "Sarah Kim", status: "Active" },
-  { id: 3, name: "Gamma Night", type: "Night", startTime: "22:00", endTime: "06:00", workers: 72, supervisor: "David Osei", status: "Active" },
-  { id: 4, name: "Delta Morning", type: "Morning", startTime: "06:00", endTime: "14:00", workers: 55, supervisor: "Emma Watts", status: "Scheduled" },
-  { id: 5, name: "Epsilon Afternoon", type: "Afternoon", startTime: "14:00", endTime: "22:00", workers: 63, supervisor: "Roy Evans", status: "Scheduled" },
-];
+type ShiftType = Shift["type"];
+type ShiftStatus = Shift["status"];
 
 const STATUS_STYLES: Record<ShiftStatus, { bg: string; color: string }> = {
-  Active: { bg: "#D1FAE5", color: "#10B981" },
-  Scheduled: { bg: "#EEF2FF", color: "#4A57B9" },
-  Completed: { bg: "#F3F4F6", color: "#6B7280" },
+  active:    { bg: "#D1FAE5", color: "#10B981" },
+  scheduled: { bg: "#EEF2FF", color: "#4A57B9" },
+  completed: { bg: "#F3F4F6", color: "#6B7280" },
 };
 
 const TYPE_COLORS: Record<ShiftType, string> = {
-  Morning: "#F59E0B",
+  Morning:   "#F59E0B",
   Afternoon: "#4A57B9",
-  Night: "#6B7280",
+  Night:     "#6B7280",
 };
 
 interface FormState {
@@ -52,36 +39,36 @@ const EMPTY_FORM: FormState = {
 };
 
 export function ShiftManagementPage() {
-  const [shifts, setShifts] = useState<Shift[]>(INITIAL_SHIFTS);
+  const { data: shifts = [], isLoading } = useListShiftsQuery();
+  const [createShift, { isLoading: isCreating }] = useCreateShiftMutation();
+  const [deleteShift, { isLoading: isDeletingId }] = useDeleteShiftMutation();
+
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const activeShifts = shifts.filter((s) => s.status === "Active").length;
-  const totalWorkers = shifts
-    .filter((s) => s.status === "Active")
-    .reduce((sum, s) => sum + s.workers, 0);
-  const upcomingShifts = shifts.filter((s) => s.status === "Scheduled").length;
+  const activeShifts   = shifts.filter((s) => s.status === "active").length;
+  const totalWorkers   = shifts.filter((s) => s.status === "active").reduce((sum, s) => sum + (s.workers ?? 0), 0);
+  const upcomingShifts = shifts.filter((s) => s.status === "scheduled").length;
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.name.trim() || !form.supervisor.trim()) return;
-    const newShift: Shift = {
-      id: shifts.length + 1,
-      name: form.name,
-      type: form.type,
+    await createShift({
+      name:      form.name,
+      type:      form.type,
       startTime: form.startTime,
-      endTime: form.endTime,
-      workers: 0,
+      endTime:   form.endTime,
       supervisor: form.supervisor,
-      status: "Scheduled",
-    };
-    setShifts((prev) => [...prev, newShift]);
+    });
     setForm(EMPTY_FORM);
     setShowForm(false);
   }
 
-  function handleCancel() {
-    setForm(EMPTY_FORM);
-    setShowForm(false);
+  async function handleDelete(id: string) {
+    if (!window.confirm("Delete this shift?")) return;
+    setDeletingId(id);
+    await deleteShift(id);
+    setDeletingId(null);
   }
 
   return (
@@ -105,9 +92,9 @@ export function ShiftManagementPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Active Shifts", value: activeShifts, color: "#10B981", icon: Clock },
-          { label: "Total Workers on Shift", value: totalWorkers, color: "#4A57B9", icon: Users },
-          { label: "Upcoming Shifts", value: upcomingShifts, color: "#F59E0B", icon: CalendarClock },
+          { label: "Active Shifts",          value: activeShifts,   color: "#10B981", icon: Clock },
+          { label: "Total Workers on Shift", value: totalWorkers,   color: "#4A57B9", icon: Users },
+          { label: "Upcoming Shifts",        value: upcomingShifts, color: "#F59E0B", icon: CalendarClock },
         ].map(({ label, value, color, icon: Icon }) => (
           <div key={label} className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
             <div className="flex items-center justify-between mb-3">
@@ -115,7 +102,9 @@ export function ShiftManagementPage() {
                 <Icon className="w-5 h-5" style={{ color }} />
               </div>
             </div>
-            <div className="text-3xl font-bold" style={{ color }}>{value}</div>
+            <div className="text-3xl font-bold" style={{ color }}>
+              {isLoading ? "—" : value}
+            </div>
             <div className="text-xs font-medium mt-1" style={{ color: "#6B7280" }}>{label}</div>
           </div>
         ))}
@@ -126,7 +115,7 @@ export function ShiftManagementPage() {
         <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[15px] font-bold" style={{ color: "#111827" }}>Add New Shift</h2>
-            <button onClick={handleCancel} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <button onClick={() => { setForm(EMPTY_FORM); setShowForm(false); }} className="text-gray-400 hover:text-gray-600">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -188,14 +177,16 @@ export function ShiftManagementPage() {
           <div className="flex items-center gap-3 mt-5">
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold"
+              disabled={isCreating}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-70"
               style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}
             >
-              Save Shift
+              {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {isCreating ? "Saving…" : "Save Shift"}
             </button>
             <button
-              onClick={handleCancel}
-              className="px-4 py-2 rounded-xl border text-sm font-semibold transition-colors hover:bg-gray-50"
+              onClick={() => { setForm(EMPTY_FORM); setShowForm(false); }}
+              className="px-4 py-2 rounded-xl border text-sm font-semibold hover:bg-gray-50"
               style={{ borderColor: "#E3E9F6", color: "#374151" }}
             >
               Cancel
@@ -206,47 +197,78 @@ export function ShiftManagementPage() {
 
       {/* Shifts Table */}
       <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
-        <div className="px-5 py-4 border-b" style={{ borderColor: "#E9EEF8" }}>
+        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "#E9EEF8" }}>
           <h2 className="text-[15px] font-bold" style={{ color: "#111827" }}>All Shifts</h2>
+          <span className="text-xs px-2.5 py-1 rounded-full font-semibold" style={{ background: "#EEF2FF", color: "#4A57B9" }}>
+            {shifts.length} total
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "#F8FAFF", borderBottom: "1px solid #E9EEF8" }}>
-                {["Shift Name", "Type", "Start Time", "End Time", "Workers", "Supervisor", "Status"].map((h) => (
+                {["Shift Name", "Type", "Start Time", "End Time", "Workers", "Supervisor", "Status", ""].map((h) => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {shifts.map((shift) => (
-                <tr key={shift.id} className="border-t hover:bg-gray-50 transition-colors" style={{ borderColor: "#E3E9F6" }}>
-                  <td className="px-5 py-3.5 font-semibold" style={{ color: "#111827" }}>{shift.name}</td>
-                  <td className="px-5 py-3.5">
-                    <span
-                      className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
-                      style={{ background: TYPE_COLORS[shift.type] + "18", color: TYPE_COLORS[shift.type] }}
-                    >
-                      {shift.type}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5" style={{ color: "#374151" }}>{shift.startTime}</td>
-                  <td className="px-5 py-3.5" style={{ color: "#374151" }}>{shift.endTime}</td>
-                  <td className="px-5 py-3.5 font-semibold" style={{ color: "#111827" }}>{shift.workers}</td>
-                  <td className="px-5 py-3.5" style={{ color: "#6B7280" }}>{shift.supervisor}</td>
-                  <td className="px-5 py-3.5">
-                    <span
-                      className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
-                      style={{
-                        background: STATUS_STYLES[shift.status].bg,
-                        color: STATUS_STYLES[shift.status].color,
-                      }}
-                    >
-                      {shift.status}
-                    </span>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-10 text-center text-sm" style={{ color: "#9CA3AF" }}>
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto mb-1" />
+                    Loading shifts…
                   </td>
                 </tr>
-              ))}
+              ) : shifts.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-12 text-center">
+                    <Clock className="w-8 h-8 mx-auto mb-2" style={{ color: "#D1D5DB" }} />
+                    <p className="text-sm" style={{ color: "#6B7280" }}>No shifts yet. Add your first shift above.</p>
+                  </td>
+                </tr>
+              ) : (
+                shifts.map((shift) => (
+                  <tr key={shift.id} className="border-t hover:bg-gray-50 transition-colors" style={{ borderColor: "#E3E9F6" }}>
+                    <td className="px-5 py-3.5 font-semibold" style={{ color: "#111827" }}>{shift.name}</td>
+                    <td className="px-5 py-3.5">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                        style={{ background: (TYPE_COLORS[shift.type] ?? "#9CA3AF") + "18", color: TYPE_COLORS[shift.type] ?? "#9CA3AF" }}
+                      >
+                        {shift.type}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5" style={{ color: "#374151" }}>{shift.startTime ?? "—"}</td>
+                    <td className="px-5 py-3.5" style={{ color: "#374151" }}>{shift.endTime ?? "—"}</td>
+                    <td className="px-5 py-3.5 font-semibold" style={{ color: "#111827" }}>{shift.workers ?? 0}</td>
+                    <td className="px-5 py-3.5" style={{ color: "#6B7280" }}>{shift.supervisor}</td>
+                    <td className="px-5 py-3.5">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize"
+                        style={{
+                          background: (STATUS_STYLES[shift.status] ?? STATUS_STYLES.active).bg,
+                          color:      (STATUS_STYLES[shift.status] ?? STATUS_STYLES.active).color,
+                        }}
+                      >
+                        {shift.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <button
+                        onClick={() => handleDelete(shift.id)}
+                        disabled={deletingId === shift.id}
+                        className="p-1.5 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+                        title="Delete shift"
+                      >
+                        {deletingId === shift.id
+                          ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#DC2626" }} />
+                          : <Trash2 className="w-4 h-4" style={{ color: "#DC2626" }} />}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

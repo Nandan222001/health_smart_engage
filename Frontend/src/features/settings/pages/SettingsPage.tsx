@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { StatusBadge } from "@/shared/components/common/StatusBadge";
-import { Upload, Plus, Copy, Eye, EyeOff, Trash2, Palette, FileText, Loader2 } from "lucide-react";
+import { Upload, Plus, Trash2, FileText, Loader2 } from "lucide-react";
+import { useGetOrgAdminOverviewQuery, useSaveOrgSetupStep1Mutation } from "@/features/org-setup/api/orgSetupApi";
 
 const integrations = [
   { name: "Jira", status: "Connected", desc: "Issue tracking integration" },
@@ -35,6 +36,29 @@ export function SettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [docsList, setDocsList] = useState(knowledgeBaseDocs);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: overview, isLoading: overviewLoading } = useGetOrgAdminOverviewQuery();
+  const [saveStep1, { isLoading: isSaving }] = useSaveOrgSetupStep1Mutation();
+  const [orgName, setOrgName] = useState("");
+  const [timezone, setTimezone] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (overview) {
+      setOrgName(overview.orgName || "");
+      setTimezone(overview.timezone || "");
+    }
+  }, [overview]);
+
+  const handleSaveGeneral = async () => {
+    try {
+      await saveStep1({ organizationName: orgName, timezone }).unwrap();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch {
+      // error handled silently
+    }
+  };
 
   const tabs = [
     { id: "general", label: "General" },
@@ -108,41 +132,66 @@ export function SettingsPage() {
         <div className="max-w-xl space-y-6">
           <div className="bg-white rounded-xl border p-6" style={{ borderColor: '#E8EFE8', boxShadow: '0px 2px 12px rgba(27, 94, 32, 0.08)' }}>
             <h2 className="mb-6">General Settings</h2>
-            <div className="space-y-5">
-              <div>
-                <label className="block mb-1.5">Platform Name</label>
-                <input defaultValue="HSE Intelligence" className="w-full h-10 px-4 rounded-lg border text-[13px]" style={{ borderColor: '#E2E8E2', color: '#0A0A0A' }} />
+            {overviewLoading ? (
+              <div className="flex items-center gap-2 text-[13px]" style={{ color: '#9CA3AF' }}>
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading settings…
               </div>
-              <div>
-                <label className="block mb-1.5">Logo</label>
-                <div className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-[#F4F7F4] transition-colors" style={{ borderColor: '#E2E8E2' }}>
-                  <Upload className="w-8 h-8 mb-2" style={{ color: '#9CA3AF' }} />
-                  <span className="text-[13px]" style={{ color: '#4A5568' }}>Drag & drop or click to upload</span>
-                  <span className="text-[11px]" style={{ color: '#9CA3AF' }}>PNG, SVG, max 2MB</span>
+            ) : (
+              <div className="space-y-5">
+                <div>
+                  <label className="block mb-1.5 text-[13px]" style={{ color: '#374151', fontWeight: 500 }}>Organisation Name</label>
+                  <input
+                    value={orgName}
+                    onChange={e => setOrgName(e.target.value)}
+                    className="w-full h-10 px-4 rounded-lg border text-[13px]"
+                    style={{ borderColor: '#E2E8E2', color: '#0A0A0A' }}
+                    placeholder="Enter organisation name"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1.5 text-[13px]" style={{ color: '#374151', fontWeight: 500 }}>Logo</label>
+                  <div className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-[#F4F7F4] transition-colors" style={{ borderColor: '#E2E8E2' }}>
+                    <Upload className="w-8 h-8 mb-2" style={{ color: '#9CA3AF' }} />
+                    <span className="text-[13px]" style={{ color: '#4A5568' }}>Drag & drop or click to upload</span>
+                    <span className="text-[11px]" style={{ color: '#9CA3AF' }}>PNG, SVG, max 2MB</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block mb-1.5 text-[13px]" style={{ color: '#374151', fontWeight: 500 }}>Default Timezone</label>
+                  <input
+                    value={timezone}
+                    onChange={e => setTimezone(e.target.value)}
+                    className="w-full h-10 px-4 rounded-lg border text-[13px]"
+                    style={{ borderColor: '#E2E8E2', color: '#0A0A0A' }}
+                    placeholder="e.g. Asia/Kolkata, Europe/London"
+                  />
+                  <p className="text-[11px] mt-1" style={{ color: '#9CA3AF' }}>IANA timezone name (e.g. Asia/Kolkata)</p>
+                </div>
+                <div>
+                  <label className="block mb-1.5 text-[13px]" style={{ color: '#374151', fontWeight: 500 }}>Default Language</label>
+                  <select className="w-full h-10 px-3 rounded-lg border text-[13px] bg-white" style={{ borderColor: '#E2E8E2' }}>
+                    <option>English (US)</option>
+                    <option>Spanish</option>
+                    <option>Portuguese</option>
+                    <option>French</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleSaveGeneral}
+                    disabled={isSaving}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-white text-[13px]"
+                    style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', fontWeight: 600, opacity: isSaving ? 0.7 : 1 }}
+                  >
+                    {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Save Changes
+                  </button>
+                  {saveSuccess && (
+                    <span className="text-[13px]" style={{ color: '#10B981', fontWeight: 500 }}>Saved successfully</span>
+                  )}
                 </div>
               </div>
-              <div>
-                <label className="block mb-1.5">Default Timezone</label>
-                <select className="w-full h-10 px-3 rounded-lg border text-[13px] bg-white" style={{ borderColor: '#E2E8E2' }}>
-                  <option>CST (UTC-6)</option>
-                  <option>EST (UTC-5)</option>
-                  <option>MST (UTC-7)</option>
-                  <option>PST (UTC-8)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block mb-1.5">Default Language</label>
-                <select className="w-full h-10 px-3 rounded-lg border text-[13px] bg-white" style={{ borderColor: '#E2E8E2' }}>
-                  <option>English (US)</option>
-                  <option>Spanish</option>
-                  <option>Portuguese</option>
-                  <option>French</option>
-                </select>
-              </div>
-              <button className="px-6 py-2.5 rounded-lg text-white text-[13px]" style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', fontWeight: 600 }}>
-                Save Changes
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}

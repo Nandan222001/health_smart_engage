@@ -4,6 +4,59 @@ const cmd = (body: unknown) => ({ data: body });
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export interface ActivityItem {
+  id: string;
+  type: "Incident" | "Permit" | "Audit" | "User" | "System";
+  description: string;
+  user: string;
+  timestamp: string | null;
+}
+
+export interface OrgAdminActivities {
+  items: ActivityItem[];
+  total: number;
+}
+
+export interface EngagementAction {
+  id: string;
+  text: string;
+  status: string;
+}
+
+export interface EngagementRecognition {
+  name: string;
+  type: "gold" | "silver" | "bronze";
+}
+
+export interface OrgAdminEngagement {
+  reportingRate: number;
+  surveyScore: number;
+  surveyCompletionPct: number;
+  observations: {
+    safetyObservations: number;
+    safetyWalks: number;
+    toolboxAttendance: number;
+    siteParticipation: number;
+  };
+  openActions: EngagementAction[];
+  topRecognitions: EngagementRecognition[];
+  employeeCount: number;
+}
+
+export interface KpiItem {
+  id: string;
+  label: string;
+  value: number;
+  target: number;
+  trend: "up" | "down";
+  status: "on_track" | "at_risk" | "breached";
+}
+
+export interface OrgAdminKpis {
+  period: string;
+  kpis: KpiItem[];
+}
+
 export interface OrgSetupProgress {
   currentStep: number;
   completedSteps: number[];
@@ -98,11 +151,67 @@ export interface ActivateOrgData {
   confirmed: boolean;
 }
 
+export interface HrmsImportPayload {
+  url: string;
+  token?: string;
+}
+
+export interface OrgApiConnectPayload {
+  url: string;
+  api_key?: string;
+  token?: string;
+}
+
+export interface OrgOverview {
+  orgName: string;
+  industry: string;
+  country: string;
+  timezone: string;
+  headquartersAddress: string;
+  officialEmail: string;
+  contactNumber: string;
+  plan: string;
+  status: string;
+  totalSites: number;
+  activeEmployees: number;
+  openIncidents: number;
+  complianceScore: number;
+  systemHealth: { database: string; aiEngine: string; lastSync: string };
+}
+
+export interface OrgDetailsFromExternal {
+  organizationName?: string;
+  industryType?: string;
+  employeeCount?: string;
+  numberOfSites?: string;
+  officialEmail?: string;
+  contactNumber?: string;
+  country?: string;
+  timezone?: string;
+  headquartersAddress?: string;
+}
+
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 export const orgSetupApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Queries
+    getOrgAdminOverview: builder.query<OrgOverview, void>({
+      query: () => "/org-admin/overview",
+      providesTags: ["OrgSetup"],
+    }),
+    getOrgAdminKpis: builder.query<OrgAdminKpis, void>({
+      query: () => "/org-admin/kpis",
+      providesTags: ["OrgSetup"],
+    }),
+    getOrgAdminEngagement: builder.query<OrgAdminEngagement, void>({
+      query: () => "/org-admin/engagement",
+      providesTags: ["OrgSetup"],
+    }),
+    getOrgAdminActivities: builder.query<ActivityItem[], void>({
+      query: () => "/org-admin/activities",
+      providesTags: ["Activity"],
+    }),
     getOrgSetupProgress: builder.query<OrgSetupProgress, void>({
       query: () => "/org-setup/progress",
       providesTags: ["OrgSetup"],
@@ -185,11 +294,25 @@ export const orgSetupApi = baseApi.injectEndpoints({
       query: (data) => ({ url: "/org-setup/activate", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
+    hrmsImport: builder.mutation<{ count: number; error?: string }, HrmsImportPayload>({
+      query: (data) => ({ url: "/org-setup/step4/hrms-import", method: "POST", body: data }),
+      invalidatesTags: ["OrgSetup"],
+    }),
+    parseOrgExcel: builder.mutation<OrgDetailsFromExternal, FormData>({
+      query: (data) => ({ url: "/org-setup/step1/parse-excel", method: "POST", body: data }),
+    }),
+    connectOrgApi: builder.mutation<OrgDetailsFromExternal, OrgApiConnectPayload>({
+      query: (data) => ({ url: "/org-setup/step1/api-connect", method: "POST", body: data }),
+    }),
   }),
   overrideExisting: false,
 });
 
 export const {
+  useGetOrgAdminOverviewQuery,
+  useGetOrgAdminKpisQuery,
+  useGetOrgAdminEngagementQuery,
+  useGetOrgAdminActivitiesQuery,
   useGetOrgSetupProgressQuery,
   useGetOrgSetupStep1Query,
   useGetOrgSetupStep2Query,
@@ -210,4 +333,7 @@ export const {
   useImportOrgSetupDataMutation,
   useSaveOrgSetupStep7Mutation,
   useActivateOrganizationMutation,
+  useHrmsImportMutation,
+  useParseOrgExcelMutation,
+  useConnectOrgApiMutation,
 } = orgSetupApi;

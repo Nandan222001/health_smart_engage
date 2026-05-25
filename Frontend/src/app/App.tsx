@@ -4,6 +4,7 @@ import { Provider } from "react-redux";
 import { router } from "./routes";
 import { AuthProvider } from "./context/AuthContext";
 import { store } from "./store";
+import { Toaster } from "sonner";
 
 type AppErrorBoundaryState = {
   hasError: boolean;
@@ -86,6 +87,7 @@ export default function App() {
     <Provider store={store}>
       <AppErrorBoundary>
         <AuthProvider>
+          <Toaster position="top-right" richColors closeButton />
           <RouterProvider router={router} />
         </AuthProvider>
       </AppErrorBoundary>

@@ -91,7 +91,6 @@ const SUPERADMIN_NAV: NavGroup[] = [
       { name: "Invitations",         icon: MailIcon,          path: "/superadmin/invitations" },
       { name: "Users",               icon: Users,             path: "/superadmin/users" },
       { name: "Roles & Permissions", icon: Shield,            path: "/superadmin/roles" },
-      { name: "Subscriptions",       icon: CreditCard,        path: "/superadmin/subscriptions" },
       { name: "Platform Analytics",  icon: TrendingUp,        path: "/superadmin/analytics" },
       { name: "Notifications",       icon: Bell,              path: "/superadmin/notifications" },
       { name: "System Settings",     icon: SlidersHorizontal, path: "/superadmin/settings" },
@@ -123,12 +122,12 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
     icon: Users,
     items: [
       { name: "Users",                path: "/users" },
-      { name: "Workers",              path: "/employees" },
-      { name: "Supervisors",          path: "/employees?type=supervisor" },
-      { name: "HSE Managers",         path: "/employees?type=hse-manager" },
-      { name: "Auditors",             path: "/employees?type=auditor" },
-      { name: "Contractors",          path: "/vendors" },
-      { name: "Roles & Permissions",  path: "/users" },
+      { name: "Workers",              path: "/workers" },
+      { name: "Supervisors",          path: "/supervisors" },
+      { name: "HSE Managers",         path: "/hse-managers" },
+      { name: "Auditors",             path: "/auditors" },
+      { name: "Contractors",          path: "/contractors" },
+      { name: "Roles & Permissions",  path: "/roles-permissions" },
       { name: "Training & Competency",path: "/training" },
       { name: "Shift Management",     path: "/shift-management" },
     ],
@@ -137,20 +136,19 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
     icon: Building2,
     items: [
       { name: "Vendor List",      path: "/vendors" },
-      { name: "Contractor Mgmt", path: "/vendors" },
-      { name: "Vendor Compliance",path: "/vendors" },
-      { name: "Certifications",   path: "/vendors" },
-      { name: "Vendor Risk Score",path: "/vendors" },
+      { name: "Vendor Compliance",path: "/vendors?tab=compliance" },
+      { name: "Certifications",   path: "/vendors?tab=certifications" },
+      { name: "Vendor Risk Score",path: "/vendors?tab=risk" },
     ],
   },
   "Assets": {
     icon: FolderClosed,
     items: [
-      { name: "Asset Register",         path: "/equipment-certification" },
-      { name: "Asset Categories",       path: "/equipment-certification" },
-      { name: "Maintenance Logs",       path: "/equipment-certification" },
-      { name: "Equipment Inspections",  path: "/equipment-certification" },
-      { name: "Asset Risk Mapping",     path: "/equipment-certification" },
+      { name: "Asset Register",        path: "/equipment-certification" },
+      { name: "Asset Categories",      path: "/equipment-certification?tab=categories" },
+      { name: "Maintenance Logs",      path: "/equipment-certification?tab=maintenance" },
+      { name: "Equipment Inspections", path: "/equipment-certification?tab=inspections" },
+      { name: "Asset Risk Mapping",    path: "/equipment-certification?tab=risk" },
     ],
   },
   "Compliance": {
@@ -159,33 +157,33 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
       { name: "Compliance Dashboard", path: "/compliance" },
       { name: "Standards & Policies", path: "/policies" },
       { name: "Audit Management",     path: "/audits" },
-      { name: "Inspections",          path: "/audits" },
-      { name: "CAPA",                 path: "/audits" },
-      { name: "Regulatory Tracking",  path: "/compliance" },
-      { name: "Documentation",        path: "/compliance" },
+      { name: "Inspections",          path: "/audits?tab=inspections" },
+      { name: "CAPA",                 path: "/audits?tab=capa" },
+      { name: "Regulatory Tracking",  path: "/compliance?tab=regulatory" },
+      { name: "Documentation",        path: "/compliance?tab=documentation" },
     ],
   },
   "Risk": {
     icon: ShieldAlert,
     items: [
-      { name: "Risk Assessments",  path: "/root-cause-analysis" },
-      { name: "Hazard Register",   path: "/hazards" },
-      { name: "Near Miss Reports", path: "/near-miss" },
+      { name: "Risk Assessments",   path: "/root-cause-analysis" },
+      { name: "Hazard Register",    path: "/hazards" },
+      { name: "Near Miss Reports",  path: "/near-miss" },
       { name: "Incident Management",path: "/incidents" },
-      { name: "Risk Matrix",       path: "/root-cause-analysis" },
-      { name: "High-Risk Areas",   path: "/root-cause-analysis" },
-      { name: "Predictive Risk AI",path: "/ai-intelligence" },
+      { name: "Risk Matrix",        path: "/root-cause-analysis?tab=matrix" },
+      { name: "High-Risk Areas",    path: "/root-cause-analysis?tab=high-risk" },
+      { name: "Predictive Risk AI", path: "/ai-intelligence" },
     ],
   },
   "Work": {
     icon: Briefcase,
     items: [
       { name: "Permit To Work (PTW)",path: "/permits" },
-      { name: "Permit Requests",    path: "/permits" },
-      { name: "Approval Queue",     path: "/permits" },
-      { name: "Active Work Permits",path: "/permits" },
+      { name: "Permit Requests",    path: "/permits?tab=requests" },
+      { name: "Approval Queue",     path: "/permits?tab=approval" },
+      { name: "Active Work Permits",path: "/permits?tab=active" },
       { name: "Workflow Management",path: "/workflow" },
-      { name: "Escalation Rules",   path: "/workflow" },
+      { name: "Escalation Rules",   path: "/workflow?tab=escalation" },
       { name: "Site Operations",    path: "/sites-zones" },
     ],
   },
@@ -195,8 +193,8 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
       { name: "Incident Reports",    path: "/incidents" },
       { name: "Near Misses",         path: "/near-miss" },
       { name: "Unsafe Acts",         path: "/violations" },
-      { name: "Unsafe Conditions",   path: "/violations" },
-      { name: "Investigation",       path: "/incidents" },
+      { name: "Unsafe Conditions",   path: "/violations?tab=conditions" },
+      { name: "Investigation",       path: "/incidents?tab=investigation" },
       { name: "Root Cause Analysis", path: "/root-cause-analysis" },
       { name: "Corrective Actions",  path: "/actions" },
       { name: "Incident Analytics",  path: "/analytics" },
@@ -205,58 +203,58 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   "Intelligence": {
     icon: BrainCircuit,
     items: [
-      { name: "AI Dashboard",             path: "/ai-intelligence" },
-      { name: "AI Assistant",             path: "/ai-agent" },
-      { name: "Risk Predictions",         path: "/ai-intelligence" },
-      { name: "Compliance Intelligence",  path: "/ai-intelligence" },
-      { name: "Safety Recommendations",   path: "/ai-intelligence" },
-      { name: "Trend Analysis",           path: "/ai-intelligence" },
-      { name: "Benchmarking",             path: "/ai-intelligence" },
-      { name: "AI Knowledge Search",      path: "/ai-agent" },
+      { name: "AI Dashboard",            path: "/ai-intelligence" },
+      { name: "AI Assistant",            path: "/ai-agent" },
+      { name: "Risk Predictions",        path: "/ai-intelligence?tab=risk" },
+      { name: "Compliance Intelligence", path: "/ai-intelligence?tab=compliance" },
+      { name: "Safety Recommendations",  path: "/ai-intelligence?tab=safety" },
+      { name: "Trend Analysis",          path: "/ai-intelligence?tab=trends" },
+      { name: "Benchmarking",            path: "/ai-intelligence?tab=benchmarking" },
+      { name: "AI Knowledge Search",     path: "/ai-agent?tab=search" },
     ],
   },
   "Data Management": {
     icon: Database,
     items: [
       { name: "Excel Upload",    path: "/data-management" },
-      { name: "CSV Import",      path: "/data-management" },
-      { name: "API Integrations",path: "/settings" },
-      { name: "Import History",  path: "/data-management" },
-      { name: "Validation Logs", path: "/data-management" },
-      { name: "Sync Status",     path: "/data-management" },
+      { name: "CSV Import",      path: "/data-management?tab=csv" },
+      { name: "API Integrations",path: "/settings?tab=api" },
+      { name: "Import History",  path: "/data-management?tab=history" },
+      { name: "Validation Logs", path: "/data-management?tab=logs" },
+      { name: "Sync Status",     path: "/data-management?tab=sync" },
     ],
   },
   "Reports": {
     icon: BarChart3,
     items: [
       { name: "KPI Reports",        path: "/analytics" },
-      { name: "Incident Reports",   path: "/analytics" },
-      { name: "Audit Reports",      path: "/analytics" },
-      { name: "Compliance Reports", path: "/analytics" },
-      { name: "Risk Reports",       path: "/analytics" },
-      { name: "Workforce Reports",  path: "/analytics" },
-      { name: "Management Reports", path: "/analytics" },
+      { name: "Incident Reports",   path: "/analytics?tab=incidents" },
+      { name: "Audit Reports",      path: "/analytics?tab=audits" },
+      { name: "Compliance Reports",  path: "/analytics?tab=compliance" },
+      { name: "Risk Reports",        path: "/analytics?tab=risk" },
+      { name: "Workforce Reports",   path: "/analytics?tab=workforce" },
+      { name: "Management Reports",  path: "/analytics?tab=management" },
     ],
   },
   "Settings": {
     icon: Settings,
     items: [
       { name: "Organization Settings", path: "/settings" },
-      { name: "Site Settings",         path: "/settings" },
-      { name: "Workflow Settings",     path: "/settings" },
-      { name: "Approval Matrix",       path: "/settings" },
-      { name: "Notification Settings", path: "/settings" },
-      { name: "Security Settings",     path: "/settings" },
-      { name: "API Settings",          path: "/settings" },
+      { name: "Site Settings",         path: "/settings?tab=sites" },
+      { name: "Workflow Settings",     path: "/settings?tab=workflow" },
+      { name: "Approval Matrix",       path: "/settings?tab=approval" },
+      { name: "Notification Settings", path: "/settings?tab=notifications" },
+      { name: "Security Settings",     path: "/settings?tab=security" },
+      { name: "API Settings",          path: "/settings?tab=api" },
     ],
   },
   "Help": {
     icon: HelpCircle,
     items: [
       { name: "Help Center",         path: "/help" },
-      { name: "Documentation",       path: "/help" },
-      { name: "Raise Support Ticket",path: "/help" },
-      { name: "Contact Support",     path: "/help" },
+      { name: "Documentation",       path: "/help?tab=docs" },
+      { name: "Raise Support Ticket",path: "/help?tab=ticket" },
+      { name: "Contact Support",     path: "/help?tab=contact" },
     ],
   },
 };
@@ -320,7 +318,16 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   };
 
   const isSubItemActive = (path: string) => {
-    const base = path.split("?")[0];
+    const [base, query] = path.split("?");
+    if (query) {
+      // Requires exact pathname + search match so query-param siblings don't all light up
+      return location.pathname === base && location.search === `?${query}`;
+    }
+    // No query on this item: don't match when the current URL has a search string on the same base
+    // (prevents "Workers /employees" being active while on "/employees?type=supervisor")
+    if (location.search && location.pathname === base) {
+      return false;
+    }
     return base === "/" ? location.pathname === "/" : location.pathname.startsWith(base);
   };
 

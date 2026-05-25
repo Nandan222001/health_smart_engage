@@ -47,6 +47,8 @@ def permissions_for_user(user: CurrentUser) -> set[str]:
 def infer_required_permission(group: str, operation: str, method: str) -> str:
     if group == "admin":
         return "admin:write" if method != "GET" else "admin:read"
+    if group == "org_setup" or group == "org_admin":
+        return "web:write" if method != "GET" else "web:read"
     if group == "integrations":
         return "integrations:write" if method != "GET" else "integrations:read"
     if group == "ai":

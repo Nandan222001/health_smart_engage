@@ -115,6 +115,25 @@ class DomainDispatcher:
             return {"id": res.id, "status": res.status}
 
         # Foundation Commands
+        if operation == "admin_roles_delete":
+            from app.models.auth import Role
+            from sqlalchemy import select
+            role_id = path_params.get("roleId")
+            role = db.scalars(select(Role).where(Role.id == role_id, Role.tenant_id == user.tenant_id)).first()
+            if role:
+                db.delete(role)
+            return {"deleted": True, "id": role_id}
+
+        if operation == "admin_role_permissions_update":
+            from app.models.auth import Role
+            from sqlalchemy import select
+            role_id = path_params.get("roleId")
+            permissions = data.get("permissions", [])
+            role = db.scalars(select(Role).where(Role.id == role_id, Role.tenant_id == user.tenant_id)).first()
+            if role:
+                role.permissions = permissions
+            return {"id": role_id, "permissions": permissions}
+
         if operation in ("admin_org_nodes_create", "admin_organisation_nodes_create"):
             res = svc["foundation"].create_organisation_node(user, data)
             return {"id": res.id}
@@ -298,10 +317,27 @@ class DomainDispatcher:
             return {"status": "created", "id": payload["id"]}
 
         if operation == "org_admin_shifts_update":
-            return {"status": "updated", "id": path_params.get("shiftId")}
+            from app.repositories.generic_repository import GenericRepository
+            shift_id = path_params.get("shiftId")
+            repo = GenericRepository(db)
+            records = repo.list_by_type(user.tenant_id, "org_admin", "shift", limit=500)
+            target = next((r for r in records if r.payload.get("id") == shift_id), None)
+            if target:
+                target.payload = {**target.payload, **data, "id": shift_id}
+                db.flush()
+            return {"status": "updated", "id": shift_id}
 
         if operation == "org_admin_shifts_delete":
-            return {"status": "deleted", "id": path_params.get("shiftId")}
+            from app.repositories.generic_repository import GenericRepository
+            shift_id = path_params.get("shiftId")
+            repo = GenericRepository(db)
+            records = repo.list_by_type(user.tenant_id, "org_admin", "shift", limit=500)
+            for r in records:
+                if r.payload.get("id") == shift_id:
+                    db.delete(r)
+                    break
+            db.flush()
+            return {"status": "deleted", "id": shift_id}
 
         if operation == "org_admin_import_create":
             from app.repositories.generic_repository import GenericRepository
@@ -449,8 +485,62 @@ class DomainDispatcher:
             return {"items": [_to_dict(i) for i in items]}
         
         if operation == "employees_list":
-            items = svc["people"].list_employees(user, {})
-            return {"items": [_to_dict(i) for i in items]}
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+
+            # Build lookup from step4_user records (email → payload, rec).
+            # These hold the original role/department values from the org-setup CSV/form
+            # and are the source of truth when the employees table has a default role.
+            step4_recs = repo.list_by_type(user.tenant_id, "org_setup", "step4_user", limit=500)
+            step4_payloads: dict[str, dict] = {}
+            step4_metas: dict[str, object] = {}
+            for rec in step4_recs:
+                ek = (rec.payload.get("email") or "").strip().lower()
+                if ek:
+                    step4_payloads[ek] = rec.payload
+                    step4_metas[ek] = rec
+
+            emp_rows = svc["people"].list_employees(user, {})
+            result: list[dict] = []
+            seen: set[str] = set()
+
+            for e in emp_rows:
+                email = (e.contact or "").strip()
+                key = email.lower()
+                s4 = step4_payloads.get(key, {})
+
+                # Use step4_user role when employees table has empty or generic default
+                role = e.role_name or ""
+                if (not role or role.lower() == "employee") and s4.get("role"):
+                    role = s4["role"]
+
+                result.append({
+                    "id": e.id,
+                    "name": e.name,
+                    "email": email,
+                    "role": role,
+                    "department": e.department_id or s4.get("department") or "",
+                    "status": e.status or "active",
+                    "joined_at": None,
+                })
+                seen.add(key)
+
+            # Surface step4_user records not yet synced to the employees table
+            for key, payload in step4_payloads.items():
+                if key in seen:
+                    continue
+                rec = step4_metas[key]
+                result.append({
+                    "id": rec.id,
+                    "name": payload.get("name", ""),
+                    "email": payload.get("email", "").strip(),
+                    "role": payload.get("role", ""),
+                    "department": payload.get("department", ""),
+                    "status": "active",
+                    "joined_at": str(rec.created_at) if rec.created_at else None,
+                })
+
+            return {"items": result}
         
         if operation == "assets_list":
             items = svc["assets"].list_assets(user, {})
@@ -511,6 +601,71 @@ class DomainDispatcher:
         if operation == "learning_outcomes_list":
             return svc["learning"].get_outcomes(user)
 
+        # ── Admin Roles / Permissions / Audit Queries ────────────────────────
+        if operation == "admin_permissions_list":
+            from app.core.rbac import ROLE_PERMISSIONS
+            all_perms = set()
+            for perms in ROLE_PERMISSIONS.values():
+                all_perms.update(perms)
+            catalog = []
+            for perm in sorted(all_perms):
+                if ":" not in perm:
+                    continue
+                group, operation_part = perm.split(":", 1)
+                method_map = {"read": "GET", "write": "POST", "approve": "PUT", "export": "GET", "scan": "POST", "confidential": "GET"}
+                catalog.append({
+                    "id": perm,
+                    "group": group,
+                    "operation": operation_part,
+                    "method": method_map.get(operation_part, "POST"),
+                    "description": f"{operation_part.capitalize()} access to {group}",
+                })
+            return {"items": catalog}
+
+        if operation == "admin_audit_logs_list":
+            from app.models.audit_log import AuditLog
+            from app.models.auth import User as AuthUser
+            from sqlalchemy import select, desc
+            logs = db.scalars(select(AuditLog).order_by(desc(AuditLog.created_at)).limit(200)).all()
+            user_ids = {log.actor_user_id for log in logs}
+            email_map: dict = {}
+            if user_ids:
+                for u in db.scalars(select(AuthUser).where(AuthUser.id.in_(user_ids))).all():
+                    email_map[u.id] = u.email
+            return {
+                "items": [
+                    {
+                        "id": log.id,
+                        "event_type": log.action,
+                        "actor_email": email_map.get(log.actor_user_id, log.actor_user_id),
+                        "resource": log.resource_type,
+                        "resource_id": log.resource_id,
+                        "timestamp": log.created_at.isoformat() if log.created_at else None,
+                        "metadata": log.details or {},
+                    }
+                    for log in logs
+                ]
+            }
+
+        if operation == "admin_audit_logs_get":
+            from app.models.audit_log import AuditLog
+            from app.models.auth import User as AuthUser
+            from sqlalchemy import select
+            event_id = path_params.get("eventId")
+            log = db.scalars(select(AuditLog).where(AuditLog.id == event_id)).first()
+            if not log:
+                return {"error": "Not found"}
+            actor_user = db.scalars(select(AuthUser).where(AuthUser.id == log.actor_user_id)).first()
+            return {
+                "id": log.id,
+                "event_type": log.action,
+                "actor_email": actor_user.email if actor_user else log.actor_user_id,
+                "resource": log.resource_type,
+                "resource_id": log.resource_id,
+                "timestamp": log.created_at.isoformat() if log.created_at else None,
+                "metadata": log.details or {},
+            }
+
         # ── Super Admin Queries ───────────────────────────────────────────────
         if operation in ("superadmin_dashboard", "admin_superadmin_dashboard"):
             return svc["superadmin"].get_dashboard()
@@ -553,54 +708,469 @@ class DomainDispatcher:
 
         # ── Org Admin Queries ─────────────────────────────────────────────────
         if operation == "org_admin_overview_get":
+            from sqlalchemy import func, select as sa_select
+            from app.models.tenant import Tenant
+            from app.models.generic_record import GenericRecord
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+
+            tenant = db.get(Tenant, user.tenant_id)
+
+            step1_recs = repo.list_by_type(user.tenant_id, "org_setup", "step1_org_details", limit=1)
+            step1 = step1_recs[0].payload if step1_recs else {}
+
+            def _count(record_type: str) -> int:
+                stmt = (
+                    sa_select(func.count())
+                    .where(GenericRecord.tenant_id == user.tenant_id)
+                    .where(GenericRecord.module == "org_setup")
+                    .where(GenericRecord.record_type == record_type)
+                )
+                return db.scalar(stmt) or 0
+
+            sites_count = _count("step3_site")
+            users_count = _count("step4_user")
+
+            # Also count actual Employee rows (may be higher if employees added after setup)
+            from app.models.people import Employee as _Emp
+            emp_count = db.scalar(sa_select(func.count()).where(_Emp.tenant_id == user.tenant_id)) or 0
+            if emp_count > users_count:
+                users_count = emp_count
+
+            org_name = step1.get("organizationName") or (tenant.name if tenant else "")
+
+            # Real incident + compliance counts
+            from app.models.incidents import Incident as _Inc
+            from app.models.compliance import AuditExecution as _Audit, Capa as _Capa
+            open_incidents = db.scalar(
+                sa_select(func.count())
+                .where(_Inc.tenant_id == user.tenant_id)
+                .where(_Inc.status.notin_(["closed", "resolved"]))
+            ) or 0
+
+            total_audits = db.scalar(
+                sa_select(func.count()).where(_Audit.tenant_id == user.tenant_id)
+            ) or 0
+            completed_audits = db.scalar(
+                sa_select(func.count())
+                .where(_Audit.tenant_id == user.tenant_id)
+                .where(_Audit.status == "completed")
+            ) or 0
+            compliance_score = round((completed_audits / total_audits * 100) if total_audits else 0)
+
             return {
-                "total_sites": 12,
-                "active_employees": 847,
-                "open_incidents": 3,
-                "compliance_score": 94,
-                "org_name": user.tenant_id,
-                "system_health": {"database": "healthy", "ai_engine": "active", "last_sync": "2 minutes ago"},
+                "orgName": org_name,
+                "industry": step1.get("industryType") or (tenant.industry if tenant else ""),
+                "country": step1.get("country", ""),
+                "timezone": step1.get("timezone", ""),
+                "headquartersAddress": step1.get("headquartersAddress", ""),
+                "officialEmail": step1.get("officialEmail") or (tenant.contact_email if tenant else ""),
+                "contactNumber": step1.get("contactNumber", ""),
+                "plan": (tenant.plan if tenant else "starter") or "starter",
+                "status": tenant.status if tenant else "active",
+                "totalSites": sites_count,
+                "activeEmployees": users_count,
+                "openIncidents": open_incidents,
+                "complianceScore": compliance_score,
+                "systemHealth": {"database": "healthy", "aiEngine": "active", "lastSync": "2 minutes ago"},
             }
 
         if operation == "org_admin_kpis_get":
+            from sqlalchemy import func, select as sa_select
+            from app.models.people import Employee, TrainingCompletion, TrainingRequirement
+            from app.models.permits import Permit
+            from app.models.compliance import AuditExecution, Capa
+            from app.models.incidents import Incident
+
+            tid = user.tenant_id
+
+            # ── base counts ───────────────────────────────────────────────────
+            emp_count = db.scalar(
+                sa_select(func.count()).where(Employee.tenant_id == tid)
+            ) or 0
+
+            # TRIR / LTIR: use 200,000-hour baseline (100 employees × 40h × 50 weeks)
+            hours_worked = max(emp_count, 1) * 8 * 30  # ~30 working days rolling
+
+            total_incidents = db.scalar(
+                sa_select(func.count()).where(Incident.tenant_id == tid)
+            ) or 0
+
+            # Lost-time = critical / major severity
+            lost_time_incidents = db.scalar(
+                sa_select(func.count())
+                .where(Incident.tenant_id == tid)
+                .where(Incident.severity.in_(["critical", "major"]))
+            ) or 0
+
+            near_miss_count = db.scalar(
+                sa_select(func.count())
+                .where(Incident.tenant_id == tid)
+                .where(Incident.incident_type.ilike("%near%miss%"))
+            ) or 0
+
+            # CAPAs
+            open_capas = db.scalar(
+                sa_select(func.count())
+                .where(Capa.tenant_id == tid)
+                .where(Capa.status == "open")
+            ) or 0
+
+            # Audits
+            total_audits = db.scalar(
+                sa_select(func.count()).where(AuditExecution.tenant_id == tid)
+            ) or 0
+
+            completed_audits = db.scalar(
+                sa_select(func.count())
+                .where(AuditExecution.tenant_id == tid)
+                .where(AuditExecution.status == "completed")
+            ) or 0
+
+            audit_completion = round((completed_audits / total_audits * 100) if total_audits else 0)
+
+            # PTW active
+            ptw_active = db.scalar(
+                sa_select(func.count())
+                .where(Permit.tenant_id == tid)
+                .where(Permit.status.in_(["approved", "active", "submitted"]))
+            ) or 0
+
+            # Training completion
+            total_completions = db.scalar(
+                sa_select(func.count()).where(TrainingCompletion.tenant_id == tid)
+            ) or 0
+
+            total_requirements = db.scalar(
+                sa_select(func.count()).where(TrainingRequirement.tenant_id == tid)
+            ) or 0
+
+            required_total = (total_requirements or 1) * max(emp_count, 1)
+            training_pct = round(min(total_completions / required_total * 100, 100)) if required_total else 0
+
+            # Near miss rate per 100 employees
+            near_miss_rate = round((near_miss_count / max(emp_count, 1)) * 100, 2)
+
+            # Compliance rate: audits completion as proxy
+            compliance_rate = audit_completion if total_audits else 0
+
+            # TRIR / LTIR
+            trir = round((total_incidents * 200_000) / hours_worked, 2) if hours_worked else 0
+            ltir = round((lost_time_incidents * 200_000) / hours_worked, 2) if hours_worked else 0
+
+            def _kpi_status(value, target, lower_is_better=False):
+                if lower_is_better:
+                    if value <= target:
+                        return "on_track"
+                    if value <= target * 1.2:
+                        return "at_risk"
+                    return "breached"
+                else:
+                    if value >= target:
+                        return "on_track"
+                    if value >= target * 0.9:
+                        return "at_risk"
+                    return "breached"
+
             return {
-                "period": "today",
+                "period": "live",
                 "kpis": [
-                    {"id": "trir", "label": "TRIR", "value": 0.42, "target": 0.5, "trend": "down", "status": "on_track"},
-                    {"id": "ltir", "label": "LTIR", "value": 0.08, "target": 0.1, "trend": "down", "status": "on_track"},
-                    {"id": "near_miss_rate", "label": "Near Miss Rate", "value": 2.1, "target": 2.0, "trend": "up", "status": "at_risk"},
-                    {"id": "compliance_rate", "label": "Compliance Rate", "value": 94, "target": 95, "trend": "up", "status": "at_risk"},
-                    {"id": "open_capas", "label": "Open CAPAs", "value": 7, "target": 5, "trend": "up", "status": "breached"},
-                    {"id": "audit_completion", "label": "Audit Completion", "value": 87, "target": 90, "trend": "up", "status": "at_risk"},
-                    {"id": "ptw_active", "label": "PTW Active", "value": 14, "target": 20, "trend": "down", "status": "on_track"},
-                    {"id": "training_completion", "label": "Training Completion", "value": 91, "target": 90, "trend": "up", "status": "on_track"},
+                    {
+                        "id": "trir",
+                        "label": "TRIR",
+                        "value": trir,
+                        "target": 0.5,
+                        "trend": "down" if trir <= 0.5 else "up",
+                        "status": _kpi_status(trir, 0.5, lower_is_better=True),
+                    },
+                    {
+                        "id": "ltir",
+                        "label": "LTIR",
+                        "value": ltir,
+                        "target": 0.1,
+                        "trend": "down" if ltir <= 0.1 else "up",
+                        "status": _kpi_status(ltir, 0.1, lower_is_better=True),
+                    },
+                    {
+                        "id": "near_miss_rate",
+                        "label": "Near Miss Rate",
+                        "value": near_miss_rate,
+                        "target": 2.0,
+                        "trend": "up" if near_miss_rate >= 2.0 else "down",
+                        "status": _kpi_status(near_miss_rate, 2.0),
+                    },
+                    {
+                        "id": "compliance_rate",
+                        "label": "Compliance Rate",
+                        "value": compliance_rate,
+                        "target": 90,
+                        "trend": "up" if compliance_rate >= 90 else "down",
+                        "status": _kpi_status(compliance_rate, 90),
+                    },
+                    {
+                        "id": "open_capas",
+                        "label": "Open CAPAs",
+                        "value": open_capas,
+                        "target": 5,
+                        "trend": "down" if open_capas <= 5 else "up",
+                        "status": _kpi_status(open_capas, 5, lower_is_better=True),
+                    },
+                    {
+                        "id": "audit_completion",
+                        "label": "Audit Completion",
+                        "value": audit_completion,
+                        "target": 90,
+                        "trend": "up" if audit_completion >= 90 else "down",
+                        "status": _kpi_status(audit_completion, 90),
+                    },
+                    {
+                        "id": "ptw_active",
+                        "label": "PTW Active",
+                        "value": ptw_active,
+                        "target": 20,
+                        "trend": "down" if ptw_active <= 20 else "up",
+                        "status": _kpi_status(ptw_active, 20, lower_is_better=True),
+                    },
+                    {
+                        "id": "training_completion",
+                        "label": "Training Completion",
+                        "value": training_pct,
+                        "target": 90,
+                        "trend": "up" if training_pct >= 90 else "down",
+                        "status": _kpi_status(training_pct, 90),
+                    },
                 ],
             }
 
         if operation == "org_admin_activities_list":
-            return {
-                "items": [
-                    {"id": "1", "type": "incident", "description": "New incident reported at Site A", "user": "John Smith", "timestamp": "2 minutes ago"},
-                    {"id": "2", "type": "permit", "description": "Hot work permit approved for Zone B", "user": "Sarah Lee", "timestamp": "15 minutes ago"},
-                    {"id": "3", "type": "audit", "description": "Monthly safety audit completed", "user": "Mike Chen", "timestamp": "1 hour ago"},
-                    {"id": "4", "type": "user", "description": "New user added: James Wilson", "user": "Admin", "timestamp": "2 hours ago"},
-                    {"id": "5", "type": "incident", "description": "Near miss reported at Warehouse C", "user": "Tom Brown", "timestamp": "3 hours ago"},
-                ],
-                "total": 248,
-            }
+            from sqlalchemy import select as sa_select, desc
+            from app.models.incidents import Incident
+            from app.models.permits import Permit
+            from app.models.compliance import AuditExecution
+            from app.models.audit_log import AuditLog
+            from app.models.auth import User as AuthUser
+            from datetime import timezone as _tz
+
+            def _utc_iso(dt) -> str | None:
+                if dt is None:
+                    return None
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=_tz.utc)
+                return dt.isoformat()
+
+            tid = user.tenant_id
+            raw: list[dict] = []
+
+            # Incidents
+            for inc in db.scalars(
+                sa_select(Incident).where(Incident.tenant_id == tid)
+                .order_by(desc(Incident.created_at)).limit(60)
+            ).all():
+                desc_text = (inc.description or f"{inc.incident_type} incident reported")[:120]
+                raw.append({
+                    "id": f"inc_{inc.id}",
+                    "type": "Incident",
+                    "description": desc_text,
+                    "actor_id": inc.reporter_user_id,
+                    "timestamp": _utc_iso(inc.created_at),
+                })
+
+            # Permits
+            for p in db.scalars(
+                sa_select(Permit).where(Permit.tenant_id == tid)
+                .order_by(desc(Permit.created_at)).limit(60)
+            ).all():
+                raw.append({
+                    "id": f"perm_{p.id}",
+                    "type": "Permit",
+                    "description": f"Permit {p.permit_ref} ({p.permit_type}) — {p.status}",
+                    "actor_id": p.requester_user_id,
+                    "timestamp": _utc_iso(p.created_at),
+                })
+
+            # Audits
+            for a in db.scalars(
+                sa_select(AuditExecution).where(AuditExecution.tenant_id == tid)
+                .order_by(desc(AuditExecution.created_at)).limit(60)
+            ).all():
+                raw.append({
+                    "id": f"audit_{a.id}",
+                    "type": "Audit",
+                    "description": f"Safety audit {a.status}" + (f" at site {a.site_id[:8]}" if a.site_id else ""),
+                    "actor_id": a.auditor_user_id,
+                    "timestamp": _utc_iso(a.created_at),
+                })
+
+            # Audit logs (User / System platform events)
+            for log in db.scalars(
+                sa_select(AuditLog).where(AuditLog.tenant_id == tid)
+                .order_by(desc(AuditLog.created_at)).limit(60)
+            ).all():
+                activity_type = "System" if (log.actor_user_id or "").lower() in ("system", "") else "User"
+                raw.append({
+                    "id": f"log_{log.id}",
+                    "type": activity_type,
+                    "description": f"{log.action.replace('_', ' ').title()} — {log.resource_type}",
+                    "actor_id": log.actor_user_id,
+                    "timestamp": _utc_iso(log.created_at),
+                })
+
+            # Sort merged list newest-first, cap at 200
+            raw.sort(key=lambda x: x["timestamp"] or "", reverse=True)
+            raw = raw[:200]
+
+            # Batch-resolve actor display names
+            actor_ids = {r["actor_id"] for r in raw if r.get("actor_id")}
+            name_map: dict[str, str] = {}
+            if actor_ids:
+                for u in db.scalars(sa_select(AuthUser).where(AuthUser.id.in_(actor_ids))).all():
+                    name_map[u.id] = u.display_name or u.email
+
+            items = []
+            for r in raw:
+                aid = r.pop("actor_id", None)
+                r["user"] = name_map.get(aid, aid or "System")
+                items.append(r)
+
+            return {"items": items, "total": len(items)}
 
         if operation == "org_admin_shifts_list":
             from app.repositories.generic_repository import GenericRepository
             repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, module="org_admin", record_type="shift")
+            records = repo.list_by_type(user.tenant_id, module="org_admin", record_type="shift", limit=200)
             if records:
                 return {"items": [r.payload for r in records]}
+            return {"items": []}
+
+        if operation == "org_admin_engagement_get":
+            from sqlalchemy import func, select as sa_select
+            from app.models.people import Employee, TrainingCompletion, TrainingRequirement
+            from app.models.compliance import AuditExecution, Capa
+            from app.models.incidents import Incident
+            from app.repositories.generic_repository import GenericRepository
+
+            tid = user.tenant_id
+
+            emp_count = db.scalar(
+                sa_select(func.count()).where(Employee.tenant_id == tid)
+            ) or 0
+
+            # Reporting rate: employees who reported at least 1 incident / total employees
+            reporters = db.scalar(
+                sa_select(func.count(func.distinct(Incident.reporter_user_id)))
+                .where(Incident.tenant_id == tid)
+            ) or 0
+            reporting_rate = round(min((reporters / max(emp_count, 1)) * 100, 100))
+
+            # Training / toolbox attendance
+            total_completions = db.scalar(
+                sa_select(func.count()).where(TrainingCompletion.tenant_id == tid)
+            ) or 0
+            total_requirements = db.scalar(
+                sa_select(func.count()).where(TrainingRequirement.tenant_id == tid)
+            ) or 0
+            required_total = max(total_requirements, 1) * max(emp_count, 1)
+            toolbox_pct = round(min((total_completions / required_total) * 100, 100))
+
+            # Safety observations: near-miss + observation incidents
+            obs_count = db.scalar(
+                sa_select(func.count())
+                .where(Incident.tenant_id == tid)
+                .where(Incident.incident_type.ilike("%near%miss%"))
+            ) or 0
+            safety_obs_pct = round(min((obs_count / max(emp_count, 1)) * 100, 100))
+
+            # Site participation: audits completed / total audits
+            total_audits = db.scalar(
+                sa_select(func.count()).where(AuditExecution.tenant_id == tid)
+            ) or 0
+            completed_audits = db.scalar(
+                sa_select(func.count())
+                .where(AuditExecution.tenant_id == tid)
+                .where(AuditExecution.status == "completed")
+            ) or 0
+            site_participation = round((completed_audits / total_audits * 100) if total_audits else 0)
+
+            # Safety walks: unique auditors as proxy
+            unique_auditors = db.scalar(
+                sa_select(func.count(func.distinct(AuditExecution.auditor_user_id)))
+                .where(AuditExecution.tenant_id == tid)
+            ) or 0
+            safety_walks_pct = round(min((unique_auditors / max(emp_count, 1)) * 100, 100))
+
+            # Survey score: derive from training + reporting composite (0–5 scale)
+            composite = (reporting_rate + toolbox_pct + site_participation) / 3
+            survey_score = round(max(1.0, min(composite / 20, 5.0)), 1)
+            survey_completion = round(min((total_completions / max(required_total, 1)) * 100 + 10, 100))
+
+            # Open actions from Capa table
+            open_capas = (
+                db.scalars(
+                    sa_select(Capa)
+                    .where(Capa.tenant_id == tid)
+                    .where(Capa.status == "open")
+                    .limit(5)
+                ).all()
+            )
+
+            def _capa_status(capa):
+                if capa.due_date is None:
+                    return "Due Soon"
+                from app.helpers.datetime import utc_now
+                from datetime import timezone
+                now = utc_now().date()
+                delta = (capa.due_date - now).days
+                if delta < 0:
+                    return "Overdue"
+                if delta == 0:
+                    return "Due Today"
+                if delta == 1:
+                    return "Due Tomorrow"
+                return f"Due in {delta}d"
+
+            open_actions = [
+                {
+                    "id": c.id,
+                    "text": f"Resolve CAPA — {c.source_type} ({c.severity} severity)",
+                    "status": _capa_status(c),
+                }
+                for c in open_capas
+            ]
+
+            # Top recognitions: employees with most training completions
+            top_rows = db.execute(
+                sa_select(TrainingCompletion.employee_id, func.count().label("cnt"))
+                .where(TrainingCompletion.tenant_id == tid)
+                .group_by(TrainingCompletion.employee_id)
+                .order_by(func.count().desc())
+                .limit(3)
+            ).all()
+
+            top_emp_ids = [r.employee_id for r in top_rows]
+            top_employees = db.scalars(
+                sa_select(Employee).where(Employee.id.in_(top_emp_ids))
+            ).all() if top_emp_ids else []
+
+            emp_map = {e.id: e.name for e in top_employees}
+            recognition_types = ["gold", "silver", "bronze"]
+            top_recognitions = [
+                {"name": emp_map.get(r.employee_id, "Employee"), "type": recognition_types[i]}
+                for i, r in enumerate(top_rows)
+            ]
+
             return {
-                "items": [
-                    {"id": "1", "name": "Morning Shift", "type": "Morning", "start": "06:00", "end": "14:00", "workers": 85, "supervisor": "Alex Johnson", "status": "active"},
-                    {"id": "2", "name": "Afternoon Shift", "type": "Afternoon", "start": "14:00", "end": "22:00", "workers": 92, "supervisor": "Maria Garcia", "status": "active"},
-                    {"id": "3", "name": "Night Shift", "type": "Night", "start": "22:00", "end": "06:00", "workers": 70, "supervisor": "David Kim", "status": "active"},
-                ],
+                "reportingRate": reporting_rate,
+                "surveyScore": survey_score,
+                "surveyCompletionPct": survey_completion,
+                "observations": {
+                    "safetyObservations": safety_obs_pct,
+                    "safetyWalks": safety_walks_pct,
+                    "toolboxAttendance": toolbox_pct,
+                    "siteParticipation": site_participation,
+                },
+                "openActions": open_actions,
+                "topRecognitions": top_recognitions,
+                "employeeCount": emp_count,
             }
 
         if operation == "org_admin_imports_list":

@@ -883,6 +883,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: u.email || trimmedEmail,
             role: "Admin",
             initials,
+            orgCode: u.tenant_id || undefined,
             allowedModules: ALL_MODULE_LABELS,
             is_superadmin: Boolean(tokenData.is_superadmin ?? u.is_superadmin),
             ...(isFirstLogin && {

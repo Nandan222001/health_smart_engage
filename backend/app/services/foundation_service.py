@@ -64,8 +64,10 @@ class FoundationService:
             payload["display_name"] = payload.pop("name")
         payload.setdefault("display_name", payload.get("email", "User"))
 
-        # Capture role/site for the email then drop from DB payload
-        role_label = str(payload.pop("role", "") or payload.pop("roles", "") or "Team Member")
+        # Capture role for email; keep it in payload so it's stored on the user record
+        role_label = str(payload.get("role", "") or payload.get("roles", "") or "Team Member")
+        if "roles" in payload:
+            payload.pop("roles")  # normalise multi-value field; role is already set
         site_label = str(payload.pop("site", "") or "")
 
         created_user = self.repo.create(User, user.tenant_id, payload)

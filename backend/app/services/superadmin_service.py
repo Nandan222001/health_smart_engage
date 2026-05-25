@@ -77,11 +77,25 @@ class SuperAdminService:
 
     def list_all_users(self) -> dict:
         users = self.db.scalars(select(DomainUser).order_by(DomainUser.created_at.desc()).limit(200)).all()
+
+        # Bulk-load tenants for name lookup
+        tenant_ids = {u.tenant_id for u in users if u.tenant_id}
+        tenant_names: dict[str, str] = {}
+        if tenant_ids:
+            for t in self.db.scalars(select(Tenant).where(Tenant.id.in_(tenant_ids))).all():
+                tenant_names[t.id] = t.name
+
         return {
             "items": [
                 {
-                    "id": u.id, "email": u.email, "display_name": u.display_name,
-                    "status": u.status, "tenant_id": u.tenant_id,
+                    "id": u.id,
+                    "email": u.email,
+                    "display_name": u.display_name,
+                    "status": u.status,
+                    "tenant_id": u.tenant_id,
+                    "tenant_name": tenant_names.get(u.tenant_id) if u.tenant_id else None,
+                    "is_superadmin": bool(u.is_superadmin),
+                    "role": "Super Admin" if u.is_superadmin else (u.role or None),
                     "created_at": u.created_at.isoformat() if u.created_at else None,
                 }
                 for u in users
@@ -159,22 +173,76 @@ class SuperAdminService:
     # ── Platform Analytics ────────────────────────────────────────────────────
 
     def get_platform_analytics(self) -> dict:
-        from app.models.domain import Incident, Capa, AuditExecution, Permit
-        from sqlalchemy import func
+        from app.models.domain import Incident, Capa, AuditExecution, Permit, HazardObservation
+        from app.models.audit_log import AuditLog
+        from sqlalchemy import func, extract
+        from datetime import datetime, timezone
+
         tenants = self.db.scalars(select(Tenant)).all()
         total_incidents = self.db.scalar(select(func.count(Incident.id))) or 0
         total_capas = self.db.scalar(select(func.count(Capa.id))) or 0
         total_audits = self.db.scalar(select(func.count(AuditExecution.id))) or 0
         total_permits = self.db.scalar(select(func.count(Permit.id))) or 0
+        total_users = self.db.scalar(select(func.count(DomainUser.id))) or 0
+        total_violations = self.db.scalar(select(func.count(HazardObservation.id))) or 0
+
+        # Tenant growth — last 6 months
+        now = datetime.now(timezone.utc)
+        tenant_growth = []
+        for i in range(5, -1, -1):
+            offset = now.month - 1 - i
+            year = now.year + (offset // 12)
+            month = (offset % 12) + 1
+            month_label = f"{year}-{month:02d}"
+            count = self.db.scalar(
+                select(func.count(Tenant.id)).where(
+                    extract("year", Tenant.created_at) == year,
+                    extract("month", Tenant.created_at) == month,
+                )
+            ) or 0
+            tenant_growth.append({"month": month_label, "count": count})
+
+        # New tenants this month
+        new_tenants_this_month = self.db.scalar(
+            select(func.count(Tenant.id)).where(
+                extract("year", Tenant.created_at) == now.year,
+                extract("month", Tenant.created_at) == now.month,
+            )
+        ) or 0
+
+        # Incidents this month
+        incidents_this_month = self.db.scalar(
+            select(func.count(Incident.id)).where(
+                extract("year", Incident.created_at) == now.year,
+                extract("month", Incident.created_at) == now.month,
+            )
+        ) or 0
+
+        # Top incident types
+        rows = self.db.execute(
+            select(Incident.incident_type, func.count(Incident.id).label("cnt"))
+            .group_by(Incident.incident_type)
+            .order_by(func.count(Incident.id).desc())
+            .limit(5)
+        ).all()
+        top_incidents_by_type = [{"type": r[0] or "Unknown", "count": r[1]} for r in rows]
+
         return {
             "total_tenants": len(tenants),
             "active_tenants": sum(1 for t in tenants if t.status == "active"),
+            "total_users": total_users,
             "total_incidents": total_incidents,
             "total_capas": total_capas,
             "total_audits": total_audits,
             "total_permits": total_permits,
-            "incident_trend": [],  # placeholder for chart data
-            "compliance_score": 87.5,  # placeholder
+            "total_violations": total_violations,
+            "compliance_rate": 87.5,
+            "compliance_score": 87.5,
+            "incidents_this_month": incidents_this_month,
+            "new_tenants_this_month": new_tenants_this_month,
+            "tenant_growth": tenant_growth,
+            "top_incidents_by_type": top_incidents_by_type,
+            "incident_trend": top_incidents_by_type,
         }
 
     def get_incident_analytics(self) -> dict:

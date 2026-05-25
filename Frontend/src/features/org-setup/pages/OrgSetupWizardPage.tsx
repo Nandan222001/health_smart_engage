@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "@/app/context/AuthContext";
 import {
@@ -24,6 +24,8 @@ import {
   Clock,
 } from "lucide-react";
 import {
+  useGetOrgSetupProgressQuery,
+  useGetOrgSetupStep1Query,
   useGetOrgSetupStep3SitesQuery,
   useGetOrgSetupStep4UsersQuery,
   useGetOrgSetupStep6DocumentsQuery,
@@ -39,7 +41,29 @@ import {
   useImportOrgSetupDataMutation,
   useSaveOrgSetupStep7Mutation,
   useActivateOrganizationMutation,
+  useHrmsImportMutation,
+  useParseOrgExcelMutation,
+  useConnectOrgApiMutation,
 } from "@/features/org-setup/api/orgSetupApi";
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+const API_BASE = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
+
+async function downloadTemplate(path: string, filename: string) {
+  const token = localStorage.getItem("hse_jwt");
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) return;
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -213,116 +237,352 @@ function StepIndicator({
 
 // ── Step 1: Organization Details ───────────────────────────────────────────────
 
+type OrgForm = {
+  organizationName: string; industryType: string; employeeCount: string;
+  numberOfSites: string; officialEmail: string; contactNumber: string;
+  country: string; timezone: string; headquartersAddress: string;
+};
+
+const EMPTY_FORM: OrgForm = {
+  organizationName: "", industryType: "", employeeCount: "",
+  numberOfSites: "", officialEmail: "", contactNumber: "",
+  country: "", timezone: "", headquartersAddress: "",
+};
+
+function OrgDetailsForm({ form, set }: { form: OrgForm; set: (k: string, v: string) => void }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label className={labelCls} style={labelStyle}>Organization Name *</label>
+        <input className={inputCls} style={inputStyle} placeholder="Enter organization name" value={form.organizationName} onChange={(e) => set("organizationName", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Industry Type</label>
+        <select className={inputCls} style={inputStyle} value={form.industryType} onChange={(e) => set("industryType", e.target.value)}>
+          <option value="">Select industry</option>
+          {INDUSTRY_TYPES.map((i) => <option key={i} value={i}>{i}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Employee Count</label>
+        <input type="number" className={inputCls} style={inputStyle} placeholder="0" value={form.employeeCount} onChange={(e) => set("employeeCount", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Number of Sites</label>
+        <input type="number" className={inputCls} style={inputStyle} placeholder="0" value={form.numberOfSites} onChange={(e) => set("numberOfSites", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Official Email *</label>
+        <input type="email" className={inputCls} style={inputStyle} placeholder="admin@company.com" value={form.officialEmail} onChange={(e) => set("officialEmail", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Contact Number</label>
+        <input className={inputCls} style={inputStyle} placeholder="+1 234 567 8900" value={form.contactNumber} onChange={(e) => set("contactNumber", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Country</label>
+        <input className={inputCls} style={inputStyle} placeholder="e.g. United States" value={form.country} onChange={(e) => set("country", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Timezone</label>
+        <select className={inputCls} style={inputStyle} value={form.timezone} onChange={(e) => set("timezone", e.target.value)}>
+          <option value="">Select timezone</option>
+          {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+        </select>
+      </div>
+      <div className="md:col-span-2">
+        <label className={labelCls} style={labelStyle}>Headquarters Address</label>
+        <textarea className={inputCls} style={inputStyle} rows={3} placeholder="Enter full address..." value={form.headquartersAddress} onChange={(e) => set("headquartersAddress", e.target.value)} />
+      </div>
+    </div>
+  );
+}
+
 function Step1({
   onNext,
+  dataEntryOption: parentDataEntryOption,
+  onDataEntryChange,
 }: {
   onNext: () => void;
+  dataEntryOption: "manual" | "excel" | "api";
+  onDataEntryChange: (opt: "manual" | "excel" | "api") => void;
 }) {
-  const [saveStep1, { isLoading }] = useSaveOrgSetupStep1Mutation();
+  const [saveStep1, { isLoading: saving }] = useSaveOrgSetupStep1Mutation();
+  const [parseExcel, { isLoading: parsing }] = useParseOrgExcelMutation();
+  const [connectApi, { isLoading: connecting }] = useConnectOrgApiMutation();
+  const { data: saved } = useGetOrgSetupStep1Query();
+  const excelRef = useRef<HTMLInputElement>(null);
 
-  const [form, setForm] = useState({
-    organizationName: "",
-    industryType: "",
-    employeeCount: "",
-    numberOfSites: "",
-    officialEmail: "",
-    contactNumber: "",
-    country: "",
-    timezone: "",
-    headquartersAddress: "",
-    dataEntryOption: "manual" as "manual" | "excel" | "api",
-  });
+  const [form, setForm] = useState<OrgForm>(EMPTY_FORM);
+  const [excelStatus, setExcelStatus] = useState<"idle" | "success" | "error">("idle");
+  const [excelMsg, setExcelMsg] = useState("");
+  const [apiUrl, setApiUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [apiToken, setApiToken] = useState("");
+  const [apiStatus, setApiStatus] = useState<"idle" | "success" | "error">("idle");
+  const [apiMsg, setApiMsg] = useState("");
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Pre-fill saved data
+  useEffect(() => {
+    if (saved && Object.keys(saved).length > 0) {
+      const s = saved as Record<string, unknown>;
+      setForm({
+        organizationName: String(s.organizationName ?? ""),
+        industryType: String(s.industryType ?? ""),
+        employeeCount: String(s.employeeCount ?? ""),
+        numberOfSites: String(s.numberOfSites ?? ""),
+        officialEmail: String(s.officialEmail ?? ""),
+        contactNumber: String(s.contactNumber ?? ""),
+        country: String(s.country ?? ""),
+        timezone: String(s.timezone ?? ""),
+        headquartersAddress: String(s.headquartersAddress ?? ""),
+      });
+      if (s.dataEntryOption && ["manual", "excel", "api"].includes(s.dataEntryOption as string)) {
+        onDataEntryChange(s.dataEntryOption as "manual" | "excel" | "api");
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved]);
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setExcelStatus("idle");
+    const fd = new FormData();
+    fd.append("file", file);
+    const result = await parseExcel(fd);
+    // baseApi unwraps the envelope: result.data is already the org fields dict directly
+    const parsed = "data" in result ? (result.data as Record<string, string>) : {};
+    const fieldCount = Object.keys(parsed).filter((k) => parsed[k]).length;
+    if (fieldCount > 0) {
+      setForm((f) => ({ ...f, ...parsed }));
+      setExcelStatus("success");
+      setExcelMsg(`${fieldCount} fields imported — review and edit below, then click Next`);
+    } else {
+      setExcelStatus("error");
+      setExcelMsg("Could not read org details from file. Make sure it uses the template format.");
+    }
+    if (excelRef.current) excelRef.current.value = "";
+  };
+
+  const handleApiConnect = async () => {
+    if (!apiUrl.trim()) { setApiStatus("error"); setApiMsg("Please enter an API URL"); return; }
+    setApiStatus("idle");
+    const result = await connectApi({ url: apiUrl.trim(), api_key: apiKey.trim(), token: apiToken.trim() });
+    if ("data" in result && result.data) {
+      const d = result.data as Record<string, string>;
+      const fieldCount = Object.keys(d).filter((k) => d[k]).length;
+      if (fieldCount > 0) {
+        setForm((f) => ({ ...f, ...d }));
+        setApiStatus("success");
+        setApiMsg(`Connected! ${fieldCount} fields populated — review below and click Next`);
+      } else {
+        setApiStatus("success");
+        setApiMsg("Connected successfully. No matching org fields found — fill in the form below manually.");
+      }
+    } else {
+      setApiStatus("error");
+      setApiMsg("Connection failed — check the URL and try again");
+    }
+  };
 
   const handleNext = async () => {
     await saveStep1({
       ...form,
-      employeeCount: Number(form.employeeCount),
-      numberOfSites: Number(form.numberOfSites),
+      employeeCount: Number(form.employeeCount) || 0,
+      numberOfSites: Number(form.numberOfSites) || 0,
+      dataEntryOption: parentDataEntryOption,
+      ...(parentDataEntryOption === "api" ? { apiUrl, apiKey, apiToken } : {}),
     });
     onNext();
   };
 
-  const dataEntryOptions = [
-    { value: "manual", label: "Manual Entry", desc: "Enter data directly through the web interface" },
-    { value: "excel", label: "Excel Upload", desc: "Import data using Excel or CSV templates" },
-    { value: "api", label: "API Integration", desc: "Connect via REST API for automated data sync" },
+  const methods = [
+    {
+      key: "manual" as const,
+      label: "Manual Entry",
+      icon: "✏️",
+      desc: "Fill in the organization details directly using the form",
+      color: "#4A57B9",
+      bg: "#EEF2FF",
+    },
+    {
+      key: "excel" as const,
+      label: "Excel / CSV Upload",
+      icon: "📊",
+      desc: "Upload a spreadsheet to automatically populate organization details",
+      color: "#059669",
+      bg: "#D1FAE5",
+    },
+    {
+      key: "api" as const,
+      label: "API Integration",
+      icon: "🔗",
+      desc: "Connect to your existing ERP, HRMS, or external system via REST API",
+      color: "#7C3AED",
+      bg: "#F5F3FF",
+    },
   ];
+
+  const active = parentDataEntryOption;
 
   return (
     <div className="space-y-5">
+      {/* Method Selector */}
       <div className={cardCls} style={cardStyle}>
-        <h2 className="text-base font-bold mb-4" style={{ color: "#111827" }}>Organization Information</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className={labelCls} style={labelStyle}>Organization Name *</label>
-            <input className={inputCls} style={inputStyle} placeholder="Enter organization name" value={form.organizationName} onChange={(e) => set("organizationName", e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Industry Type</label>
-            <select className={inputCls} style={inputStyle} value={form.industryType} onChange={(e) => set("industryType", e.target.value)}>
-              <option value="">Select industry</option>
-              {INDUSTRY_TYPES.map((i) => <option key={i} value={i}>{i}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Employee Count</label>
-            <input type="number" className={inputCls} style={inputStyle} placeholder="0" value={form.employeeCount} onChange={(e) => set("employeeCount", e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Number of Sites</label>
-            <input type="number" className={inputCls} style={inputStyle} placeholder="0" value={form.numberOfSites} onChange={(e) => set("numberOfSites", e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Official Email *</label>
-            <input type="email" className={inputCls} style={inputStyle} placeholder="admin@company.com" value={form.officialEmail} onChange={(e) => set("officialEmail", e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Contact Number</label>
-            <input className={inputCls} style={inputStyle} placeholder="+1 234 567 8900" value={form.contactNumber} onChange={(e) => set("contactNumber", e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Country</label>
-            <input className={inputCls} style={inputStyle} placeholder="e.g. United States" value={form.country} onChange={(e) => set("country", e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Timezone</label>
-            <select className={inputCls} style={inputStyle} value={form.timezone} onChange={(e) => set("timezone", e.target.value)}>
-              <option value="">Select timezone</option>
-              {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className={labelCls} style={labelStyle}>Headquarters Address</label>
-            <textarea className={inputCls} style={inputStyle} rows={3} placeholder="Enter full address..." value={form.headquartersAddress} onChange={(e) => set("headquartersAddress", e.target.value)} />
-          </div>
-        </div>
-      </div>
-
-      <div className={cardCls} style={cardStyle}>
-        <h2 className="text-base font-bold mb-4" style={{ color: "#111827" }}>Data Entry Preference</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {dataEntryOptions.map((opt) => (
+        <h2 className="text-base font-bold mb-1" style={{ color: "#111827" }}>How would you like to set up your organization?</h2>
+        <p className="text-xs mb-4" style={{ color: "#6B7280" }}>Select a method — your choice determines how data is entered in all steps.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {methods.map((m) => (
             <button
-              key={opt.value}
+              key={m.key}
               type="button"
-              onClick={() => set("dataEntryOption", opt.value)}
-              className="p-4 rounded-xl border-2 text-left transition-all"
-              style={form.dataEntryOption === opt.value
-                ? { borderColor: "#4A57B9", background: "#EEF2FF" }
+              onClick={() => onDataEntryChange(m.key)}
+              className="p-5 rounded-2xl border-2 text-left transition-all"
+              style={active === m.key
+                ? { borderColor: m.color, background: m.bg, boxShadow: `0 0 0 3px ${m.color}22` }
                 : { borderColor: "#E3E9F6", background: "#fff" }}
             >
-              <div className="text-sm font-bold mb-1" style={{ color: form.dataEntryOption === opt.value ? "#4A57B9" : "#111827" }}>{opt.label}</div>
-              <div className="text-xs" style={{ color: "#6B7280" }}>{opt.desc}</div>
+              <div className="text-2xl mb-2">{m.icon}</div>
+              <div className="text-sm font-bold mb-1" style={{ color: active === m.key ? m.color : "#111827" }}>{m.label}</div>
+              <div className="text-xs leading-relaxed" style={{ color: "#6B7280" }}>{m.desc}</div>
+              {active === m.key && (
+                <div className="mt-2 text-xs font-semibold px-2 py-0.5 rounded-full w-fit" style={{ background: m.color, color: "#fff" }}>Selected</div>
+              )}
             </button>
           ))}
         </div>
       </div>
 
+      {/* ── Manual Entry ── */}
+      {active === "manual" && (
+        <div className={cardCls} style={{ ...cardStyle, borderColor: "#4A57B9", borderWidth: 2 }}>
+          <h2 className="text-base font-bold mb-4" style={{ color: "#111827" }}>Organization Information</h2>
+          <OrgDetailsForm form={form} set={set} />
+        </div>
+      )}
+
+      {/* ── Excel / CSV Upload ── */}
+      {active === "excel" && (
+        <>
+          <div className={cardCls} style={{ ...cardStyle, borderColor: "#059669", borderWidth: 2 }}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-bold" style={{ color: "#111827" }}>Upload Organization Details</h2>
+              <button
+                className={secondaryBtnCls}
+                style={secondaryBtnStyle}
+                onClick={() => downloadTemplate("/org-setup/step1/template", "org_details_template.csv")}
+              >
+                <Download className="w-4 h-4" /> Download Template
+              </button>
+            </div>
+            <p className="text-xs mb-4" style={{ color: "#6B7280" }}>
+              Download the template, fill in your organization details, then upload the completed file.
+            </p>
+
+            {excelStatus === "success" && (
+              <div className="mb-4 px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: "#D1FAE5", color: "#059669" }}>
+                ✓ {excelMsg}
+              </div>
+            )}
+            {excelStatus === "error" && (
+              <div className="mb-4 px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: "#FEF2F2", color: "#EF4444" }}>
+                {excelMsg}
+              </div>
+            )}
+
+            <label
+              className="flex flex-col items-center justify-center w-full py-10 rounded-2xl border-2 border-dashed cursor-pointer transition-colors"
+              style={{ borderColor: "#6EE7B7", background: "#F0FDF4" }}
+            >
+              {parsing
+                ? <Loader2 className="w-10 h-10 mb-3 animate-spin" style={{ color: "#059669" }} />
+                : <Upload className="w-10 h-10 mb-3" style={{ color: "#059669" }} />}
+              <span className="text-sm font-bold" style={{ color: "#059669" }}>
+                {parsing ? "Parsing file…" : "Click to upload or drag & drop"}
+              </span>
+              <span className="text-xs mt-1" style={{ color: "#9CA3AF" }}>Excel (.xlsx, .xls) or CSV</span>
+              <input ref={excelRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} />
+            </label>
+          </div>
+
+          {/* Preview / edit form after upload */}
+          {excelStatus === "success" && (
+            <div className={cardCls} style={cardStyle}>
+              <h2 className="text-base font-bold mb-4" style={{ color: "#111827" }}>Review & Edit Details</h2>
+              <OrgDetailsForm form={form} set={set} />
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── API Integration ── */}
+      {active === "api" && (
+        <>
+          <div className={cardCls} style={{ ...cardStyle, borderColor: "#7C3AED", borderWidth: 2 }}>
+            <h2 className="text-base font-bold mb-1" style={{ color: "#111827" }}>Connect via API</h2>
+            <p className="text-xs mb-4" style={{ color: "#6B7280" }}>
+              Enter your system's API endpoint and credentials. We'll pull your organization details automatically.
+            </p>
+
+            {apiStatus === "success" && (
+              <div className="mb-4 px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: "#F5F3FF", color: "#7C3AED" }}>
+                ✓ {apiMsg}
+              </div>
+            )}
+            {apiStatus === "error" && (
+              <div className="mb-4 px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: "#FEF2F2", color: "#EF4444" }}>
+                {apiMsg}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className={labelCls} style={labelStyle}>API Endpoint URL *</label>
+                <input className={inputCls} style={inputStyle} placeholder="https://api.yourcompany.com/org/info" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls} style={labelStyle}>API Key</label>
+                  <input className={inputCls} style={inputStyle} placeholder="Your API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls} style={labelStyle}>Bearer Token</label>
+                  <input className={inputCls} style={inputStyle} placeholder="Bearer token (if applicable)" value={apiToken} onChange={(e) => setApiToken(e.target.value)} />
+                </div>
+              </div>
+              <button
+                className={primaryBtnCls}
+                style={{ ...primaryBtnStyle, background: "linear-gradient(135deg,#7C3AED,#9F67F5)" }}
+                onClick={handleApiConnect}
+                disabled={connecting}
+              >
+                {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                {connecting ? "Connecting…" : "Connect & Pull Data"}
+              </button>
+            </div>
+          </div>
+
+          {/* Review form after API pull (or always show for manual fill-in) */}
+          <div className={cardCls} style={cardStyle}>
+            <h2 className="text-base font-bold mb-4" style={{ color: "#111827" }}>
+              {apiStatus === "success" ? "Review & Edit Details" : "Organization Details"}
+            </h2>
+            {apiStatus !== "success" && (
+              <p className="text-xs mb-4" style={{ color: "#9CA3AF" }}>
+                Connect to your API above to auto-fill, or enter details manually below.
+              </p>
+            )}
+            <OrgDetailsForm form={form} set={set} />
+          </div>
+        </>
+      )}
+
       <div className="flex justify-end">
-        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleNext} disabled={isLoading}>
-          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleNext} disabled={saving || (active === "excel" && excelStatus === "idle" && !form.organizationName)}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
           Next Step <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -537,14 +797,18 @@ function Step2({
 function Step3({
   onNext,
   onBack,
+  dataEntryOption,
 }: {
   onNext: () => void;
   onBack: () => void;
+  dataEntryOption: "manual" | "excel" | "api";
 }) {
   const { data: sites = [], isLoading: sitesLoading, refetch } = useGetOrgSetupStep3SitesQuery();
   const [createSite, { isLoading: creating }] = useCreateOrgSetupSiteMutation();
   const [bulkUpload, { isLoading: uploading }] = useBulkUploadOrgSetupSitesMutation();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState("");
 
   const [form, setForm] = useState({ name: "", type: "", address: "" });
   const [error, setError] = useState("");
@@ -560,59 +824,109 @@ function Step3({
   const handleBulkFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError("");
+    setUploadSuccess(null);
     const fd = new FormData();
     fd.append("file", file);
-    await bulkUpload(fd);
+    const result = await bulkUpload(fd);
+    if ("data" in result) {
+      const d = result.data as { count?: number };
+      setUploadSuccess(d?.count ?? 0);
+    } else {
+      setUploadError("Upload failed. Check that your file has Name, Type, Address columns.");
+    }
     refetch();
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  const bulkUploadCard = (
+    <div className={cardCls} style={{ ...cardStyle, borderColor: dataEntryOption === "excel" ? "#4A57B9" : "#E3E9F6", borderWidth: dataEntryOption === "excel" ? 2 : 1 }}>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-bold" style={{ color: "#111827" }}>
+          {dataEntryOption === "excel" ? "Upload Sites — Excel / CSV" : "Bulk Upload"}
+        </h2>
+        {dataEntryOption === "excel" && (
+          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full" style={{ background: "#EEF2FF", color: "#4A57B9" }}>Preferred method</span>
+        )}
+      </div>
+      {uploadSuccess !== null && (
+        <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#D1FAE5", color: "#059669" }}>
+          ✓ {uploadSuccess} site{uploadSuccess !== 1 ? "s" : ""} imported successfully
+        </div>
+      )}
+      {uploadError && (
+        <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#FEF2F2", color: "#EF4444" }}>{uploadError}</div>
+      )}
+      <label
+        className="flex flex-col items-center justify-center w-full py-8 rounded-xl border-2 border-dashed cursor-pointer transition-colors mb-3"
+        style={{ borderColor: "#C7D2FE", background: uploading ? "#F5F7FF" : "#F8FAFF" }}
+      >
+        {uploading
+          ? <Loader2 className="w-8 h-8 mb-2 animate-spin" style={{ color: "#4A57B9" }} />
+          : <Upload className="w-8 h-8 mb-2" style={{ color: "#4A57B9" }} />}
+        <span className="text-sm font-semibold" style={{ color: "#4A57B9" }}>
+          {uploading ? "Uploading…" : "Click to upload or drag & drop"}
+        </span>
+        <span className="text-xs mt-1" style={{ color: "#9CA3AF" }}>Excel (.xlsx, .xls) or CSV — columns: Name, Type, Address</span>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleBulkFile} />
+      </label>
+      <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={() => downloadTemplate("/org-setup/step3/template", "sites_template.csv")}>
+        <Download className="w-4 h-4" /> Download Template
+      </button>
+    </div>
+  );
+
+  const manualCard = (
+    <div className={cardCls} style={cardStyle}>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-bold" style={{ color: "#111827" }}>Add a Site Manually</h2>
+        {dataEntryOption !== "manual" && (
+          <span className="text-xs" style={{ color: "#9CA3AF" }}>optional</span>
+        )}
+      </div>
+      {error && <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#FEF2F2", color: "#EF4444" }}>{error}</div>}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+        <div>
+          <label className={labelCls} style={labelStyle}>Site Name *</label>
+          <input className={inputCls} style={inputStyle} placeholder="Site name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Type</label>
+          <select className={inputCls} style={inputStyle} value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
+            <option value="">Select type</option>
+            {SITE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Address</label>
+          <input className={inputCls} style={inputStyle} placeholder="Address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+        </div>
+      </div>
+      <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleAdd} disabled={creating}>
+        {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+        Add Site
+      </button>
+    </div>
+  );
+
   return (
     <div className="space-y-5">
-      <div className={cardCls} style={cardStyle}>
-        <h2 className="text-base font-bold mb-4" style={{ color: "#111827" }}>Add a Site</h2>
-        {error && <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#FEF2F2", color: "#EF4444" }}>{error}</div>}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-          <div>
-            <label className={labelCls} style={labelStyle}>Site Name *</label>
-            <input className={inputCls} style={inputStyle} placeholder="Site name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+      {dataEntryOption === "excel" ? (
+        <>{bulkUploadCard}{manualCard}</>
+      ) : dataEntryOption === "api" ? (
+        <>
+          <div className={cardCls} style={{ ...cardStyle, borderColor: "#4A57B9", borderWidth: 2 }}>
+            <h2 className="text-base font-bold mb-2" style={{ color: "#111827" }}>API Integration — Sites</h2>
+            <p className="text-sm" style={{ color: "#6B7280" }}>
+              Your API integration preference will sync sites automatically once the platform is active. You can still add sites manually below, or upload a CSV to seed your initial data.
+            </p>
           </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Type</label>
-            <select className={inputCls} style={inputStyle} value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-              <option value="">Select type</option>
-              {SITE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Address</label>
-            <input className={inputCls} style={inputStyle} placeholder="Address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
-          </div>
-        </div>
-        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleAdd} disabled={creating}>
-          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          Add Site
-        </button>
-      </div>
-
-      {/* Bulk Upload */}
-      <div className={cardCls} style={cardStyle}>
-        <h2 className="text-base font-bold mb-3" style={{ color: "#111827" }}>Bulk Upload</h2>
-        <div className="flex items-center gap-3 flex-wrap">
-          <label
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-colors"
-            style={{ borderColor: "#E3E9F6", color: "#4A57B9" }}
-          >
-            <Upload className="w-4 h-4" />
-            {uploading ? "Uploading…" : "Upload Excel File"}
-            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleBulkFile} />
-          </label>
-          <button className={secondaryBtnCls} style={secondaryBtnStyle}>
-            <Download className="w-4 h-4" /> Download Template
-          </button>
-          <span className="text-xs" style={{ color: "#9CA3AF" }}>Supported: .xlsx, .xls, .csv</span>
-        </div>
-      </div>
+          {bulkUploadCard}
+          {manualCard}
+        </>
+      ) : (
+        <>{manualCard}{bulkUploadCard}</>
+      )}
 
       {/* Sites Table */}
       <div className={cardCls} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
@@ -662,19 +976,27 @@ function Step3({
 function Step4({
   onNext,
   onBack,
+  dataEntryOption,
 }: {
   onNext: () => void;
   onBack: () => void;
+  dataEntryOption: "manual" | "excel" | "api";
 }) {
   const { data: users = [], isLoading: usersLoading, refetch } = useGetOrgSetupStep4UsersQuery();
   const [createUser, { isLoading: creating }] = useCreateOrgSetupUserMutation();
   const [bulkUpload, { isLoading: uploading }] = useBulkUploadOrgSetupUsersMutation();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [hrmsImport, { isLoading: hrmsLoading }] = useHrmsImportMutation();
+
   const [form, setForm] = useState({ name: "", email: "", role: "", department: "" });
   const [error, setError] = useState("");
+  const [uploadSuccess, setUploadSuccess] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState("");
   const [showHrmsModal, setShowHrmsModal] = useState(false);
   const [hrmsUrl, setHrmsUrl] = useState("");
+  const [hrmsToken, setHrmsToken] = useState("");
+  const [hrmsError, setHrmsError] = useState("");
 
   const handleAdd = async () => {
     if (!form.name.trim() || !form.email.trim()) { setError("Name and email are required"); return; }
@@ -687,12 +1009,111 @@ function Step4({
   const handleBulkFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError("");
+    setUploadSuccess(null);
     const fd = new FormData();
     fd.append("file", file);
-    await bulkUpload(fd);
+    const result = await bulkUpload(fd);
+    if ("data" in result) {
+      const d = result.data as { count?: number };
+      setUploadSuccess(d?.count ?? 0);
+    } else {
+      setUploadError("Upload failed. Check that your file has Name, Email, Role, Department columns.");
+    }
     refetch();
     if (fileRef.current) fileRef.current.value = "";
   };
+
+  const handleHrmsConnect = async () => {
+    if (!hrmsUrl.trim()) { setHrmsError("Please enter the HRMS API URL"); return; }
+    setHrmsError("");
+    const result = await hrmsImport({ url: hrmsUrl.trim(), token: hrmsToken.trim() });
+    if ("data" in result && (result.data as { error?: string })?.error) {
+      setHrmsError((result.data as { error: string }).error);
+      return;
+    }
+    setShowHrmsModal(false);
+    setHrmsUrl("");
+    setHrmsToken("");
+    refetch();
+  };
+
+  const bulkUploadCard = (
+    <div className={cardCls} style={{ ...cardStyle, borderColor: dataEntryOption === "excel" ? "#4A57B9" : "#E3E9F6", borderWidth: dataEntryOption === "excel" ? 2 : 1 }}>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-bold" style={{ color: "#111827" }}>
+          {dataEntryOption === "excel" ? "Upload Users — Excel / CSV" : "Bulk Upload"}
+        </h2>
+        {dataEntryOption === "excel" && (
+          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full" style={{ background: "#EEF2FF", color: "#4A57B9" }}>Preferred method</span>
+        )}
+      </div>
+      {uploadSuccess !== null && (
+        <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#D1FAE5", color: "#059669" }}>
+          ✓ {uploadSuccess} user{uploadSuccess !== 1 ? "s" : ""} imported successfully
+        </div>
+      )}
+      {uploadError && (
+        <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#FEF2F2", color: "#EF4444" }}>{uploadError}</div>
+      )}
+      <label
+        className="flex flex-col items-center justify-center w-full py-8 rounded-xl border-2 border-dashed cursor-pointer transition-colors mb-3"
+        style={{ borderColor: "#C7D2FE", background: uploading ? "#F5F7FF" : "#F8FAFF" }}
+      >
+        {uploading
+          ? <Loader2 className="w-8 h-8 mb-2 animate-spin" style={{ color: "#4A57B9" }} />
+          : <Upload className="w-8 h-8 mb-2" style={{ color: "#4A57B9" }} />}
+        <span className="text-sm font-semibold" style={{ color: "#4A57B9" }}>
+          {uploading ? "Uploading…" : "Click to upload or drag & drop"}
+        </span>
+        <span className="text-xs mt-1" style={{ color: "#9CA3AF" }}>Excel (.xlsx, .xls) or CSV — columns: Name, Email, Role, Department</span>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleBulkFile} />
+      </label>
+      <div className="flex gap-2 flex-wrap">
+        <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={() => downloadTemplate("/org-setup/step4/template", "users_template.csv")}>
+          <Download className="w-4 h-4" /> Download Template
+        </button>
+        <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={() => setShowHrmsModal(true)}>
+          <Users className="w-4 h-4" /> Import from HRMS
+        </button>
+      </div>
+    </div>
+  );
+
+  const manualCard = (
+    <div className={cardCls} style={cardStyle}>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-bold" style={{ color: "#111827" }}>Add User Manually</h2>
+        {dataEntryOption !== "manual" && <span className="text-xs" style={{ color: "#9CA3AF" }}>optional</span>}
+      </div>
+      {error && <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#FEF2F2", color: "#EF4444" }}>{error}</div>}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+        <div>
+          <label className={labelCls} style={labelStyle}>Full Name *</label>
+          <input className={inputCls} style={inputStyle} placeholder="Full name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Email *</label>
+          <input type="email" className={inputCls} style={inputStyle} placeholder="user@company.com" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Role</label>
+          <select className={inputCls} style={inputStyle} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
+            <option value="">Select role</option>
+            {USER_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Department</label>
+          <input className={inputCls} style={inputStyle} placeholder="Department" value={form.department} onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))} />
+        </div>
+      </div>
+      <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleAdd} disabled={creating}>
+        {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+        Add User
+      </button>
+    </div>
+  );
 
   return (
     <div className="space-y-5">
@@ -703,55 +1124,41 @@ function Step4({
               <h3 className="text-base font-bold" style={{ color: "#111827" }}>Import from HRMS</h3>
               <button onClick={() => setShowHrmsModal(false)}><X className="w-5 h-5" style={{ color: "#9CA3AF" }} /></button>
             </div>
-            <label className={labelCls} style={labelStyle}>HRMS API Endpoint URL</label>
-            <input className={`${inputCls} mb-4`} style={inputStyle} placeholder="https://hrms.company.com/api/employees" value={hrmsUrl} onChange={(e) => setHrmsUrl(e.target.value)} />
+            {hrmsError && <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#FEF2F2", color: "#EF4444" }}>{hrmsError}</div>}
+            <label className={labelCls} style={labelStyle}>HRMS API Endpoint URL *</label>
+            <input className={`${inputCls} mb-3`} style={inputStyle} placeholder="https://hrms.company.com/api/employees" value={hrmsUrl} onChange={(e) => setHrmsUrl(e.target.value)} />
+            <label className={labelCls} style={labelStyle}>API Token (optional)</label>
+            <input className={`${inputCls} mb-4`} style={inputStyle} placeholder="Bearer token or API key" value={hrmsToken} onChange={(e) => setHrmsToken(e.target.value)} />
             <div className="flex gap-3">
-              <button className={primaryBtnCls} style={primaryBtnStyle} onClick={() => setShowHrmsModal(false)}>Connect & Import</button>
+              <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleHrmsConnect} disabled={hrmsLoading}>
+                {hrmsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Connect & Import
+              </button>
               <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={() => setShowHrmsModal(false)}>Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      <div className={cardCls} style={cardStyle}>
-        <h2 className="text-base font-bold mb-4" style={{ color: "#111827" }}>Add User</h2>
-        {error && <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#FEF2F2", color: "#EF4444" }}>{error}</div>}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-          <div>
-            <label className={labelCls} style={labelStyle}>Full Name *</label>
-            <input className={inputCls} style={inputStyle} placeholder="Full name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+      {dataEntryOption === "excel" ? (
+        <>{bulkUploadCard}{manualCard}</>
+      ) : dataEntryOption === "api" ? (
+        <>
+          <div className={cardCls} style={{ ...cardStyle, borderColor: "#4A57B9", borderWidth: 2 }}>
+            <h2 className="text-base font-bold mb-2" style={{ color: "#111827" }}>API Integration — Users</h2>
+            <p className="text-sm mb-3" style={{ color: "#6B7280" }}>
+              Connect your HRMS to automatically import employees. You can also upload a CSV or add users manually below.
+            </p>
+            <button className={primaryBtnCls} style={primaryBtnStyle} onClick={() => setShowHrmsModal(true)}>
+              <Users className="w-4 h-4" /> Connect HRMS / API
+            </button>
           </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Email *</label>
-            <input type="email" className={inputCls} style={inputStyle} placeholder="user@company.com" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Role</label>
-            <select className={inputCls} style={inputStyle} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
-              <option value="">Select role</option>
-              {USER_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls} style={labelStyle}>Department</label>
-            <input className={inputCls} style={inputStyle} placeholder="Department" value={form.department} onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))} />
-          </div>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleAdd} disabled={creating}>
-            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            Add User
-          </button>
-          <label className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold cursor-pointer" style={{ borderColor: "#E3E9F6", color: "#4A57B9" }}>
-            <Upload className="w-4 h-4" />
-            {uploading ? "Uploading…" : "Bulk Upload Excel"}
-            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleBulkFile} />
-          </label>
-          <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={() => setShowHrmsModal(true)}>
-            <Users className="w-4 h-4" /> Import from HRMS
-          </button>
-        </div>
-      </div>
+          {bulkUploadCard}
+          {manualCard}
+        </>
+      ) : (
+        <>{manualCard}{bulkUploadCard}</>
+      )}
 
       <div className={cardCls} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
         <div className="px-5 py-3 border-b" style={{ borderColor: "#E3E9F6" }}>
@@ -1359,6 +1766,35 @@ function Step8({
 export function OrgSetupWizardPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [dataEntryOption, setDataEntryOption] = useState<"manual" | "excel" | "api">("manual");
+
+  const { data: progressRaw } = useGetOrgSetupProgressQuery();
+  const { data: step1Saved } = useGetOrgSetupStep1Query();
+
+  // Restore progress from backend on first load
+  useEffect(() => {
+    if (progressRaw && !progressLoaded) {
+      const raw = progressRaw as unknown as { steps_completed?: number[]; activated?: boolean };
+      const done: number[] = raw.steps_completed ?? [];
+      setCompletedSteps(done);
+      if (done.length > 0) {
+        const nextStep = Math.min(Math.max(...done) + 1, 8);
+        setCurrentStep(nextStep);
+      }
+      setProgressLoaded(true);
+    }
+  }, [progressRaw, progressLoaded]);
+
+  // Restore dataEntryOption from saved step 1
+  useEffect(() => {
+    if (step1Saved) {
+      const s = step1Saved as unknown as { dataEntryOption?: string };
+      if (s.dataEntryOption && ["manual", "excel", "api"].includes(s.dataEntryOption)) {
+        setDataEntryOption(s.dataEntryOption as "manual" | "excel" | "api");
+      }
+    }
+  }, [step1Saved]);
 
   const markDone = (step: number) => {
     setCompletedSteps((prev) => prev.includes(step) ? prev : [...prev, step]);
@@ -1404,16 +1840,16 @@ export function OrgSetupWizardPage() {
 
       {/* Step Content */}
       {currentStep === 1 && (
-        <Step1 onNext={() => goNext(1)} />
+        <Step1 onNext={() => goNext(1)} dataEntryOption={dataEntryOption} onDataEntryChange={setDataEntryOption} />
       )}
       {currentStep === 2 && (
         <Step2 onNext={() => goNext(2)} onBack={() => goBack(2)} />
       )}
       {currentStep === 3 && (
-        <Step3 onNext={() => goNext(3)} onBack={() => goBack(3)} />
+        <Step3 onNext={() => goNext(3)} onBack={() => goBack(3)} dataEntryOption={dataEntryOption} />
       )}
       {currentStep === 4 && (
-        <Step4 onNext={() => goNext(4)} onBack={() => goBack(4)} />
+        <Step4 onNext={() => goNext(4)} onBack={() => goBack(4)} dataEntryOption={dataEntryOption} />
       )}
       {currentStep === 5 && (
         <Step5 onNext={() => goNext(5)} onBack={() => goBack(5)} />

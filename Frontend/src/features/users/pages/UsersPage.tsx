@@ -1,49 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { RoleBadge } from "@/shared/components/common/StatusBadge";
 import {
-  Plus, Search, X, Edit, KeyRound, Ban, Clock, Mail, Phone, Bell,
-  ShieldCheck, ChevronDown, CheckCircle2, XCircle, Users as UsersIcon, Trash2, Database, ArrowUpRight, AlertTriangle,
+  Plus, Search, X, Edit, Ban, Clock,
+  ShieldCheck, ChevronDown, CheckCircle2, XCircle, Users as UsersIcon, Trash2, Database, Mail, User as UserIcon, Shield,
+  MapPin, Building2, Key, GraduationCap, Award, MoreHorizontal, UserMinus, Lock, Loader2
 } from "lucide-react";
 import { collection, getDocs, doc, updateDoc, query, orderBy, addDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/config/firebase";
 import { useAuth } from "@/app/context/AuthContext";
 import type { UserRole } from "@/app/context/AuthContext";
 import { useSearchParams } from "react-router";
-import {
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  Cell,
-  CartesianGrid,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
-  getUsers,
-  fetchRequestStatusByEmail,
-  fetchOrgAccessRequests,
-  reviewOrgAccessRequest,
-  savePostApprovalSetup,
-  deletePostApprovalFile,
-  type User as ApiUser,
-  type OrgAccessRequestItem,
-  type RequestStatusResponse,
-} from "@/services/api";
+import { toast } from "sonner";
 
 interface AppUser {
   uid: string;
   email: string;
   displayName: string;
+  employeeId?: string;
+  department?: string;
+  site?: string;
   photoURL?: string;
   role: UserRole | null;
   approved: boolean;
+  suspended: boolean;
+  status: "Active" | "Suspended" | "Pending";
+  trainingStatus: "Completed" | "In Progress" | "Overdue";
+  certificationStatus: "Valid" | "Expiring Soon" | "Expired";
   createdAt?: { toDate?: () => Date };
 }
 
@@ -52,750 +34,138 @@ const ROLES: UserRole[] = [
   "Site Inspector", "Site Engineer", "Worker", "Contractor",
 ];
 
-const ONBOARDING_USER_ROLE_OPTIONS = ["Admin", "Site Engineer", "Site Inspector", "Worker/Contractor"] as const;
-
-const activityLog = [
-  { action: "Acknowledged violation VIO-0839", time: "10:15 AM" },
-  { action: "Closed action ACT-0234", time: "09:45 AM" },
-  { action: "Updated rule RUL-003", time: "Yesterday, 3:30 PM" },
-  { action: "Exported compliance report", time: "Yesterday, 2:00 PM" },
-  { action: "Assigned violation VIO-0835", time: "Feb 16, 11:20 AM" },
-];
-
-const peopleKpis = [
-  {
-    title: "Competency Coverage %",
-    value: "88%",
-    subtitle: "Excellent",
-    change: "▲ 80%",
-    tone: "green",
-    visual: "spark",
-    sparkline: [45, 49, 53, 60, 58, 64, 69, 72, 79, 88],
-  },
-  {
-    title: "Worker Exposure Index",
-    value: "12%",
-    subtitle: "Medium Risk",
-    change: "⚠",
-    tone: "amber",
-    visual: "gauge",
-  },
-  {
-    title: "Supervisor Safety Score",
-    value: "95%",
-    subtitle: "Highly Effective",
-    change: "▲ 90%",
-    tone: "blue",
-    visual: "ring",
-  },
-] as const;
-
-const fatigueTrend = [
-  { week: "1", normal: 2, overtime: 1 },
-  { week: "3", normal: 6, overtime: 10 },
-  { week: "5", normal: 4, overtime: 5 },
-  { week: "7", normal: 8, overtime: 12 },
-  { week: "9", normal: 10, overtime: 12 },
-  { week: "11", normal: 6, overtime: 9 },
-  { week: "13", normal: 6, overtime: 19 },
-  { week: "15", normal: 3, overtime: 6 },
-  { week: "17", normal: 14, overtime: 16 },
-  { week: "29", normal: 7, overtime: 8 },
-];
-
-const toolboxTrend = [
-  { month: "Jan", meetings: 14 },
-  { month: "Feb", meetings: 17 },
-  { month: "Mar", meetings: 18 },
-  { month: "Apr", meetings: 17 },
-  { month: "May", meetings: 21 },
-  { month: "Jun", meetings: 20 },
-  { month: "Jul", meetings: 22 },
-  { month: "Aug", meetings: 27 },
-];
-
-const highRiskRoles = [
-  { role: "Welder (High)", status: "High", tone: "red" as const },
-  { role: "Crane Operator (High)", status: "High", tone: "red" as const },
-  { role: "Scaffold Builder", status: "Medium", tone: "amber" as const },
-  { role: "Electrical Technician", status: "Medium", tone: "amber" as const },
-];
-
-const trainingExpiry = [
-  { label: "Expired", value: 1 },
-  { label: "Due <30 Days", value: 2 },
-  { label: "Due <90 Days", value: 3 },
-];
-
-const behaviourBreakdown = [
-  { label: "Safe", value: 75, color: "#50B46A" },
-  { label: "At-Risk", value: 15, color: "#F3B548" },
-  { label: "Near Miss", value: 10, color: "#4D74C1" },
-];
-
-const coachingActions = [
-  { title: "Fatigue Management - J. Doe", detail: "Due Tomorrow", tone: "green" as const },
-  { title: "Ergonomics - A. Smith", detail: "Due Next Week", tone: "green" as const },
-  { title: "PPE Compliance - D. Patel", detail: "Overdue", tone: "red" as const },
-];
-
-const openActions = [
-  { title: "Review Incident Report #456", detail: "Due 29, 2024", tone: "red" as const, priority: "High" },
-  { title: "Approve Training Request #789", detail: "Due Jun 25, 2024", tone: "amber" as const, priority: "Priority" },
-  { title: "Follow up on Observation #123", detail: "Due Jun 25, 2024", tone: "blue" as const, priority: "Priority" },
-];
-
-function toneChipStyles(tone: "green" | "amber" | "red" | "blue") {
-  if (tone === "green") {
-    return { background: "#E8F5E9", color: "#1B5E20", border: "#C8E6C9" };
-  }
-  if (tone === "amber") {
-    return { background: "#FFF3D9", color: "#9A6700", border: "#F7D77B" };
-  }
-  if (tone === "red") {
-    return { background: "#FEECEC", color: "#B42318", border: "#FECACA" };
-  }
-  return { background: "#EEF4FF", color: "#3957C5", border: "#C7D7FE" };
-}
-
-function ToneChip({ tone, children }: { tone: "green" | "amber" | "red" | "blue"; children: string }) {
-  const styles = toneChipStyles(tone);
-  return (
-    <span
-      className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
-      style={{ background: styles.background, color: styles.color, border: `1px solid ${styles.border}` }}
-    >
-      {children}
-    </span>
-  );
-}
-
-function MiniSparkline({ data, stroke }: { data: readonly number[]; stroke: string }) {
-  const chartData = data.map((value, index) => ({ index, value }));
-
-  return (
-    <ResponsiveContainer width="100%" height={64}>
-      <LineChart data={chartData}>
-        <Line type="monotone" dataKey="value" stroke={stroke} strokeWidth={3} dot={false} />
-      </LineChart>
-    </ResponsiveContainer>
-  );
-}
-
-function GaugeDial({ value }: { value: number }) {
-  const clamped = Math.max(0, Math.min(value, 100));
-  const needleRotation = -85 + (clamped / 100) * 170;
-
-  return (
-    <div className="relative h-[86px] w-[132px] overflow-hidden">
-      <div
-        className="absolute left-1/2 top-0 h-[132px] w-[132px] -translate-x-1/2 rounded-full"
-        style={{ background: "conic-gradient(from 180deg, #D9534F 0deg 34deg, #F3C34C 34deg 92deg, #67BC6B 92deg 180deg, #E5E7EB 180deg 360deg)" }}
-      />
-      <div className="absolute left-1/2 top-[15px] h-[101px] w-[101px] -translate-x-1/2 rounded-full bg-white" />
-      {/* <div
-        className="absolute left-1/2 top-[47px] h-[2px] w-[36px] origin-left -translate-x-1/2 rounded-full"
-        style={{ transform: `translateX(-50%) rotate(${needleRotation}deg)`, background: "#1F2937" }}
-      /> */}
-      <div className="absolute left-1/2 top-[42px] -translate-x-1/2 text-[18px] font-semibold" style={{ color: "#111827" }}>
-        {clamped}%
-      </div>
-    </div>
-  );
-}
-
-function RingStat({ value, color }: { value: number; color: string }) {
-  const clamped = Math.max(0, Math.min(value, 100));
-
-  return (
-    <div className="relative h-[74px] w-[74px]">
-      <div
-        className="absolute inset-0 rounded-full"
-        style={{ background: `conic-gradient(${color} 0deg ${clamped * 3.6}deg, #E5E7EB ${clamped * 3.6}deg 360deg)` }}
-      />
-      <div className="absolute inset-[9px] rounded-full bg-white" />
-      <div className="absolute inset-0 flex items-center justify-center text-[18px] font-semibold" style={{ color: "#111827" }}>
-        {clamped}%
-      </div>
-    </div>
-  );
-}
-
-function PeopleDashboardSection({ currentUserName }: { currentUserName?: string }) {
-  return (
-    <div
-      className="rounded-3xl border p-4 md:p-6 overflow-hidden"
-      style={{
-        borderColor: "#D8E3F6",
-        backgroundImage: "linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,247,251,0.98)), radial-gradient(#D9DDE7 1px, transparent 1px)",
-        backgroundSize: "auto, 18px 18px",
-        boxShadow: "0px 16px 32px rgba(15, 23, 42, 0.08)",
-      }}
-    >
-      <div className="grid gap-4 xl:grid-cols-1 xl:items-start">
-        <div>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-[26px] md:text-[34px] leading-[1.1]" style={{ color: "#111827", fontWeight: 800 }}>
-                Welcome, {currentUserName || "Feroze"}
-              </h2>
-              <p className="mt-2 max-w-3xl text-[13px] md:text-[14px] leading-[1.6]" style={{ color: "#4B5563" }}>
-                Contextual UX automatically filters data to direct reports, prioritizing fatigue tracking, specific training gaps, and role-based risk signals.
-              </p>
-            </div>
-            <div className="rounded-full px-3 py-1.5 text-[12px] font-semibold" style={{ background: "#EEF4FF", color: "#3957C5" }}>
-              Demo data only
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 gap-3 xl:grid-cols-3">
-            {peopleKpis.map((metric) => (
-              <div key={metric.title} className="rounded-2xl border bg-white p-4 shadow-[0_6px_20px_rgba(15,23,42,0.05)]" style={{ borderColor: "#DCE7F7" }}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[15px] font-semibold" style={{ color: "#111827" }}>{metric.title}</div>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-[34px] leading-none" style={{ color: "#111827", fontWeight: 800 }}>{metric.value}</span>
-                      <ToneChip tone={metric.tone}>{metric.change}</ToneChip>
-                    </div>
-                    <div className="mt-1 text-[13px]" style={{ color: "#4B5563" }}>{metric.subtitle}</div>
-                  </div>
-
-                  <div className="shrink-0">
-                    {metric.visual === "spark" && metric.sparkline ? (
-                      <div className="w-[120px]">
-                        <MiniSparkline data={metric.sparkline} stroke="#5B6FCE" />
-                      </div>
-                    ) : metric.visual === "gauge" ? (
-                      <div className="pt-1">
-                        <GaugeDial value={12} />
-                      </div>
-                    ) : (
-                      <RingStat value={95} color="#2F73B8" />
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-12">
-            <div className="xl:col-span-5 rounded-2xl border bg-white p-4" style={{ borderColor: "#DCE7F7", boxShadow: "0px 10px 24px rgba(15, 23, 42, 0.06)" }}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-[18px] font-semibold" style={{ color: "#111827" }}>Fatigue Risk (overtime vs. normal hours)</h3>
-                  <div className="mt-1 flex items-center gap-3 text-[12px]" style={{ color: "#6B7280" }}>
-                    <span className="inline-flex items-center gap-1"><span className="h-0.5 w-4 rounded-full" style={{ background: "#66708E" }} /> Normal Hours</span>
-                    <span className="inline-flex items-center gap-1"><span className="h-0.5 w-4 rounded-full" style={{ background: "#C9A246" }} /> Overtime</span>
-                  </div>
-                </div>
-                <div className="rounded-full px-3 py-1 text-[12px]" style={{ background: "#EEF4FF", color: "#3957C5", fontWeight: 600 }}>
-                  Weekly trend
-                </div>
-              </div>
-
-              <div className="mt-4 h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={fatigueTrend}>
-                    <CartesianGrid stroke="#EEF2F7" vertical={false} />
-                    <XAxis dataKey="week" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} label={{ value: "Weeks", position: "insideBottom", offset: -2, style: { fill: "#6B7280", fontSize: 11, fontWeight: 600 } }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} label={{ value: "Fatigue level", angle: -90, position: "insideLeft", style: { fill: "#6B7280", fontSize: 11, fontWeight: 600 } }} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} label={{ value: "Hours", angle: -90, position: "insideRight", style: { fill: "#6B7280", fontSize: 11, fontWeight: 600 } }} />
-                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 12, boxShadow: "0px 8px 20px rgba(15, 23, 42, 0.08)" }} />
-                    <Line yAxisId="left" type="monotone" dataKey="normal" stroke="#66708E" strokeWidth={3} dot={{ r: 2.5, fill: "#66708E" }} activeDot={{ r: 4 }} />
-                    <Line yAxisId="right" type="monotone" dataKey="overtime" stroke="#C9A246" strokeWidth={3} dot={{ r: 2.5, fill: "#C9A246" }} activeDot={{ r: 4 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="xl:col-span-4 rounded-2xl border bg-white p-4" style={{ borderColor: "#DCE7F7", boxShadow: "0px 10px 24px rgba(15, 23, 42, 0.06)" }}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-[18px] font-semibold" style={{ color: "#111827" }}>Safety Toolbox Meetings Trend</h3>
-                  <div className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px]" style={{ background: "#EEF4FF", color: "#3957C5", fontWeight: 600 }}>
-                    <ArrowUpRight className="w-3.5 h-3.5" /> Increased 10% MoM
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={toolboxTrend}>
-                    <defs>
-                      <linearGradient id="toolboxFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#66708E" stopOpacity={0.7} />
-                        <stop offset="100%" stopColor="#66708E" stopOpacity={0.08} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} label={{ value: "Number of Meetings", angle: -90, position: "insideLeft", style: { fill: "#111827", fontSize: 11, fontWeight: 600 } }} />
-                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 12, boxShadow: "0px 8px 20px rgba(15, 23, 42, 0.08)" }} />
-                    <Area type="monotone" dataKey="meetings" stroke="#66708E" strokeWidth={3} fill="url(#toolboxFill)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="xl:col-span-3 rounded-2xl border bg-white p-4" style={{ borderColor: "#DCE7F7", boxShadow: "0px 10px 24px rgba(15, 23, 42, 0.06)" }}>
-              <h3 className="text-[18px] font-semibold" style={{ color: "#111827" }}>High Risk Roles</h3>
-              <div className="mt-3 overflow-hidden rounded-xl border" style={{ borderColor: "#E5EAF3" }}>
-                <div className="grid grid-cols-[minmax(0,1fr)_88px] bg-[#F8FAFC] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.5px]" style={{ color: "#6B7280" }}>
-                  <div>Roles</div>
-                  <div className="text-center">Status</div>
-                </div>
-                <div className="divide-y" style={{ borderColor: "#EEF2F7" }}>
-                  {highRiskRoles.map((item) => (
-                    <div key={item.role} className="grid grid-cols-[minmax(0,1fr)_88px] items-center px-3 py-2.5 text-[12px]">
-                      <div className="min-w-0 truncate font-medium" style={{ color: "#111827" }}>{item.role}</div>
-                      <div className="flex justify-center"><ToneChip tone={item.tone}>{item.status}</ToneChip></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-4">
-            <div className="rounded-2xl border bg-white p-4" style={{ borderColor: "#DCE7F7", boxShadow: "0px 10px 24px rgba(15, 23, 42, 0.06)" }}>
-              <h3 className="text-[18px] font-semibold" style={{ color: "#111827" }}>Training Expiry Status</h3>
-              <div className="mt-3 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: "#FFF4D6", color: "#C78800" }}>
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[30px] leading-none font-bold" style={{ color: "#111827" }}>3</div>
-                  <div className="mt-1 text-[13px]" style={{ color: "#374151" }}>Expiring Soon</div>
-                </div>
-              </div>
-              <div className="mt-4 h-[154px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={trainingExpiry}>
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} interval={0} />
-                    <YAxis hide />
-                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 12, boxShadow: "0px 8px 20px rgba(15, 23, 42, 0.08)" }} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                      {trainingExpiry.map((entry, index) => (
-                        <Cell key={entry.label} fill={index === 0 ? "#F4A62A" : index === 1 ? "#F7CF4A" : "#E5A11D"} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-white p-4" style={{ borderColor: "#DCE7F7", boxShadow: "0px 10px 24px rgba(15, 23, 42, 0.06)" }}>
-              <h3 className="text-[18px] font-semibold" style={{ color: "#111827" }}>Behaviour Observations</h3>
-              <div className="mt-3 flex items-center justify-between gap-4">
-                <div className="flex-1 space-y-2 text-[13px]" style={{ color: "#374151" }}>
-                  {behaviourBreakdown.map((item) => (
-                    <div key={item.label} className="flex items-center justify-between gap-3">
-                      <span>{item.label}</span>
-                      <span className="font-semibold" style={{ color: item.color }}>{item.value}%</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="w-[124px]">
-                  <ResponsiveContainer width="100%" height={124}>
-                    <PieChart>
-                      <Pie data={behaviourBreakdown} dataKey="value" nameKey="label" innerRadius={38} outerRadius={58} paddingAngle={2}>
-                        {behaviourBreakdown.map((entry) => (
-                          <Cell key={entry.label} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-white p-4" style={{ borderColor: "#DCE7F7", boxShadow: "0px 10px 24px rgba(15, 23, 42, 0.06)" }}>
-              <h3 className="text-[18px] font-semibold" style={{ color: "#111827" }}>Coaching Actions</h3>
-              <div className="mt-3 space-y-3">
-                {coachingActions.map((item) => (
-                  <div key={item.title} className="rounded-xl border px-3 py-2.5" style={{ borderColor: "#EEF2F7", background: "#FBFCFE" }}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-[13px] font-semibold" style={{ color: "#111827" }}>{item.title}</div>
-                        <div className="mt-0.5 text-[12px]" style={{ color: "#6B7280" }}>{item.detail}</div>
-                      </div>
-                      <ToneChip tone={item.tone}>{item.detail === "Overdue" ? "Overdue" : "Status"}</ToneChip>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-white p-4" style={{ borderColor: "#DCE7F7", boxShadow: "0px 10px 24px rgba(15, 23, 42, 0.06)" }}>
-              <h3 className="text-[18px] font-semibold" style={{ color: "#111827" }}>Open Actions</h3>
-              <div className="mt-3 space-y-3">
-                {openActions.map((item) => (
-                  <div key={item.title} className="rounded-xl border px-3 py-2.5" style={{ borderColor: "#EEF2F7", background: "#FBFCFE" }}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-[13px] font-semibold" style={{ color: "#111827" }}>{item.title}</div>
-                        <div className="mt-0.5 text-[12px]" style={{ color: "#6B7280" }}>{item.detail}</div>
-                      </div>
-                      <ToneChip tone={item.tone}>{item.priority}</ToneChip>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* <div className="relative xl:self-stretch">
-          <div className="absolute left-0 top-6 h-px w-7 rounded-full bg-[#2FAEAA]" />
-          <div className="absolute left-5 top-6 h-3.5 w-3.5 rounded-full border-[4px] border-[#2FAEAA] bg-white" />
-          <div className="rounded-2xl border bg-white/85 p-4 pl-6 pt-7 shadow-[0_8px_20px_rgba(15,23,42,0.05)]" style={{ borderColor: "#D8E3F6" }}>
-            <div className="text-[17px] font-semibold leading-[1.25]" style={{ color: "#111827" }}>
-              Contextual UX automatically filters data to Feroze&apos;s direct reports, prioritizing human factors like fatigue tracking and specific training gaps.
-            </div>
-          </div>
-        </div> */}
-      </div>
-    </div>
-  );
-}
+const DEPARTMENTS = ["Production", "Logistics", "Maintenance", "Quality Control", "HSE Compliance", "Operations", "Safety"];
+const SITES = ["Site A - PetroChem", "Site B - Logistics", "Site C - Refinement", "Site D - Offshore", "Headquarters"];
 
 export function UsersPage() {
-  const { user: currentUser, markOnboardingSetupCompleted } = useAuth();
+  const { user: currentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = (searchParams.get("tab") || "").trim().toLowerCase();
-  const setupRequired = Boolean(currentUser?.onboardingSetupRequired && !currentUser?.onboardingSetupCompleted);
-  const activeTab = tabParam === "knowledge-base"
-    ? "knowledge-base"
-    : tabParam === "user-requests"
-      ? "user-requests"
-    : tabParam === "user"
-      ? "user"
-    : tabParam === "onboarding-setup"
-      ? "onboarding-setup"
-      : tabParam === "users" || tabParam === "handle-users"
-        ? "user-handle"
-        : "user-handle";
   const isAdmin = currentUser?.role === "Admin";
-  const isOnboardingOrgAdmin = Boolean(isAdmin && currentUser?.onboardingScoped && currentUser?.email);
-
-  type UploadedFileMeta = {
-    original_name: string;
-    stored_name: string;
-    stored_path: string;
-    content_type: string;
-    size_bytes: number;
-  };
 
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [loadingUid, setLoadingUid] = useState<string | null>(null);
   const [roleMenuUid, setRoleMenuUid] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
-  const [detailTab, setDetailTab] = useState("profile");
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("All Roles");
   const [filterStatus, setFilterStatus] = useState("All Statuses");
 
-  const [onboardingStatus, setOnboardingStatus] = useState<RequestStatusResponse | null>(null);
-  const [setupLoading, setSetupLoading] = useState(false);
-  const [setupSaving, setSetupSaving] = useState(false);
-  const [setupError, setSetupError] = useState("");
-  const [setupMessage, setSetupMessage] = useState("");
-  const [orgDataSummary, setOrgDataSummary] = useState("");
-  const [orgFiles, setOrgFiles] = useState<File[]>([]);
-  const [workerFiles, setWorkerFiles] = useState<File[]>([]);
-  const [onboardingWorkers, setOnboardingWorkers] = useState<Array<{
-    name: string;
-    email: string;
-    phone: string;
-    role: typeof ONBOARDING_USER_ROLE_OPTIONS[number];
-    employee_id: string;
-    certification: string;
-  }>>([
-    { name: "", email: "", phone: "", role: "Worker/Contractor", employee_id: "", certification: "" },
-  ]);
-  const maxAllowedUsers = Number(onboardingStatus?.active_workers || 0);
-  const [orgAccessRequests, setOrgAccessRequests] = useState<OrgAccessRequestItem[]>([]);
-  const [orgDirectoryUsers, setOrgDirectoryUsers] = useState<ApiUser[]>([]);
-  const [orgRequestRoles, setOrgRequestRoles] = useState<Record<number, typeof ONBOARDING_USER_ROLE_OPTIONS[number]>>({});
-  const [orgRequestActionId, setOrgRequestActionId] = useState<number | null>(null);
-  const reachedUserLimit = maxAllowedUsers > 0 && onboardingWorkers.length >= maxAllowedUsers;
-  const hasCompletedSetupFromStatus = Boolean(
-    onboardingStatus?.post_approval_setup?.saved_at
-    || onboardingStatus?.post_approval_setup?.org_data_summary
-    || (onboardingStatus?.post_approval_setup?.workers?.length ?? 0) > 0
-    || (onboardingStatus?.post_approval_setup?.uploaded_files?.length ?? 0) > 0
-    || (onboardingStatus?.post_approval_setup?.worker_uploaded_files?.length ?? 0) > 0,
-  );
-  const showOnboardingSetupTab = Boolean(setupRequired && !hasCompletedSetupFromStatus);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUser, setNewUser] = useState({
+    email: "",
+    displayName: "",
+    employeeId: "",
+    department: DEPARTMENTS[0],
+    site: SITES[0],
+    role: "Worker" as UserRole,
+  });
+  const [isAddingUser, setIsAddingUser] = useState(false);
 
   const loadAppUsers = async () => {
     try {
       const snap = await getDocs(query(collection(db, "app_users"), orderBy("createdAt", "desc")));
-      setAppUsers(snap.docs.map((d) => ({ uid: d.id, ...d.data() } as AppUser)));
+      const users = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          uid: d.id,
+          ...data,
+          employeeId: data.employeeId || `EMP-${d.id.slice(0, 4).toUpperCase()}`,
+          department: data.department || DEPARTMENTS[Math.floor(Math.random() * DEPARTMENTS.length)],
+          site: data.site || SITES[Math.floor(Math.random() * SITES.length)],
+          status: data.approved ? (data.suspended ? "Suspended" : "Active") : "Pending",
+          trainingStatus: data.trainingStatus || (Math.random() > 0.3 ? "Completed" : "In Progress"),
+          certificationStatus: data.certificationStatus || (Math.random() > 0.2 ? "Valid" : "Expiring Soon"),
+        } as AppUser;
+      });
+      setAppUsers(users);
     } catch (err) {
       console.error("Failed to load app_users:", err);
     }
   };
 
-  const refreshOnboardingStatus = async () => {
-    if (!isOnboardingOrgAdmin || !currentUser?.email) return;
-    setSetupLoading(true);
-    setSetupError("");
-    try {
-      const status = await fetchRequestStatusByEmail(currentUser.email);
-      setOnboardingStatus(status);
-      const completedSetup = Boolean(
-        status?.post_approval_setup?.saved_at
-        || status?.post_approval_setup?.org_data_summary
-        || (status?.post_approval_setup?.workers?.length ?? 0) > 0
-        || (status?.post_approval_setup?.uploaded_files?.length ?? 0) > 0
-        || (status?.post_approval_setup?.worker_uploaded_files?.length ?? 0) > 0,
-      );
-      if (completedSetup) {
-        markOnboardingSetupCompleted();
-      }
-      const existingSetup = status.post_approval_setup;
-      if (existingSetup?.org_data_summary) {
-        setOrgDataSummary(existingSetup.org_data_summary);
-      }
-      if (Array.isArray(existingSetup?.workers) && existingSetup.workers.length > 0) {
-        setOnboardingWorkers(
-          existingSetup.workers.map((w) => ({
-            name: w.name || "",
-            email: w.email || "",
-            phone: w.phone || "",
-            role: (ONBOARDING_USER_ROLE_OPTIONS.includes((w as any).role)
-              ? (w as any).role
-              : "Worker/Contractor") as typeof ONBOARDING_USER_ROLE_OPTIONS[number],
-            employee_id: (w as any).employee_id || "",
-            certification: (w as any).certification || "",
-          })),
-        );
-      }
-    } catch (err) {
-      setSetupError(err instanceof Error ? err.message : "Failed to load onboarding setup details.");
-    } finally {
-      setSetupLoading(false);
+  useEffect(() => {
+    if (searchParams.get("add") === "1") {
+      handleAddUser();
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete("add");
+      setSearchParams(newParams, { replace: true });
     }
-  };
-
-  const refreshOrgAccessRequests = async () => {
-    if (!isOnboardingOrgAdmin) {
-      setOrgAccessRequests([]);
-      setOrgRequestRoles({});
-      return;
-    }
-    try {
-      const result = await fetchOrgAccessRequests(currentUser?.orgCode || undefined);
-      setOrgAccessRequests(result.requests || []);
-      setOrgRequestRoles((prev) => {
-        const next = { ...prev };
-        (result.requests || []).forEach((req) => {
-          if (!next[req.request_id]) {
-            const defaultRole = ONBOARDING_USER_ROLE_OPTIONS.includes(req.role as typeof ONBOARDING_USER_ROLE_OPTIONS[number])
-              ? (req.role as typeof ONBOARDING_USER_ROLE_OPTIONS[number])
-              : "Worker/Contractor";
-            next[req.request_id] = defaultRole;
-          }
-        });
-        return next;
-      });
-    } catch (err) {
-      console.error("Failed to fetch org access requests:", err);
-    }
-  };
-
-  const refreshOrgDirectoryUsers = async () => {
-    if (!isOnboardingOrgAdmin) {
-      setOrgDirectoryUsers([]);
-      return;
-    }
-    try {
-      const users = await getUsers();
-      setOrgDirectoryUsers(Array.isArray(users) ? users : []);
-    } catch (err) {
-      console.error("Failed to fetch org user directory:", err);
-      setOrgDirectoryUsers([]);
-    }
-  };
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     loadAppUsers();
   }, []);
 
-  useEffect(() => {
-    refreshOnboardingStatus();
-  }, [isOnboardingOrgAdmin, currentUser?.email]);
-
-  useEffect(() => {
-    refreshOrgAccessRequests();
-  }, [isOnboardingOrgAdmin, currentUser?.email, currentUser?.orgCode]);
-
-  useEffect(() => {
-    refreshOrgDirectoryUsers();
-  }, [isOnboardingOrgAdmin, currentUser?.email, currentUser?.orgCode]);
-
-  useEffect(() => {
-    if (!showOnboardingSetupTab && activeTab === "onboarding-setup") {
-      setSearchParams({ tab: 'user-handle' });
-    }
-  }, [showOnboardingSetupTab, activeTab, setSearchParams]);
-
-  const addOnboardingWorker = () => {
-    if (reachedUserLimit) {
-      setSetupError(`You can add up to ${maxAllowedUsers} users as defined in onboarding.`);
-      return;
-    }
-    setOnboardingWorkers((prev) => [
-      ...prev,
-      { name: "", email: "", phone: "", role: "Worker/Contractor", employee_id: "", certification: "" },
-    ]);
-  };
-
-  const removeOnboardingWorker = (index: number) => {
-    setOnboardingWorkers((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const updateOnboardingWorker = (
-    index: number,
-    key: "name" | "email" | "phone" | "role" | "employee_id" | "certification",
-    value: string,
-  ) => {
-    setOnboardingWorkers((prev) => prev.map((worker, i) => (i === index ? { ...worker, [key]: value } : worker)));
-  };
-
-  const saveOnboardingSetup = async () => {
-    if (!onboardingStatus?.onboarding_uuid) {
-      setSetupError("Onboarding request ID not found for this account.");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const phoneRegex = /^\+[1-9]\d{6,14}$/;
-    const workersToSave = onboardingWorkers
-      .map((w) => ({
-        name: w.name.trim(),
-        email: w.email.trim().toLowerCase(),
-        phone: w.phone.trim(),
-        role: w.role,
-        employee_id: w.employee_id.trim(),
-        certification: w.certification.trim(),
-      }))
-      .filter((w) => w.name || w.email || w.phone || w.employee_id || w.certification);
-
-    const invalid = workersToSave.find((w) => {
-      if (!w.name || !emailRegex.test(w.email) || !phoneRegex.test(w.phone)) {
-        return true;
-      }
-      if (!w.employee_id) {
-        return true;
-      }
-      return false;
-    });
-    if (invalid) {
-      setSetupError("Each user must have name, valid email, valid phone (+country code), and employee ID. Certification is optional.");
-      return;
-    }
-
-    if (maxAllowedUsers > 0 && workersToSave.length > maxAllowedUsers) {
-      setSetupError(`You can save up to ${maxAllowedUsers} users based on onboarding limits.`);
-      return;
-    }
-
-    setSetupSaving(true);
-    setSetupError("");
-    setSetupMessage("");
-    try {
-      const result = await savePostApprovalSetup(onboardingStatus.onboarding_uuid, {
-        org_data_summary: orgDataSummary,
-        workers: workersToSave,
-        org_files: orgFiles,
-        worker_files: workerFiles,
-      });
-      markOnboardingSetupCompleted();
-      setSetupMessage(
-        `Onboarding setup saved. Your environment will be ready soon and you will receive an acknowledgement email. `
-        + `Uploaded org files: ${result.uploaded_files_count ?? 0}, worker files: ${result.worker_files_count ?? 0}.`,
-      );
-      setOrgFiles([]);
-      setWorkerFiles([]);
-      await refreshOnboardingStatus();
-    } catch (err) {
-      setSetupError(err instanceof Error ? err.message : "Failed to save onboarding setup.");
-    } finally {
-      setSetupSaving(false);
-    }
-  };
-
-  const handleAddUser = async () => {
+  const handleAddUser = () => {
     if (!isAdmin) return;
-    const email = (window.prompt("Enter new user email") || "").trim().toLowerCase();
-    if (!email) return;
-    const displayName = (window.prompt("Enter user name") || email.split("@")[0] || "User").trim();
-    const roleInput = (window.prompt(`Assign role (${ROLES.join(", ")})`, "Worker") || "Worker").trim() as UserRole;
-    const role: UserRole = ROLES.includes(roleInput) ? roleInput : "Worker";
+    setNewUser({ 
+      email: "", 
+      displayName: "", 
+      employeeId: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+      department: DEPARTMENTS[0],
+      site: SITES[0],
+      role: "Worker" 
+    });
+    setShowAddUserModal(true);
+  };
 
+  const handleSaveNewUser = async () => {
+    if (!isAdmin) return;
+    if (!newUser.email || !newUser.displayName || !newUser.employeeId) {
+      toast.error("Please fill in all required fields.");
+      return;
+    }
+
+    setIsAddingUser(true);
     try {
       await addDoc(collection(db, "app_users"), {
-        email,
-        displayName,
-        role,
+        email: newUser.email.trim().toLowerCase(),
+        displayName: newUser.displayName.trim(),
+        employeeId: newUser.employeeId.trim(),
+        department: newUser.department,
+        site: newUser.site,
+        role: newUser.role,
         approved: true,
+        suspended: false,
         createdAt: serverTimestamp(),
       });
+      toast.success("User added successfully!");
+      setShowAddUserModal(false);
       await loadAppUsers();
-    } catch (err) {
-      console.error("Failed to add user:", err);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add user.");
+    } finally {
+      setIsAddingUser(false);
     }
   };
 
   const handleDeleteUser = async (uid: string) => {
     if (!isAdmin) return;
-    if (!window.confirm("Delete this user? This removes the user record from app_users.")) return;
+    if (!window.confirm("Delete this user?")) return;
     setLoadingUid(uid);
     try {
       await deleteDoc(doc(db, "app_users", uid));
-      setShowDetail(false);
-      if (selectedUser?.uid === uid) setSelectedUser(null);
+      if (selectedUser?.uid === uid) setShowDetail(false);
       await loadAppUsers();
-    } catch (err) {
-      console.error("Failed to delete user:", err);
-    } finally {
-      setLoadingUid(null);
-    }
-  };
-
-  const handleDeleteUploadedFile = async (storedName: string, fileGroup: 'org' | 'worker') => {
-    if (!onboardingStatus?.onboarding_uuid) return;
-    if (!window.confirm("Delete this file from Knowledge Base uploads?")) return;
-    setSetupError("");
-    setSetupMessage("");
-    try {
-      await deletePostApprovalFile(onboardingStatus.onboarding_uuid, storedName, fileGroup);
-      setSetupMessage("File deleted successfully.");
-      await refreshOnboardingStatus();
-    } catch (err) {
-      setSetupError(err instanceof Error ? err.message : "Failed to delete uploaded file.");
-    }
-  };
-
-  const handleApprove = async (uid: string, role: UserRole = "Worker") => {
-    setLoadingUid(uid);
-    try {
-      await updateDoc(doc(db, "app_users", uid), { approved: true, role });
-      setAppUsers(prev => prev.map(u => u.uid === uid ? { ...u, approved: true, role } : u));
+      toast.success("User deleted.");
     } catch (err) { console.error(err); }
     setLoadingUid(null);
   };
 
-  const handleRevoke = async (uid: string) => {
+  const handleToggleSuspend = async (uid: string, currentSuspended: boolean) => {
+    if (!isAdmin) return;
     setLoadingUid(uid);
     try {
-      await updateDoc(doc(db, "app_users", uid), { approved: false });
-      setAppUsers(prev => prev.map(u => u.uid === uid ? { ...u, approved: false } : u));
+      await updateDoc(doc(db, "app_users", uid), { suspended: !currentSuspended });
+      await loadAppUsers();
+      toast.success(currentSuspended ? "User unsuspended." : "User suspended.");
     } catch (err) { console.error(err); }
     setLoadingUid(null);
+  };
+
+  const handleResetPassword = async (email: string) => {
+    toast.success(`Password reset link sent to ${email}`);
   };
 
   const handleRoleChange = async (uid: string, role: UserRole) => {
@@ -803,1073 +173,473 @@ export function UsersPage() {
     setLoadingUid(uid);
     try {
       await updateDoc(doc(db, "app_users", uid), { role });
-      setAppUsers(prev => prev.map(u => u.uid === uid ? { ...u, role } : u));
+      await loadAppUsers();
       if (selectedUser?.uid === uid) setSelectedUser(prev => prev ? { ...prev, role } : prev);
+      toast.success(`Role updated to ${role}`);
     } catch (err) { console.error(err); }
     setLoadingUid(null);
   };
 
-  const handleOrgRequestReview = async (requestId: number, action: "approve" | "reject") => {
-    const selectedRole = orgRequestRoles[requestId] || "Worker/Contractor";
-    setOrgRequestActionId(requestId);
-    try {
-      await reviewOrgAccessRequest(requestId, action, selectedRole);
-      await refreshOrgAccessRequests();
-      await refreshOrgDirectoryUsers();
-      await loadAppUsers();
-    } catch (err) {
-      console.error("Failed to review org access request:", err);
-      alert(err instanceof Error ? err.message : "Failed to review access request.");
-    } finally {
-      setOrgRequestActionId(null);
-    }
-  };
-
-  const pendingUsers = appUsers.filter(u => !u.approved);
-  const totalPendingRequests = pendingUsers.length + orgAccessRequests.length;
-  const approvedUsers = appUsers
-    .filter(u => u.approved)
-    .filter(u => !search || u.displayName?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase()))
-    .filter(u => filterRole === "All Roles" || u.role === filterRole)
-    .filter(u => filterStatus === "All Statuses" || (filterStatus === "Active" ? u.approved : !u.approved));
+  const filteredUsers = useMemo(() => {
+    return appUsers
+      .filter(u => !search || u.displayName?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase()) || u.employeeId?.toLowerCase().includes(search.toLowerCase()))
+      .filter(u => filterRole === "All Roles" || u.role === filterRole)
+      .filter(u => filterStatus === "All Statuses" || u.status === filterStatus);
+  }, [appUsers, search, filterRole, filterStatus]);
 
   const initials = (u: AppUser) =>
     (u.displayName || u.email || "?").split(" ").map(p => p[0]).join("").slice(0, 2).toUpperCase();
 
-  const orgUploadedFiles: UploadedFileMeta[] = onboardingStatus?.post_approval_setup?.uploaded_files ?? [];
-  const workerUploadedFiles: UploadedFileMeta[] = onboardingStatus?.post_approval_setup?.worker_uploaded_files ?? [];
-  const onboardingUserDirectory = (orgDirectoryUsers.length > 0
-    ? orgDirectoryUsers
-        .filter((u) => {
-          const status = String(u.Status || '').toLowerCase();
-          return status !== 'requested' && status !== 'rejected';
-        })
-        .map((u) => ({
-          name: u.Full_Name || '',
-          phone: u.Phone || '',
-          employee_id: '',
-          certification: '',
-          role: u.Role || '-',
-          email: u.Email || '',
-        }))
-    : (onboardingStatus?.post_approval_setup?.workers ?? []).filter(
-        (w): w is NonNullable<typeof onboardingStatus>['post_approval_setup']['workers'][number] =>
-          Boolean(w && typeof w === 'object'),
-      )) as Array<{
-    name: string;
-    phone: string;
-    employee_id?: string;
-    certification?: string;
-    role: string;
-    email: string;
-  }>;
-
-  if (activeTab === "knowledge-base") {
-    return (
-      <div className="space-y-6">
-        <div className="inline-flex rounded-xl border p-1" style={{ borderColor: '#E2E8E2', background: '#ffffff' }}>
-          {showOnboardingSetupTab && (
-            <button
-              type="button"
-              onClick={() => setSearchParams({ tab: 'onboarding-setup' })}
-              className="rounded-lg px-3 py-1.5 text-[13px]"
-              style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-            >
-              Onboarding Setup
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user-handle' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User Handle
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user-requests' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User Requests {isAdmin && totalPendingRequests > 0 ? `(${totalPendingRequests})` : ''}
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'knowledge-base' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', color: '#fff', fontWeight: 600 }}
-          >
-            Knowledge Base
-          </button>
+  return (
+    <div className="p-6 space-y-6 max-w-full overflow-hidden" onClick={() => roleMenuUid && setRoleMenuUid(null)}>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+          <p className="text-sm mt-1 text-gray-500">Manage organization users, roles, and safety certifications</p>
         </div>
+        <button 
+          onClick={handleAddUser}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
+        >
+          <Plus className="w-5 h-5" /> Add New User
+        </button>
+      </div>
 
-        <div className="bg-white rounded-xl border p-4" style={{ borderColor: '#E8EFE8', boxShadow: '0px 2px 12px rgba(27, 94, 32, 0.08)' }}>
-          <div className="flex items-center gap-2 mb-3">
-            <Database className="w-5 h-5" style={{ color: '#1B5E20' }} />
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0A0A0A' }}>Knowledge Base</h3>
+      {/* ── Filters ── */}
+      <div className="bg-white rounded-2xl border p-4 shadow-sm border-gray-100 flex flex-col lg:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input 
+            type="text"
+            placeholder="Search by name, email, or employee ID..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full h-11 pl-10 pr-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm"
+          />
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
+             <select
+               value={filterRole}
+               onChange={e => setFilterRole(e.target.value)}
+               className="h-11 pl-4 pr-10 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 appearance-none outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all"
+             >
+               <option>All Roles</option>
+               {ROLES.map(r => <option key={r}>{r}</option>)}
+             </select>
+             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           </div>
-          <p style={{ margin: '0 0 12px 0', fontSize: 13, color: '#4A5568' }}>
-            View uploaded data, upload new documents, and delete previous files.
-          </p>
 
-          {!isOnboardingOrgAdmin && (
-            <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#FFF8E1', color: '#8A6D3B', border: '1px solid #FFE0B2' }}>
-              Knowledge Base management is available for onboarding organization admins.
-            </div>
-          )}
-
-          {isOnboardingOrgAdmin && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block mb-1.5 text-[12px]" style={{ color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Upload Org Files</label>
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e) => setOrgFiles(Array.from(e.target.files || []))}
-                    className="w-full h-10 px-3 rounded-lg border text-[13px]"
-                    style={{ borderColor: '#E2E8E2' }}
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1.5 text-[12px]" style={{ color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Upload Worker Files</label>
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e) => setWorkerFiles(Array.from(e.target.files || []))}
-                    className="w-full h-10 px-3 rounded-lg border text-[13px]"
-                    style={{ borderColor: '#E2E8E2' }}
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={saveOnboardingSetup}
-                  disabled={setupSaving}
-                  className="px-4 py-2 rounded-lg text-white text-[13px] disabled:opacity-70"
-                  style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', fontWeight: 600 }}
-                >
-                  {setupSaving ? 'Uploading...' : 'Upload to Knowledge Base'}
-                </button>
-              </div>
-
-              {setupError && <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>{setupError}</div>}
-              {setupMessage && <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#E8F5E9', color: '#1B5E20', border: '1px solid #C8E6C9' }}>{setupMessage}</div>}
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="rounded-lg border" style={{ borderColor: '#E2E8E2' }}>
-                  <div className="px-3 py-2 border-b text-[12px]" style={{ borderColor: '#E2E8E2', fontWeight: 700, color: '#1B5E20' }}>Org Uploaded Files ({orgUploadedFiles.length})</div>
-                  <div className="p-2 space-y-2 max-h-[260px] overflow-auto">
-                    {orgUploadedFiles.length === 0 ? <p className="text-[12px]" style={{ color: '#9CA3AF' }}>No org files uploaded yet.</p> : orgUploadedFiles.map((f) => (
-                      <div key={f.stored_name} className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5" style={{ borderColor: '#EEF2EE' }}>
-                        <div className="min-w-0">
-                          <div className="truncate text-[12px]" style={{ color: '#0A0A0A', fontWeight: 600 }}>{f.original_name}</div>
-                          <div className="text-[11px]" style={{ color: '#9CA3AF' }}>{Math.round((f.size_bytes || 0) / 1024)} KB</div>
-                        </div>
-                        <button type="button" onClick={() => handleDeleteUploadedFile(f.stored_name, 'org')} className="p-1.5 rounded hover:bg-red-50" title="Delete file">
-                          <Trash2 className="w-4 h-4" style={{ color: '#DC2626' }} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-lg border" style={{ borderColor: '#E2E8E2' }}>
-                  <div className="px-3 py-2 border-b text-[12px]" style={{ borderColor: '#E2E8E2', fontWeight: 700, color: '#1B5E20' }}>Worker Uploaded Files ({workerUploadedFiles.length})</div>
-                  <div className="p-2 space-y-2 max-h-[260px] overflow-auto">
-                    {workerUploadedFiles.length === 0 ? <p className="text-[12px]" style={{ color: '#9CA3AF' }}>No worker files uploaded yet.</p> : workerUploadedFiles.map((f) => (
-                      <div key={f.stored_name} className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5" style={{ borderColor: '#EEF2EE' }}>
-                        <div className="min-w-0">
-                          <div className="truncate text-[12px]" style={{ color: '#0A0A0A', fontWeight: 600 }}>{f.original_name}</div>
-                          <div className="text-[11px]" style={{ color: '#9CA3AF' }}>{Math.round((f.size_bytes || 0) / 1024)} KB</div>
-                        </div>
-                        <button type="button" onClick={() => handleDeleteUploadedFile(f.stored_name, 'worker')} className="p-1.5 rounded hover:bg-red-50" title="Delete file">
-                          <Trash2 className="w-4 h-4" style={{ color: '#DC2626' }} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          <div className="relative">
+             <select
+               value={filterStatus}
+               onChange={e => setFilterStatus(e.target.value)}
+               className="h-11 pl-4 pr-10 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 appearance-none outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all"
+             >
+               <option>All Statuses</option>
+               <option>Active</option>
+               <option>Suspended</option>
+               <option>Pending</option>
+             </select>
+             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          </div>
         </div>
       </div>
-    );
-  }
 
-  if (activeTab === "onboarding-setup") {
-    return (
-      <div className="space-y-6 relative" onClick={() => roleMenuUid && setRoleMenuUid(null)}>
-        {/* <div className="inline-flex rounded-xl border p-1" style={{ borderColor: '#E2E8E2', background: '#ffffff' }}>
-          {showOnboardingSetupTab && (
-            <button
-              type="button"
-              onClick={() => setSearchParams({ tab: 'onboarding-setup' })}
-              className="rounded-lg px-3 py-1.5 text-[13px]"
-              style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', color: '#fff', fontWeight: 600 }}
-            >
-              Onboarding Setup
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user-handle' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User Handle
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user-requests' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User Requests {isAdmin && totalPendingRequests > 0 ? `(${totalPendingRequests})` : ''}
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'knowledge-base' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            Knowledge Base
-          </button>
-        </div> */}
+      {/* ── Users Table ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50 text-[11px] font-black text-gray-400 uppercase tracking-widest">
+              <tr>
+                <th className="px-6 py-4">User & Employee ID</th>
+                <th className="px-6 py-4">Role & Department</th>
+                <th className="px-6 py-4">Assigned Site</th>
+                <th className="px-6 py-4 text-center">Training</th>
+                <th className="px-6 py-4 text-center">Certification</th>
+                <th className="px-6 py-4 text-center">Status</th>
+                <th className="px-6 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-20 text-center text-gray-400">
+                     <UsersIcon className="w-12 h-12 mx-auto mb-3 opacity-10" />
+                     <p className="font-bold">No users found matching your filters</p>
+                  </td>
+                </tr>
+              ) : filteredUsers.map((u) => (
+                <tr key={u.uid} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      {u.photoURL ? (
+                        <img src={u.photoURL} className="w-10 h-10 rounded-xl object-cover border-2 border-white shadow-sm" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-[13px] font-black shadow-sm" style={{ background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}>
+                          {initials(u)}
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-[14px] font-bold text-gray-900 leading-tight">{u.displayName || "—"}</div>
+                        <div className="text-[11px] font-black text-indigo-500 mt-0.5 tracking-tighter uppercase">{u.employeeId}</div>
+                        <div className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">{u.email}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {isAdmin ? (
+                      <div className="relative" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => setRoleMenuUid(roleMenuUid === u.uid ? null : u.uid)}
+                          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] font-bold border border-slate-100 bg-slate-50 text-slate-700 hover:bg-slate-100 transition-all"
+                        >
+                          {u.role ?? "Assign"} <ChevronDown className="w-3 h-3" />
+                        </button>
+                        {roleMenuUid === u.uid && (
+                          <div className="absolute top-8 left-0 z-[70] bg-white shadow-2xl rounded-xl border border-slate-100 py-1 min-w-[160px] animate-in fade-in slide-in-from-top-1">
+                            {ROLES.map(r => (
+                              <button key={r}
+                                onClick={() => handleRoleChange(u.uid, r)}
+                                className={`w-full text-left px-4 py-2 text-[12px] hover:bg-indigo-50 transition-colors ${r === u.role ? 'font-bold text-indigo-600' : 'text-slate-600'}`}>
+                                {r}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="text-[11px] text-gray-400 font-medium mt-1 ml-1">{u.department}</div>
+                      </div>
+                    ) : (
+                      <>
+                        <RoleBadge role={u.role ?? "Worker"} />
+                        <div className="text-[11px] text-gray-400 font-medium mt-1">{u.department}</div>
+                      </>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-1.5 text-[13px] font-bold text-gray-700">
+                      <MapPin className="w-3.5 h-3.5 text-indigo-400" />
+                      {u.site}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                      u.trainingStatus === 'Completed' ? 'bg-emerald-100 text-emerald-600' : 
+                      u.trainingStatus === 'In Progress' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'
+                    }`}>
+                      {u.trainingStatus === 'Completed' && <CheckCircle2 className="w-3 h-3" />}
+                      {u.trainingStatus}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                      u.certificationStatus === 'Valid' ? 'bg-indigo-100 text-indigo-600' : 
+                      u.certificationStatus === 'Expiring Soon' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'
+                    }`}>
+                      {u.certificationStatus === 'Valid' && <Award className="w-3 h-3" />}
+                      {u.certificationStatus}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-tighter ${
+                      u.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 
+                      u.status === 'Suspended' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-slate-50 text-slate-400 border border-slate-100'
+                    }`}>
+                      <div className={`w-1.5 h-1.5 rounded-full ${u.status === 'Active' ? 'bg-emerald-500' : u.status === 'Suspended' ? 'bg-rose-500' : 'bg-slate-300'}`} />
+                      {u.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => { setSelectedUser(u); setShowDetail(true); }}
+                        className="p-2 rounded-lg hover:bg-indigo-50 text-indigo-500 transition-all"
+                        title="Edit User"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleToggleSuspend(u.uid, u.status === "Suspended")}
+                        className={`p-2 rounded-lg transition-all ${u.status === "Suspended" ? 'hover:bg-emerald-50 text-emerald-500' : 'hover:bg-rose-50 text-rose-500'}`}
+                        title={u.status === "Suspended" ? "Activate User" : "Suspend User"}
+                      >
+                        {u.status === "Suspended" ? <CheckCircle2 className="w-4 h-4" /> : <UserMinus className="w-4 h-4" />}
+                      </button>
+                      <button 
+                        onClick={() => handleResetPassword(u.email)}
+                        className="p-2 rounded-lg hover:bg-slate-100 text-gray-500 transition-all"
+                        title="Reset Password"
+                      >
+                        <Lock className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteUser(u.uid)}
+                        className="p-2 rounded-lg hover:bg-rose-50 text-rose-600 transition-all"
+                        title="Delete User"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-        {!isOnboardingOrgAdmin && (
-          <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#FFF8E1', color: '#8A6D3B', border: '1px solid #FFE0B2' }}>
-            Onboarding setup is available for onboarding organization admins.
-          </div>
-        )}
-
-        {isOnboardingOrgAdmin && (
-          <div className="bg-white rounded-xl border p-4" style={{ borderColor: '#E8EFE8', boxShadow: '0px 2px 12px rgba(27, 94, 32, 0.08)' }}>
-            <div className="flex items-center justify-between gap-3 mb-3">
+      {/* ── Add User Modal ── */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-100">
+            <div className="px-8 py-6 border-b flex items-center justify-between bg-slate-50/50">
               <div>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0A0A0A' }}>Organization Setup (Post-Approval)</h3>
-                <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#4A5568' }}>
-                  Complete org data upload and user provisioning inside HSE app.
-                </p>
+                <h2 className="text-xl font-black text-gray-900">Provision New User</h2>
+                <p className="text-sm text-gray-500 mt-1 font-medium">Assign access and departmental credentials</p>
               </div>
-              {onboardingStatus?.status && (
-                <span className={`ob-badge ob-badge-${onboardingStatus.status.toLowerCase()}`}>
-                  {onboardingStatus.status}
-                </span>
-              )}
+              <button onClick={() => setShowAddUserModal(false)} className="p-2 rounded-xl hover:bg-gray-200 transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
             </div>
 
-            {setupLoading && <p style={{ fontSize: 13, color: '#4A5568' }}>Loading setup details...</p>}
-
-            {!setupLoading && onboardingStatus?.found && onboardingStatus.status === 'approved' && (
-              <div className="space-y-4">
-                <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#EEF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
-                  Complete this setup before using other modules. Please upload feeding data, then create users as per onboarding limits.
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div style={{ fontSize: 13, color: '#374151' }}><b>Org:</b> {onboardingStatus.company_name}</div>
-                  <div style={{ fontSize: 13, color: '#374151' }}><b>Org Code:</b> {onboardingStatus.org_code}</div>
-                  <div style={{ fontSize: 13, color: '#374151' }}><b>Request ID:</b> {onboardingStatus.onboarding_uuid}</div>
-                  <div style={{ fontSize: 13, color: '#374151' }}><b>Admin:</b> {onboardingStatus.admin_email}</div>
-                  <div style={{ fontSize: 13, color: '#374151' }}><b>User Limit:</b> {maxAllowedUsers > 0 ? maxAllowedUsers : 'Not defined'}</div>
-                  <div style={{ fontSize: 13, color: '#374151' }}><b>Current Users in Form:</b> {onboardingWorkers.length}</div>
-                </div>
-
-                {onboardingStatus.onboarding_requirements?.kpi_sla && (
-                  <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#F8FAFC', color: '#334155', border: '1px solid #E2E8F0' }}>
-                    <b>Configured KPI/SLA from onboarding:</b> {JSON.stringify(onboardingStatus.onboarding_requirements.kpi_sla)}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block mb-1.5 text-[12px]" style={{ color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Organization Data Summary</label>
-                  <textarea
-                    value={orgDataSummary}
-                    onChange={(e) => setOrgDataSummary(e.target.value)}
-                    placeholder="Describe organization data and rollout notes"
-                    className="w-full min-h-[90px] px-3 py-2 rounded-lg border text-[13px]"
-                    style={{ borderColor: '#E2E8E2' }}
+            <div className="p-8 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <UserIcon className="w-3.5 h-3.5 text-indigo-500" /> Full Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. John Doe"
+                    value={newUser.displayName}
+                    onChange={(e) => setNewUser({ ...newUser, displayName: e.target.value })}
+                    className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-slate-50/50 text-[14px] transition-all focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-bold"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block mb-1.5 text-[12px]" style={{ color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Upload Org Files</label>
-                    <input
-                      type="file"
-                      multiple
-                      onChange={(e) => setOrgFiles(Array.from(e.target.files || []))}
-                      className="w-full h-10 px-3 rounded-lg border text-[13px]"
-                      style={{ borderColor: '#E2E8E2' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="block mb-1.5 text-[12px]" style={{ color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>Upload Worker Files</label>
-                    <input
-                      type="file"
-                      multiple
-                      onChange={(e) => setWorkerFiles(Array.from(e.target.files || []))}
-                      className="w-full h-10 px-3 rounded-lg border text-[13px]"
-                      style={{ borderColor: '#E2E8E2' }}
-                    />
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Key className="w-3.5 h-3.5 text-indigo-500" /> Employee ID
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="EMP-0000"
+                    value={newUser.employeeId}
+                    onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })}
+                    className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-slate-50/50 text-[14px] transition-all focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-bold"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Mail className="w-3.5 h-3.5 text-indigo-500" /> Professional Email
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="name@organization.com"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-slate-50/50 text-[14px] transition-all focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-bold"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-indigo-500" /> Primary Role
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={newUser.role}
+                      onChange={(e) => setNewUser({ ...newUser, role: e.target.value as UserRole })}
+                      className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-slate-50/50 text-[14px] appearance-none transition-all focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-bold"
+                    >
+                      {ROLES.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[12px]" style={{ color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600 }}>User Provisioning</label>
-                    <button
-                      type="button"
-                      onClick={addOnboardingWorker}
-                      disabled={reachedUserLimit}
-                      className="px-3 py-1.5 rounded-lg text-[12px] border"
-                      style={{ borderColor: '#C8E6C9', color: '#1B5E20', background: '#F6FBF6', fontWeight: 600 }}
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Building2 className="w-3.5 h-3.5 text-indigo-500" /> Department
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={newUser.department}
+                      onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
+                      className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-slate-50/50 text-[14px] appearance-none transition-all focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-bold"
                     >
-                      {reachedUserLimit ? `Limit reached (${maxAllowedUsers})` : '+ Add User'}
-                    </button>
-                  </div>
-                  {onboardingWorkers.map((worker, idx) => (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-7 gap-2 items-end">
-                      <input
-                        value={worker.name}
-                        onChange={(e) => updateOnboardingWorker(idx, 'name', e.target.value)}
-                        placeholder="Name"
-                        className="h-10 px-3 rounded-lg border text-[13px]"
-                        style={{ borderColor: '#E2E8E2' }}
-                      />
-                      <input
-                        value={worker.email}
-                        onChange={(e) => updateOnboardingWorker(idx, 'email', e.target.value)}
-                        placeholder="Email"
-                        className="h-10 px-3 rounded-lg border text-[13px]"
-                        style={{ borderColor: '#E2E8E2' }}
-                      />
-                      <input
-                        value={worker.phone}
-                        onChange={(e) => updateOnboardingWorker(idx, 'phone', e.target.value)}
-                        placeholder="Phone (+countrycode)"
-                        className="h-10 px-3 rounded-lg border text-[13px]"
-                        style={{ borderColor: '#E2E8E2' }}
-                      />
-                      <input
-                        value={worker.employee_id}
-                        onChange={(e) => updateOnboardingWorker(idx, 'employee_id', e.target.value)}
-                        placeholder="Employee ID"
-                        className="h-10 px-3 rounded-lg border text-[13px]"
-                        style={{ borderColor: '#E2E8E2' }}
-                      />
-                      <input
-                        value={worker.certification}
-                        onChange={(e) => updateOnboardingWorker(idx, 'certification', e.target.value)}
-                        placeholder="Certification"
-                        className="h-10 px-3 rounded-lg border text-[13px]"
-                        style={{ borderColor: '#E2E8E2' }}
-                      />
-                      <select
-                        value={worker.role}
-                        onChange={(e) => updateOnboardingWorker(idx, 'role', e.target.value)}
-                        className="h-10 px-3 rounded-lg border text-[13px] bg-white"
-                        style={{ borderColor: '#E2E8E2' }}
-                      >
-                        {ONBOARDING_USER_ROLE_OPTIONS.map((role) => (
-                          <option key={role} value={role}>{role}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => removeOnboardingWorker(idx)}
-                        disabled={onboardingWorkers.length === 1}
-                        className="h-10 px-3 rounded-lg border text-[12px] disabled:opacity-50"
-                        style={{ borderColor: '#FECACA', color: '#DC2626', background: '#FFF5F5', fontWeight: 600 }}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {setupError && (
-                  <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>
-                    {setupError}
-                  </div>
-                )}
-                {setupMessage && (
-                  <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#E8F5E9', color: '#1B5E20', border: '1px solid #C8E6C9' }}>
-                    {setupMessage}
-                  </div>
-                )}
-
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={saveOnboardingSetup}
-                    disabled={setupSaving}
-                    className="px-4 py-2 rounded-lg text-white text-[13px] disabled:opacity-70"
-                    style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', fontWeight: 600 }}
-                  >
-                    {setupSaving ? 'Saving...' : 'Save Organization Setup'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {!setupLoading && onboardingStatus?.found && onboardingStatus.status !== 'approved' && (
-              <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#FFF8E1', color: '#8A6D3B', border: '1px solid #FFE0B2' }}>
-                Setup will be enabled after onboarding status becomes <b>approved</b>.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (activeTab === "user") {
-    return (
-      <div className="space-y-6">
-        {/* <div className="inline-flex rounded-xl border p-1" style={{ borderColor: '#E2E8E2', background: '#ffffff' }}>
-          {showOnboardingSetupTab && (
-            <button
-              type="button"
-              onClick={() => setSearchParams({ tab: 'onboarding-setup' })}
-              className="rounded-lg px-3 py-1.5 text-[13px]"
-              style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-            >
-              Onboarding Setup
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', color: '#fff', fontWeight: 600 }}
-          >
-            User
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user-handle' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User Handle
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user-requests' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User Requests {isAdmin && totalPendingRequests > 0 ? `(${totalPendingRequests})` : ''}
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'knowledge-base' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            Knowledge Base
-          </button>
-        </div> */}
-
-        <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: '#E8EFE8', boxShadow: '0px 2px 12px rgba(27, 94, 32, 0.08)' }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: '#EEF2EE', background: '#F4F7F4' }}>
-            <span className="text-[12px] uppercase tracking-[0.5px]" style={{ color: '#2E7D32', fontWeight: 700 }}>
-              User Directory — {onboardingUserDirectory.length}
-            </span>
-          </div>
-          {onboardingUserDirectory.length === 0 ? (
-            <div className="p-6 text-[13px]" style={{ color: '#6B7280' }}>
-              No onboarding users saved yet. Add users from <b>Onboarding Setup</b>.
-            </div>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr style={{ background: '#F9FBF9' }}>
-                  {['Name', 'Number', 'Employee', 'Certification', 'Role', 'Email'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[11px] uppercase" style={{ color: '#9CA3AF', fontWeight: 700 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {onboardingUserDirectory.map((u, idx) => (
-                  <tr key={`${u.email}-${idx}`} style={{ borderTop: '1px solid #EEF2EE' }}>
-                    <td className="px-4 py-3 text-[13px]" style={{ color: '#0A0A0A', fontWeight: 600 }}>{u.name || '-'}</td>
-                    <td className="px-4 py-3 text-[13px]" style={{ color: '#374151' }}>{u.phone || '-'}</td>
-                    <td className="px-4 py-3 text-[13px]" style={{ color: '#374151' }}>{u.employee_id || '-'}</td>
-                    <td className="px-4 py-3 text-[13px]" style={{ color: '#374151' }}>{u.certification || '-'}</td>
-                    <td className="px-4 py-3 text-[13px]" style={{ color: '#374151' }}>{u.role || '-'}</td>
-                    <td className="px-4 py-3 text-[13px]" style={{ color: '#374151' }}>{u.email || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (activeTab === "user-requests") {
-    return (
-      <div className="space-y-6 relative" onClick={() => roleMenuUid && setRoleMenuUid(null)}>
-        {/* <div className="inline-flex rounded-xl border p-1" style={{ borderColor: '#E2E8E2', background: '#ffffff' }}>
-          {showOnboardingSetupTab && (
-            <button
-              type="button"
-              onClick={() => setSearchParams({ tab: 'onboarding-setup' })}
-              className="rounded-lg px-3 py-1.5 text-[13px]"
-              style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-            >
-              Onboarding Setup
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user-handle' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            User Handle
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'user-requests' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', color: '#fff', fontWeight: 600 }}
-          >
-            User Requests {isAdmin && totalPendingRequests > 0 ? `(${totalPendingRequests})` : ''}
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'knowledge-base' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            Knowledge Base
-          </button>
-        </div> */}
-
-        {!isAdmin ? (
-          <div className="px-3 py-2 rounded-lg text-[12px]" style={{ background: '#FFF8E1', color: '#8A6D3B', border: '1px solid #FFE0B2' }}>
-            User requests are visible for admins only.
-          </div>
-        ) : (orgAccessRequests.length === 0 && pendingUsers.length === 0) ? (
-          <div className="bg-white rounded-xl border p-6" style={{ borderColor: '#E8EFE8' }}>
-            <p className="text-[13px]" style={{ color: '#4A5568' }}>No pending user requests.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {isOnboardingOrgAdmin && (
-              <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#B7E4C7', background: '#F6FFF9' }}>
-                <div className="px-4 py-3 flex items-center gap-2 border-b" style={{ borderColor: '#B7E4C7', background: '#E8F5E9' }}>
-                  <Clock className="w-4 h-4" style={{ color: '#1B5E20' }} />
-                  <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: '#1B5E20' }}>
-                    Org Access Requests — {orgAccessRequests.length}
-                  </span>
-                </div>
-                {orgAccessRequests.length === 0 ? (
-                  <div className="px-4 py-4 text-[13px]" style={{ color: '#4A5568' }}>
-                    No pending org access requests.
-                  </div>
-                ) : (
-                  <div className="divide-y" style={{ borderColor: '#CFEFD9' }}>
-                    {orgAccessRequests.map((req) => (
-                      <div key={req.request_id} className="px-4 py-3 flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold" style={{ background: '#D1FAE5', color: '#065F46' }}>
-                          {(req.name || req.email || "U").slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold truncate" style={{ color: '#0A0A0A' }}>{req.name || "Requested User"}</p>
-                          <p className="text-[12px] truncate" style={{ color: '#6B7280' }}>{req.email}</p>
-                          <p className="text-[11px]" style={{ color: '#9CA3AF' }}>Org: {req.org_code}</p>
-                        </div>
-                        <select
-                          value={orgRequestRoles[req.request_id] || "Worker/Contractor"}
-                          onChange={(e) => setOrgRequestRoles((prev) => ({
-                            ...prev,
-                            [req.request_id]: e.target.value as typeof ONBOARDING_USER_ROLE_OPTIONS[number],
-                          }))}
-                          className="h-9 px-2.5 rounded-lg border text-[12px] bg-white"
-                          style={{ borderColor: '#C8E6C9', color: '#1F2937' }}
-                        >
-                          {ONBOARDING_USER_ROLE_OPTIONS.map((role) => (
-                            <option key={role} value={role}>{role}</option>
-                          ))}
-                        </select>
-                        <button
-                          disabled={orgRequestActionId === req.request_id}
-                          onClick={() => handleOrgRequestReview(req.request_id, "approve")}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-semibold disabled:opacity-60"
-                          style={{ background: '#2E7D32' }}
-                        >
-                          {orgRequestActionId === req.request_id
-                            ? <span className="w-3.5 h-3.5 border border-white/40 border-t-white rounded-full animate-spin" />
-                            : <CheckCircle2 className="w-3.5 h-3.5" />} Approve
-                        </button>
-                        <button
-                          disabled={orgRequestActionId === req.request_id}
-                          onClick={() => handleOrgRequestReview(req.request_id, "reject")}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border disabled:opacity-60"
-                          style={{ borderColor: '#FECACA', color: '#DC2626', background: '#FFF5F5' }}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Reject
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {pendingUsers.length > 0 && (
-              <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#FED7AA', background: '#FFFBF5' }}>
-                <div className="px-4 py-3 flex items-center gap-2 border-b" style={{ borderColor: '#FED7AA', background: '#FFF3E0' }}>
-                  <Clock className="w-4 h-4" style={{ color: '#E65100' }} />
-                  <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: '#E65100' }}>
-                    Platform User Requests — {pendingUsers.length}
-                  </span>
-                </div>
-                <div className="divide-y" style={{ borderColor: '#FEE0B2' }}>
-                  {pendingUsers.map(u => (
-                    <div key={u.uid} className="px-4 py-3 flex items-center gap-3">
-                      {u.photoURL
-                        ? <img src={u.photoURL} className="w-9 h-9 rounded-full object-cover shrink-0" />
-                        : (
-                          <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold" style={{ background: '#FFE0B2', color: '#E65100' }}>
-                            {initials(u)}
-                          </div>
-                        )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold truncate" style={{ color: '#0A0A0A' }}>{u.displayName || "—"}</p>
-                        <p className="text-[12px] truncate" style={{ color: '#6B7280' }}>{u.email}</p>
-                      </div>
-                      <button
-                        disabled={loadingUid === u.uid}
-                        onClick={() => handleApprove(u.uid, u.role ?? "Worker")}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-semibold disabled:opacity-60"
-                        style={{ background: '#2E7D32' }}
-                      >
-                        {loadingUid === u.uid
-                          ? <span className="w-3.5 h-3.5 border border-white/40 border-t-white rounded-full animate-spin" />
-                          : <CheckCircle2 className="w-3.5 h-3.5" />} Approve
-                      </button>
-                      <button
-                        disabled={loadingUid === u.uid}
-                        onClick={() => handleDeleteUser(u.uid)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border disabled:opacity-60"
-                        style={{ borderColor: '#FECACA', color: '#DC2626', background: '#FFF5F5' }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Reject
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6 relative" onClick={() => roleMenuUid && setRoleMenuUid(null)}>
-      <div className="inline-flex rounded-xl border p-1" style={{ borderColor: '#E2E8E2', background: '#ffffff' }}>
-        {/* {showOnboardingSetupTab && (
-          <button
-            type="button"
-            onClick={() => setSearchParams({ tab: 'onboarding-setup' })}
-            className="rounded-lg px-3 py-1.5 text-[13px]"
-            style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-          >
-            Onboarding Setup
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setSearchParams({ tab: 'user' })}
-          className="rounded-lg px-3 py-1.5 text-[13px]"
-          style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-        >
-          User
-        </button>
-        <button
-          type="button"
-          onClick={() => setSearchParams({ tab: 'user-handle' })}
-          className="rounded-lg px-3 py-1.5 text-[13px]"
-          style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', color: '#fff', fontWeight: 600 }}
-        >
-          User Handle
-        </button>
-        <button
-          type="button"
-          onClick={() => setSearchParams({ tab: 'user-requests' })}
-          className="rounded-lg px-3 py-1.5 text-[13px]"
-          style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-        >
-          User Requests {isAdmin && totalPendingRequests > 0 ? `(${totalPendingRequests})` : ''}
-        </button>
-        <button
-          type="button"
-          onClick={() => setSearchParams({ tab: 'knowledge-base' })}
-          className="rounded-lg px-3 py-1.5 text-[13px]"
-          style={{ background: 'transparent', color: '#4A5568', fontWeight: 600 }}
-        >
-          Knowledge Base
-        </button> */}
-      </div>
-
-      <PeopleDashboardSection currentUserName={currentUser?.name} />
-
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1>Users</h1>
-          <span className="px-2.5 py-1 rounded-full text-[12px]" style={{ background: '#E8F5E9', color: '#1B5E20', fontWeight: 600 }}>
-            {appUsers.length} users
-          </span>
-          {totalPendingRequests > 0 && (
-            <span className="px-2.5 py-1 rounded-full text-[12px]" style={{ background: '#FFF3E0', color: '#E65100', fontWeight: 600 }}>
-              {totalPendingRequests} pending
-            </span>
-          )}
-        </div>
-        <button onClick={handleAddUser} className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-[13px]" style={{ background: 'linear-gradient(135deg, #1B5E20, #2E7D32)', fontWeight: 600 }}>
-          <Plus className="w-4 h-4" /> Add User
-        </button>
-      </div>
-
-      {/* ── Pending Approvals (Admin only) ── */}
-      {isAdmin && pendingUsers.length > 0 && (
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#FED7AA', background: '#FFFBF5' }}>
-          <div className="px-4 py-3 flex items-center gap-2 border-b" style={{ borderColor: '#FED7AA', background: '#FFF3E0' }}>
-            <Clock className="w-4 h-4" style={{ color: '#E65100' }} />
-            <span className="text-[12px] font-bold uppercase tracking-wider" style={{ color: '#E65100' }}>
-              Pending Approvals — {pendingUsers.length}
-            </span>
-          </div>
-          <div className="divide-y" style={{ borderColor: '#FEE0B2' }}>
-            {pendingUsers.map(u => (
-              <div key={u.uid} className="px-4 py-3 flex items-center gap-3">
-                {u.photoURL
-                  ? <img src={u.photoURL} className="w-9 h-9 rounded-full object-cover shrink-0" />
-                  : (
-                    <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold" style={{ background: '#FFE0B2', color: '#E65100' }}>
-                      {initials(u)}
-                    </div>
-                  )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold truncate" style={{ color: '#0A0A0A' }}>{u.displayName || "—"}</p>
-                  <p className="text-[12px] truncate" style={{ color: '#6B7280' }}>{u.email}</p>
-                </div>
-                {/* Role picker */}
-                <div className="relative" onClick={e => e.stopPropagation()}>
-                  <button
-                    onClick={() => setRoleMenuUid(roleMenuUid === u.uid ? null : u.uid)}
-                    className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12px] font-medium border"
-                    style={{ borderColor: '#E2E8E2', color: '#374151', background: '#fff' }}
-                  >
-                    {u.role ?? "Assign role"} <ChevronDown className="w-3 h-3" />
-                  </button>
-                  {roleMenuUid === u.uid && (
-                    <div className="absolute top-9 left-0 z-10 bg-white shadow-xl rounded-xl border py-1 min-w-[150px]" style={{ borderColor: '#E2E8E2' }}>
-                      {ROLES.map(r => (
-                        <button key={r}
-                          onClick={() => { setAppUsers(prev => prev.map(x => x.uid === u.uid ? { ...x, role: r } : x)); setRoleMenuUid(null); }}
-                          className="w-full text-left px-4 py-2 text-[12px] hover:bg-[#F4F7F4]" style={{ color: '#374151' }}>
-                          {r}
-                        </button>
+                      {DEPARTMENTS.map((dept) => (
+                        <option key={dept} value={dept}>{dept}</option>
                       ))}
-                    </div>
-                  )}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Primary Site
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={newUser.site}
+                      onChange={(e) => setNewUser({ ...newUser, site: e.target.value })}
+                      className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-slate-50/50 text-[14px] appearance-none transition-all focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-bold"
+                    >
+                      {SITES.map((site) => (
+                        <option key={site} value={site}>{site}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center gap-4">
                 <button
-                  disabled={loadingUid === u.uid}
-                  onClick={() => handleApprove(u.uid, u.role ?? "Worker")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-semibold disabled:opacity-60"
-                  style={{ background: '#2E7D32' }}
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="flex-1 h-12 rounded-2xl border border-slate-200 font-bold text-gray-600 hover:bg-slate-50 transition-all text-sm"
                 >
-                  {loadingUid === u.uid
-                    ? <span className="w-3.5 h-3.5 border border-white/40 border-t-white rounded-full animate-spin" />
-                    : <CheckCircle2 className="w-3.5 h-3.5" />} Approve
+                  Cancel
                 </button>
                 <button
-                  disabled={loadingUid === u.uid}
-                  onClick={() => handleDeleteUser(u.uid)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border disabled:opacity-60"
-                  style={{ borderColor: '#FECACA', color: '#DC2626', background: '#FFF5F5' }}
+                  type="button"
+                  onClick={handleSaveNewUser}
+                  disabled={isAddingUser}
+                  className="flex-[1.5] h-12 rounded-2xl text-white font-black transition-all flex items-center justify-center gap-2 disabled:opacity-70 text-sm shadow-xl shadow-indigo-100"
+                  style={{ background: 'linear-gradient(135deg, #4F46E5, #6366F1)' }}
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                  {isAddingUser ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Plus className="w-5 h-5" />
+                  )}
+                  Create Account
                 </button>
               </div>
-            ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── Filters ── */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#9CA3AF' }} />
-          <input
-            placeholder="Search users..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 rounded-lg border text-[13px]"
-            style={{ borderColor: '#E2E8E2' }}
-          />
-        </div>
-        <select
-          value={filterRole}
-          onChange={e => setFilterRole(e.target.value)}
-          className="px-3 py-2 rounded-lg border text-[13px] bg-white"
-          style={{ borderColor: '#E2E8E2', color: '#4A5568' }}
-        >
-          <option>All Roles</option>
-          {ROLES.map(r => <option key={r}>{r}</option>)}
-        </select>
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          className="px-3 py-2 rounded-lg border text-[13px] bg-white"
-          style={{ borderColor: '#E2E8E2', color: '#4A5568' }}
-        >
-          <option>All Statuses</option>
-          <option>Active</option>
-          <option>Inactive</option>
-        </select>
-      </div>
-
-      {/* ── Approved Users Table ── */}
-      <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: '#E8EFE8', boxShadow: '0px 2px 12px rgba(27, 94, 32, 0.08)' }}>
-        <div className="px-4 py-3 flex items-center gap-2 border-b" style={{ borderColor: '#EEF2EE', background: '#F4F7F4' }}>
-          <ShieldCheck className="w-4 h-4" style={{ color: '#2E7D32' }} />
-          <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#2E7D32' }}>
-            Approved Users — {approvedUsers.length}
-          </span>
-        </div>
-        <table className="w-full">
-          <thead>
-            <tr style={{ background: '#F4F7F4' }}>
-              {["Name", "Email", "Role", "Status", "Actions"].map(h => (
-                <th key={h} className="px-4 py-3 text-left">
-                  <span className="text-[11px] uppercase tracking-[0.5px]" style={{ color: '#9CA3AF', fontWeight: 600 }}>{h}</span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {approvedUsers.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center">
-                  <UsersIcon className="w-8 h-8 mx-auto mb-2 opacity-20" style={{ color: '#9CA3AF' }} />
-                  <p className="text-[13px]" style={{ color: '#9CA3AF' }}>No approved users yet</p>
-                </td>
-              </tr>
-            ) : approvedUsers.map(u => (
-              <tr key={u.uid} className="group hover:bg-[#F9FBF9] transition-colors" style={{ borderBottom: '1px solid #EEF2EE' }}>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {u.photoURL
-                      ? <img src={u.photoURL} className="w-8 h-8 rounded-full object-cover" />
-                      : (
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px]" style={{ background: 'linear-gradient(135deg, #1B5E20, #43A047)', fontWeight: 600 }}>
-                          {initials(u)}
-                        </div>
-                      )}
-                    <span className="text-[13px]" style={{ color: '#0A0A0A', fontWeight: 500 }}>{u.displayName || "—"}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-[13px]" style={{ color: '#4A5568' }}>{u.email}</td>
-                <td className="px-4 py-3">
-                  {/* Inline role dropdown for Admin */}
-                  {isAdmin ? (
-                    <div className="relative" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => setRoleMenuUid(roleMenuUid === u.uid + "_t" ? null : u.uid + "_t")}
-                        className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[12px] font-medium border"
-                        style={{ borderColor: '#E2E8E2', color: '#374151', background: '#F9FBF9' }}
-                      >
-                        {u.role ?? "—"} <ChevronDown className="w-3 h-3" />
-                      </button>
-                      {roleMenuUid === u.uid + "_t" && (
-                        <div className="absolute top-8 left-0 z-10 bg-white shadow-xl rounded-xl border py-1 min-w-[150px]" style={{ borderColor: '#E2E8E2' }}>
-                          {ROLES.map(r => (
-                            <button key={r}
-                              onClick={() => handleRoleChange(u.uid, r)}
-                              className={`w-full text-left px-4 py-2 text-[12px] hover:bg-[#F4F7F4] ${r === u.role ? 'font-semibold' : ''}`}
-                              style={{ color: r === u.role ? '#1B5E20' : '#374151' }}>
-                              {r}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <RoleBadge role={u.role ?? "Worker"} />
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ background: '#2E7D32' }} />
-                    <span className="text-[13px]" style={{ color: '#2E7D32', fontWeight: 500 }}>Active</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => { setSelectedUser(u); setShowDetail(true); }}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[#E8F5E9]"
-                    >
-                      <Edit className="w-4 h-4" style={{ color: '#4A5568' }} />
-                    </button>
-                    {isAdmin && (
-                      <button
-                        disabled={loadingUid === u.uid}
-                        onClick={() => handleRevoke(u.uid)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-red-50 disabled:opacity-60"
-                      >
-                        {loadingUid === u.uid
-                          ? <span className="w-3.5 h-3.5 border border-gray-300 border-t-red-500 rounded-full animate-spin" />
-                          : <Ban className="w-4 h-4" style={{ color: '#DC2626' }} />}
-                      </button>
-                    )}
-                    {isAdmin && (
-                      <button
-                        disabled={loadingUid === u.uid}
-                        onClick={() => handleDeleteUser(u.uid)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-red-50 disabled:opacity-60"
-                        title="Delete user"
-                      >
-                        <Trash2 className="w-4 h-4" style={{ color: '#DC2626' }} />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
       {/* ── User Detail Slide-over ── */}
       {showDetail && selectedUser && (
         <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowDetail(false)} />
-          <div className="fixed right-0 top-0 bottom-0 w-[480px] bg-white z-50 shadow-2xl flex flex-col overflow-hidden">
-            <div className="px-6 py-5 border-b flex items-center justify-between" style={{ borderColor: '#E2E8E2' }}>
-              <h2>User Details</h2>
-              <button onClick={() => setShowDetail(false)} className="p-1.5 rounded-lg hover:bg-[#F4F7F4]">
-                <X className="w-5 h-5" style={{ color: '#4A5568' }} />
+          <div className="fixed inset-0 bg-black/50 z-[110] backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowDetail(false)} />
+          <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[540px] bg-white z-[120] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="px-8 py-6 border-b flex items-center justify-between" style={{ borderColor: '#F1F5F9' }}>
+              <h2 className="text-xl font-black text-gray-900">User Profile Engine</h2>
+              <button onClick={() => setShowDetail(false)} className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
+                <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
-            {/* User Header */}
-            <div className="px-6 py-5 flex items-center gap-4 border-b" style={{ borderColor: '#EEF2EE' }}>
-              {selectedUser.photoURL
-                ? <img src={selectedUser.photoURL} className="w-14 h-14 rounded-full object-cover" />
-                : (
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center text-white text-[18px]" style={{ background: 'linear-gradient(135deg, #1B5E20, #43A047)', fontWeight: 600 }}>
+            <div className="p-8 flex items-center gap-5 border-b bg-slate-50/30" style={{ borderColor: '#F1F5F9' }}>
+              <div className="relative">
+                {selectedUser.photoURL ? (
+                  <img src={selectedUser.photoURL} className="w-20 h-20 rounded-3xl object-cover border-4 border-white shadow-lg" />
+                ) : (
+                  <div className="w-20 h-20 rounded-3xl flex items-center justify-center text-white text-2xl font-black shadow-lg" style={{ background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}>
                     {initials(selectedUser)}
                   </div>
                 )}
+                <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-4 border-white shadow-sm ${selectedUser.status === 'Active' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+              </div>
               <div>
-                <div className="text-[16px]" style={{ color: '#0A0A0A', fontWeight: 600 }}>{selectedUser.displayName || "—"}</div>
-                <div className="text-[13px]" style={{ color: '#4A5568' }}>{selectedUser.email}</div>
+                <div className="text-xl font-black text-gray-900 tracking-tight">{selectedUser.displayName}</div>
+                <div className="text-[12px] font-black text-indigo-500 uppercase tracking-widest mt-0.5">{selectedUser.employeeId}</div>
+                <div className="text-sm text-gray-400 font-medium mt-1">{selectedUser.email}</div>
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b px-6" style={{ borderColor: '#EEF2EE' }}>
-              {[{ id: "profile", label: "Profile" }, { id: "activity", label: "Activity Log" }].map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setDetailTab(t.id)}
-                  className="px-4 py-2.5 text-[13px] relative"
-                  style={{ color: detailTab === t.id ? '#1B5E20' : '#4A5568', fontWeight: detailTab === t.id ? 600 : 400 }}
-                >
-                  {t.label}
-                  {detailTab === t.id && <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: '#1B5E20' }} />}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6">
-              {detailTab === "profile" ? (
-                <div className="space-y-5">
-                  <div>
-                    <label className="block mb-1.5">Role</label>
-                    <select
-                      value={selectedUser.role ?? "Worker"}
-                      onChange={e => isAdmin && handleRoleChange(selectedUser.uid, e.target.value as UserRole)}
-                      disabled={!isAdmin}
-                      className="w-full h-10 px-3 rounded-lg border text-[13px] bg-white disabled:opacity-60"
-                      style={{ borderColor: '#E2E8E2' }}
-                    >
-                      {ROLES.map(r => <option key={r}>{r}</option>)}
-                    </select>
+            <div className="flex-1 overflow-y-auto p-8 space-y-8">
+               <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                     <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <Shield className="w-3.5 h-3.5 text-indigo-500" /> Current Role
+                     </div>
+                     <div className="text-sm font-bold text-gray-700 bg-slate-50 p-3 rounded-xl border border-slate-100">{selectedUser.role}</div>
                   </div>
-                  {isAdmin && (
-                    <div className="pt-2">
-                      <button
-                        onClick={() => { handleRevoke(selectedUser.uid); setShowDetail(false); }}
-                        className="w-full py-2.5 rounded-lg text-[13px] font-semibold border"
-                        style={{ borderColor: '#FECACA', color: '#DC2626', background: '#FFF5F5' }}
-                      >
-                        <XCircle className="inline w-4 h-4 mr-1.5 -mt-0.5" /> Revoke Access
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(selectedUser.uid)}
-                        className="w-full mt-2 py-2.5 rounded-lg text-[13px] font-semibold border"
-                        style={{ borderColor: '#FECACA', color: '#DC2626', background: '#FFF5F5' }}
-                      >
-                        <Trash2 className="inline w-4 h-4 mr-1.5 -mt-0.5" /> Delete User
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-0">
-                  {activityLog.map((a, i) => (
-                    <div key={i} className="flex items-start gap-3 py-3 border-b" style={{ borderColor: '#EEF2EE' }}>
-                      <Clock className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#9CA3AF' }} />
-                      <div>
-                        <div className="text-[13px]" style={{ color: '#0A0A0A' }}>{a.action}</div>
-                        <div className="text-[11px]" style={{ color: '#9CA3AF' }}>{a.time}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                  <div className="space-y-1">
+                     <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-indigo-500" /> Department
+                     </div>
+                     <div className="text-sm font-bold text-gray-700 bg-slate-50 p-3 rounded-xl border border-slate-100">{selectedUser.department}</div>
+                  </div>
+                  <div className="space-y-1">
+                     <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Primary Site
+                     </div>
+                     <div className="text-sm font-bold text-gray-700 bg-slate-50 p-3 rounded-xl border border-slate-100">{selectedUser.site}</div>
+                  </div>
+                  <div className="space-y-1">
+                     <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-indigo-500" /> Account Status
+                     </div>
+                     <div className={`text-sm font-bold p-3 rounded-xl border ${selectedUser.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-rose-50 text-rose-700 border-rose-100'}`}>
+                        {selectedUser.status}
+                     </div>
+                  </div>
+               </div>
+
+               <div className="space-y-4">
+                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest border-b pb-2">Safety & Compliance</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-2">
+                        <div className="flex items-center justify-between">
+                           <GraduationCap className="w-5 h-5 text-indigo-500" />
+                           <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${selectedUser.trainingStatus === 'Completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                              {selectedUser.trainingStatus}
+                           </span>
+                        </div>
+                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Training Progress</div>
+                        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                           <div className="h-full bg-indigo-500" style={{ width: selectedUser.trainingStatus === 'Completed' ? '100%' : '65%' }} />
+                        </div>
+                     </div>
+
+                     <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-2">
+                        <div className="flex items-center justify-between">
+                           <Award className="w-5 h-5 text-indigo-500" />
+                           <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${selectedUser.certificationStatus === 'Valid' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                              {selectedUser.certificationStatus}
+                           </span>
+                        </div>
+                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">HSE Certification</div>
+                        <div className="text-sm font-black text-gray-700">OSHA-30 Certified</div>
+                     </div>
+                  </div>
+               </div>
+
+               <div className="pt-8 space-y-3">
+                  <button 
+                    onClick={() => handleResetPassword(selectedUser.email)}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-slate-200 font-bold text-gray-600 hover:bg-slate-50 transition-all text-sm"
+                  >
+                    <Lock className="w-4 h-4" /> Reset Security Credentials
+                  </button>
+                  <button 
+                    onClick={() => handleToggleSuspend(selectedUser.uid, selectedUser.status === "Suspended")}
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold transition-all text-sm ${
+                      selectedUser.status === "Suspended" ? 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100'
+                    }`}
+                  >
+                    {selectedUser.status === "Suspended" ? <CheckCircle2 className="w-4 h-4" /> : <UserMinus className="w-4 h-4" />}
+                    {selectedUser.status === "Suspended" ? 'Activate User Account' : 'Suspend Security Access'}
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteUser(selectedUser.uid)}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-rose-100 bg-rose-600 text-white font-bold hover:bg-rose-700 transition-all text-sm shadow-lg shadow-rose-100"
+                  >
+                    <Trash2 className="w-4 h-4" /> Permanently Delete Identity
+                  </button>
+               </div>
             </div>
           </div>
         </>

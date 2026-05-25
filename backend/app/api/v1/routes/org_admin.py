@@ -13,6 +13,9 @@ ENDPOINTS = [
     # Activities
     ("GET",    "/activities",                     "org_admin_activities_list",       "List recent activities"),
 
+    # Engagement
+    ("GET",    "/engagement",                     "org_admin_engagement_get",        "Get engagement & participation data"),
+
     # Shift Management
     ("GET",    "/shifts",                         "org_admin_shifts_list",           "List shifts"),
     ("POST",   "/shifts",                         "org_admin_shifts_create",         "Create shift"),

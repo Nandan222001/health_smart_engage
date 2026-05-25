@@ -173,8 +173,31 @@ interface SuperAdminUser {
   tenant_name?: string;
 }
 
+interface StorageStore {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  used_gb: number;
+  capacity_gb: number;
+  entities: Record<string, number>;
+}
+
+interface StorageMetrics {
+  stores: StorageStore[];
+  summary: {
+    total_used_gb: number;
+    total_capacity_gb: number;
+    healthy_stores: number;
+    degraded_stores: number;
+    total_records: number;
+  };
+}
+
+// baseQuery in baseApi.ts already unwraps {data:{items:[...]}} → raw array.
+// Handle both the already-unwrapped array and any still-wrapped fallback.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const items = (r: any) => r?.data?.items ?? [];
+const items = (r: any) => Array.isArray(r) ? r : r?.items ?? r?.data?.items ?? [];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const obj = (r: any) => r?.data ?? r;
 // Backend CommandPayload requires body wrapped as { data: { ... } }
@@ -419,6 +442,12 @@ export const adminApi = baseApi.injectEndpoints({
       transformResponse: items,
       providesTags: ["User"],
     }),
+
+    // Storage metrics
+    getAdminStorageMetrics: builder.query<StorageMetrics, void>({
+      query: () => "/admin/storage/metrics",
+      transformResponse: obj,
+    }),
   }),
 });
 
@@ -473,4 +502,5 @@ export const {
   useUpdateComplianceConfigMutation,
   useGetPlatformAnalyticsQuery,
   useListSuperAdminUsersQuery,
+  useGetAdminStorageMetricsQuery,
 } = adminApi;

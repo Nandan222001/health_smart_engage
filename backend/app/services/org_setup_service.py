@@ -1,8 +1,11 @@
+from uuid import uuid4
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import CurrentUser
 from app.models.generic_record import GenericRecord
+from app.models.people import Employee
 from app.models.tenant import Tenant
 from app.repositories.generic_repository import GenericRepository
 
@@ -189,6 +192,35 @@ class OrgSetupService:
 
     # ── step 4: users ─────────────────────────────────────────────────────────
 
+    def _sync_user_to_employees(self, tenant_id: str, payload: dict, record_id: str) -> None:
+        """Upsert a step4_user payload into the employees table (keyed by email/contact)."""
+        email = payload.get("email", "").strip()
+        if not email:
+            return
+        from sqlalchemy import select as _sa_select
+        existing = self.db.scalars(
+            _sa_select(Employee)
+            .where(Employee.tenant_id == tenant_id)
+            .where(Employee.contact == email)
+        ).first()
+        if existing:
+            existing.name = payload.get("name", existing.name) or existing.name
+            existing.role_name = payload.get("role") or existing.role_name
+            existing.department_id = payload.get("department") or existing.department_id
+            self.db.flush()
+        else:
+            emp = Employee(
+                id=str(uuid4()),
+                tenant_id=tenant_id,
+                name=payload.get("name", ""),
+                role_name=payload.get("role", "Employee") or "Employee",
+                department_id=payload.get("department"),
+                contact=email,
+                status="active",
+            )
+            self.db.add(emp)
+            self.db.flush()
+
     def create_user(self, user: CurrentUser, data: dict) -> dict:
         record = self.repo.create(
             tenant_id=user.tenant_id,
@@ -197,6 +229,7 @@ class OrgSetupService:
             payload=data,
             status="pending",
         )
+        self._sync_user_to_employees(user.tenant_id, data, record.id)
         return {"step": 4, "status": "created", "record_id": record.id, "user_id": record.id}
 
     def bulk_upload_users(self, user: CurrentUser, data: dict) -> dict:
@@ -210,6 +243,7 @@ class OrgSetupService:
                 payload=u,
                 status="pending",
             )
+            self._sync_user_to_employees(user.tenant_id, u, rec.id)
             created_ids.append(rec.id)
         return {"step": 4, "status": "bulk_uploaded", "count": len(created_ids), "record_ids": created_ids}
 
@@ -297,6 +331,11 @@ class OrgSetupService:
         if tenant:
             tenant.status = "active"
             self.db.flush()
+
+        # Sync all step4_user records into employees table (idempotent)
+        step4_records = self.repo.list_by_type(user.tenant_id, MODULE, "step4_user", limit=500)
+        for rec in step4_records:
+            self._sync_user_to_employees(user.tenant_id, rec.payload, rec.id)
 
         return {
             "status": "activated",

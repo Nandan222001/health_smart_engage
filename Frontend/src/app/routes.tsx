@@ -34,7 +34,8 @@ import { OnboardingWizardPage } from "@/features/superadmin/pages/OnboardingWiza
 import { StorageLayerPage } from "@/features/superadmin/pages/StorageLayerPage";
 import { InvitationsPage } from "@/features/superadmin/pages/InvitationsPage";
 import { TenantDetailPage } from "@/features/superadmin/pages/TenantDetailPage";
-import { RolesPermissionsPage } from "@/features/superadmin/pages/RolesPermissionsPage";
+import { RolesPermissionsPage as SuperAdminRolesPage } from "@/features/superadmin/pages/RolesPermissionsPage";
+import { RolesPermissionsPage } from "@/features/roles/pages/RolesPermissionsPage";
 import { SubscriptionsPage } from "@/features/superadmin/pages/SubscriptionsPage";
 import { PlatformAnalyticsPage } from "@/features/superadmin/pages/PlatformAnalyticsPage";
 import { NotificationsEnginePage } from "@/features/superadmin/pages/NotificationsEnginePage";
@@ -53,16 +54,21 @@ import { ContinuousLearningPage } from "@/features/learning/pages/ContinuousLear
 import { PermitsPage } from "@/features/permits/pages/PermitsPage";
 import { IncidentsPage } from "@/features/incidents/pages/IncidentsPage";
 import { EmployeesPage } from "@/features/employees/pages/EmployeesPage";
-import { TrainingPage } from "@/features/training/pages/TrainingPage";
+import { TrainingCompetencyPage } from "@/features/training/pages/TrainingCompetencyPage";
 import { AuditsPage } from "@/features/audits/pages/AuditsPage";
 import { HazardsPage } from "@/features/hazards/pages/HazardsPage";
 import { OrgSetupWizardPage } from "@/features/org-setup/pages/OrgSetupWizardPage";
 import { OverviewPage } from "@/features/overview/pages/OverviewPage";
 import { KPIsPage } from "@/features/kpis/pages/KPIsPage";
 import { ActivitiesPage } from "@/features/activities/pages/ActivitiesPage";
-import { ShiftManagementPage } from "@/features/shift-management/pages/ShiftManagementPage";
+import { ShiftDashboardPage } from "@/features/shift-management/pages/ShiftDashboardPage";
 import { DataManagementPage } from "@/features/data-management/pages/DataManagementPage";
 import { HelpPage } from "@/features/help/pages/HelpPage";
+import { WorkersPage } from "@/features/workers/pages/WorkersPage";
+import { SupervisorsPage } from "@/features/supervisors/pages/SupervisorsPage";
+import { HSEManagersScreen } from "@/features/hse-managers/pages/HSEManagersScreen";
+import { AuditorsPage } from "@/features/auditors/pages/AuditorsPage";
+import { ContractorsPage } from "@/features/contractors/pages/ContractorsPage";
 import type { ComponentType } from "react";
 
 function RouteErrorFallback() {
@@ -231,10 +237,11 @@ export const router = createBrowserRouter([
       { path: "permits", Component: PermitsPage },
       { path: "incidents", Component: IncidentsPage },
       { path: "employees", Component: EmployeesPage },
-      { path: "training", Component: TrainingPage },
+      { path: "training", Component: TrainingCompetencyPage },
       { path: "audits", Component: AuditsPage },
       { path: "hazards", Component: HazardsPage },
       // Org Admin pages
+      { path: "roles-permissions", Component: RolesPermissionsPage },
       { path: "admin/invitations", Component: OrgInvitationsPage },
       { path: "admin/departments", Component: DepartmentsPage },
       { path: "admin/hse-managers", Component: HSEManagersPage },
@@ -242,7 +249,12 @@ export const router = createBrowserRouter([
       { path: "overview", Component: OverviewPage },
       { path: "kpis", Component: KPIsPage },
       { path: "activities", Component: ActivitiesPage },
-      { path: "shift-management", Component: ShiftManagementPage },
+      { path: "shift-management", Component: ShiftDashboardPage },
+      { path: "workers", Component: WorkersPage },
+      { path: "supervisors", Component: SupervisorsPage },
+      { path: "hse-managers", Component: HSEManagersScreen },
+      { path: "auditors", Component: AuditorsPage },
+      { path: "contractors", Component: ContractorsPage },
       { path: "data-management", Component: DataManagementPage },
       { path: "help", Component: HelpPage },
       // Super Admin pages
@@ -252,7 +264,7 @@ export const router = createBrowserRouter([
       { path: "superadmin/users", Component: SuperAdminUsersPage },
       { path: "superadmin/storage", Component: StorageLayerPage },
       { path: "superadmin/invitations", Component: InvitationsPage },
-      { path: "superadmin/roles", Component: RolesPermissionsPage },
+      { path: "superadmin/roles", Component: SuperAdminRolesPage },
       { path: "superadmin/subscriptions", Component: SubscriptionsPage },
       { path: "superadmin/analytics", Component: PlatformAnalyticsPage },
       { path: "superadmin/notifications", Component: NotificationsEnginePage },
