@@ -107,11 +107,19 @@ class DomainDispatcher:
         if operation == "vendors_create":
             res = svc["vendors"].create_vendor(user, data)
             return {"id": res.id, "status": res.status}
+        if operation == "vendors_update":
+            res = svc["vendors"].update_vendor(user, path_params.get("vendorId"), data)
+            return {"id": res.id, "status": res.status}
         if operation == "vendor_documents_upload":
             res = svc["vendors"].upload_vendor_document(user, path_params.get("vendorId"), data)
             return {"id": res.id}
         if operation == "vendor_documents_review":
             res = svc["vendors"].review_vendor_document(user, path_params.get("documentId"), data)
+            return {"id": res.id, "status": res.status}
+        if operation == "vendor_compliance_save":
+            return svc["vendors"].save_vendor_compliance(user, path_params.get("vendorId"), data)
+        if operation == "vendor_certification_add":
+            res = svc["vendors"].add_vendor_certification(user, path_params.get("vendorId"), data)
             return {"id": res.id, "status": res.status}
 
         # Foundation Commands
@@ -178,29 +186,71 @@ class DomainDispatcher:
         # Asset Commands
         if operation == "assets_create":
             res = svc["assets"].create_asset(user, data)
-            return {"id": res.id}
+            return {"id": res.id, "status": res.status}
+        if operation == "assets_update":
+            res = svc["assets"].update_asset(user, path_params.get("assetId"), data)
+            return {"id": res.id, "status": res.status}
         if operation in ["asset_inspections_create", "mobile_asset_inspections_create"]:
             res = svc["assets"].record_inspection(user, path_params.get("assetId"), data)
             return {"id": res.id}
+        if operation == "asset_maintenance_log_create":
+            res = svc["assets"].create_maintenance_log(user, path_params.get("assetId"), data)
+            return {"id": res.id, "status": res.status}
 
         # Compliance Commands
+        if operation == "audit_checklists_create":
+            res = svc["compliance"].create_audit_checklist(user, data)
+            return {"id": res.id, "status": res.status}
+        if operation == "audit_checklists_publish":
+            res = svc["compliance"].publish_checklist(user, path_params.get("checklistId"))
+            return {"id": res.id, "status": res.status}
         if operation == "audits_create":
             res = svc["compliance"].create_audit_execution(user, data)
-            return {"id": res.id}
+            return {"id": res.id, "status": res.status}
+        if operation == "audits_update":
+            res = svc["compliance"].update_audit_execution(user, path_params.get("auditId"), data)
+            return {"id": res.id, "status": res.status}
         if operation == "audit_findings_create":
             res = svc["compliance"].create_finding(user, path_params.get("auditId"), data)
             return {"id": res.id}
+        if operation == "capas_create":
+            res = svc["compliance"].create_capa(user, data)
+            return {"id": res.id, "status": res.status}
+        if operation == "capas_update":
+            res = svc["compliance"].update_capa(user, path_params.get("capaId"), data)
+            return {"id": res.id, "status": res.status}
+        if operation == "capas_submit_closure":
+            res = svc["compliance"].submit_capa_closure(user, path_params.get("capaId"), data)
+            return {"id": res.id, "status": res.status}
+        if operation == "capas_approve_closure":
+            res = svc["compliance"].approve_capa_closure(user, path_params.get("capaId"), data)
+            return {"id": res.id, "status": res.status}
         if operation == "incidents_classify":
             res = svc["compliance"].classify_incident(user, path_params.get("incidentId"), data)
             return {"id": res.id, "status": res.status}
         if operation == "incident_investigations_create":
             res = svc["compliance"].start_investigation(user, path_params.get("incidentId"), data)
             return {"id": res.id}
-        if operation == "capas_submit_closure":
-            res = svc["compliance"].submit_capa_closure(user, path_params.get("capaId"), data)
+        if operation == "compliance_standards_create":
+            res = svc["compliance"].create_standard(user, data)
             return {"id": res.id, "status": res.status}
-        if operation == "capas_approve_closure":
-            res = svc["compliance"].approve_capa_closure(user, path_params.get("capaId"), data)
+        if operation == "compliance_standards_update":
+            res = svc["compliance"].update_standard(user, path_params.get("standardId"), data)
+            return {"id": res.id, "status": res.status}
+        if operation == "regulatory_requirements_create":
+            res = svc["compliance"].create_regulatory_requirement(user, data)
+            return {"id": res.id, "status": res.status}
+        if operation == "regulatory_requirements_update":
+            res = svc["compliance"].update_regulatory_requirement(user, path_params.get("reqId"), data)
+            return {"id": res.id, "status": res.status}
+        if operation == "compliance_documents_create":
+            res = svc["compliance"].create_compliance_document(user, data)
+            return {"id": res.id, "status": res.status}
+        if operation == "compliance_documents_update":
+            res = svc["compliance"].update_compliance_document(user, path_params.get("docId"), data)
+            return {"id": res.id, "status": res.status}
+        if operation == "inspections_create":
+            res = svc["compliance"].create_inspection(user, data)
             return {"id": res.id, "status": res.status}
 
         # Integration Commands
@@ -417,6 +467,12 @@ class DomainDispatcher:
         if operation == "vendors_get":
             res = svc["vendors"].get_vendor(user, path_params.get("vendorId"))
             return _to_dict(res)
+        if operation == "vendor_compliance_list":
+            return svc["vendors"].list_vendor_compliance(user)
+        if operation == "vendor_certifications_list":
+            return svc["vendors"].list_vendor_certifications(user)
+        if operation == "vendor_risk_scores_list":
+            return svc["vendors"].list_vendor_risk_scores(user)
 
         # Foundation Queries
         if operation in ("admin_org_nodes_list", "admin_organisation_nodes_list"):
@@ -458,12 +514,31 @@ class DomainDispatcher:
             return svc["dashboards"].get_data_quality(user)
 
         # Compliance Queries
-        if operation == "capas_list":
-            items = svc["compliance"].list_capas(user, {})
+        if operation == "compliance_dashboard_get":
+            return svc["compliance"].get_compliance_dashboard(user)
+        if operation == "audit_checklists_list":
+            items = svc["compliance"].list_audit_checklists(user)
             return {"items": [_to_dict(i) for i in items]}
+        if operation == "audits_list":
+            return svc["compliance"].list_audits_enriched(user)
+        if operation == "audits_get":
+            res = svc["compliance"].get_audit(user, path_params.get("auditId"))
+            return _to_dict(res)
+        if operation == "audit_findings_list":
+            return svc["compliance"].list_findings_enriched(user)
+        if operation == "capas_list":
+            return svc["compliance"].list_capas_enriched(user)
         if operation == "capas_get":
             res = svc["compliance"].get_capa(user, path_params.get("capaId"))
             return _to_dict(res)
+        if operation == "compliance_standards_list":
+            return svc["compliance"].list_standards(user)
+        if operation == "regulatory_requirements_list":
+            return svc["compliance"].list_regulatory_requirements(user)
+        if operation == "compliance_documents_list":
+            return svc["compliance"].list_compliance_documents(user)
+        if operation == "inspections_list":
+            return svc["compliance"].list_inspections_enriched(user)
 
         # Knowledge Queries
         if operation == "mobile_knowledge_search":
@@ -545,6 +620,17 @@ class DomainDispatcher:
         if operation == "assets_list":
             items = svc["assets"].list_assets(user, {})
             return {"items": [_to_dict(i) for i in items]}
+        if operation == "assets_get":
+            res = svc["assets"].get_asset(user, path_params.get("assetId"))
+            return _to_dict(res)
+        if operation == "asset_categories_list":
+            return svc["assets"].list_asset_categories(user)
+        if operation == "asset_maintenance_logs_list":
+            return svc["assets"].list_all_maintenance_logs_enriched(user)
+        if operation == "asset_inspections_all_list":
+            return svc["assets"].list_all_inspections_enriched(user)
+        if operation == "asset_risk_mapping_list":
+            return svc["assets"].list_asset_risk_mapping(user)
 
         if operation == "health_dependencies":
             return {"database": "configured", "storage": "configured", "ai": "configured"}

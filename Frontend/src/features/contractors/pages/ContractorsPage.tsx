@@ -4,43 +4,28 @@ import {
   Search, CheckCircle2, XCircle, Clock, TrendingUp, TrendingDown,
   RefreshCw, MapPin, Phone, Mail, Calendar, ChevronDown,
   ChevronRight, Star, AlertCircle, ShieldAlert, ShieldCheck,
-  FileText, Zap, Filter,
+  FileText, Zap, Plus, X,
 } from "lucide-react";
-import { useGetContractorsQuery } from "@/features/vendors/api/vendorsApi";
-import type { Contractor } from "@/services/api";
+import {
+  useGetVendorsQuery,
+  useCreateVendorMutation,
+  useGetVendorComplianceQuery,
+  useGetVendorCertificationsQuery,
+  useAddVendorCertificationMutation,
+  useGetVendorRiskScoresQuery,
+  type Vendor,
+  type VendorComplianceRecord,
+  type VendorCertification,
+  type VendorRiskScore,
+} from "@/features/vendors/api/vendorsApi";
 import { useListIncidentsQuery } from "@/features/incidents/api/incidentsApi";
 import { useListEmployeesQuery } from "@/features/employees/api/employeesApi";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type TabId = "companies" | "workers" | "compliance" | "incidents" | "certifications" | "risk";
+type TabId = "vendors" | "workers" | "compliance" | "certifications" | "risk";
 
-// ── Seeded helpers ─────────────────────────────────────────────────────────
-
-function seeded(id: string, offset = 0) {
-  const s = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) + offset;
-  const x = Math.sin(s + 1) * 10000;
-  return x - Math.floor(x);
-}
-
-const SITES         = ["North Plant", "South Zone", "West Gate", "Central Hub", "East Block"];
-const ZONES         = ["Zone A – Production", "Zone B – Loading", "Zone C – Chemical", "Zone D – Maintenance"];
-const CERT_NAMES    = ["ISO 45001 – OH&S", "ISO 14001 – Environmental", "OHSAS 18001", "SafePass Accreditation", "CHAS Premium", "Achilles UVDB", "Construction Line Gold"];
-const CERT_ISSUERS  = ["BSI Group", "DNV GL", "Bureau Veritas", "Lloyd's Register", "UKAS", "IOSH"];
-const COMPLIANCE_DOMAINS = ["Safety Training", "PPE Compliance", "Permit-to-Work", "Inspection Schedule", "Incident Reporting"] as const;
-const RISK_FACTORS  = ["Incident Rate", "PPE Non-Compliance", "Near Miss Frequency", "Training Gaps", "Permit Violations", "Unsafe Act Reports"] as const;
-const INC_TYPES     = ["Slip & Trip", "Equipment Failure", "Chemical Exposure", "Near Miss", "Fire", "Electrical"];
-
-function contractorMeta(id: string) {
-  const complianceScore  = Math.round(seeded(id, 1) * 35) + 60;        // 60–95
-  const activeWorkers    = Math.floor(seeded(id, 2) * 18) + 2;
-  const incidentCount    = Math.floor(seeded(id, 3) * 8);
-  const riskScore        = Math.round(seeded(id, 4) * 60) + 20;        // 20–80
-  const certCount        = Math.floor(seeded(id, 5) * 3) + 2;
-  const onSiteWorkers    = Math.floor(seeded(id, 6) * activeWorkers);
-  const siteIdx          = Math.floor(seeded(id, 7) * SITES.length);
-  return { complianceScore, activeWorkers, incidentCount, riskScore, certCount, onSiteWorkers, site: SITES[siteIdx] };
-}
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function riskLevel(score: number) {
   if (score >= 70) return { label: "High",     color: "#EF4444", bg: "#FEE2E2" };
@@ -53,11 +38,27 @@ function complianceColor(score: number) {
   return score >= 85 ? "#10B981" : score >= 70 ? "#F59E0B" : "#EF4444";
 }
 
-function certStatus(id: string, certIdx: number): { label: string; color: string; bg: string } {
-  const v = seeded(id, 200 + certIdx);
-  if (v > 0.7) return { label: "Valid",    color: "#10B981", bg: "#D1FAE5" };
-  if (v > 0.4) return { label: "Expiring", color: "#F59E0B", bg: "#FEF3C7" };
-  return              { label: "Expired",  color: "#EF4444", bg: "#FEE2E2" };
+function certStatusStyle(status: string): { color: string; bg: string } {
+  if (status === "Valid")    return { color: "#10B981", bg: "#D1FAE5" };
+  if (status === "Expiring") return { color: "#F59E0B", bg: "#FEF3C7" };
+  return                            { color: "#EF4444", bg: "#FEE2E2" };
+}
+
+function computeRiskFactors(v: VendorRiskScore) {
+  const inc = Math.min(100, (v.incident_count || 0) * 12);
+  const ppe = Math.max(0, Math.round(100 - (v.safety_score || 0)));
+  const nm  = Math.min(100, (v.incident_count || 0) * 7);
+  const tg  = Math.max(0, Math.round(80 - (v.safety_score || 0) * 0.8));
+  const pv  = Math.min(100, (v.incident_count || 0) * 10);
+  const ua  = Math.max(0, Math.round(90 - (v.safety_score || 0) * 0.9));
+  return [
+    { factor: "Incident Rate",          score: inc },
+    { factor: "PPE Non-Compliance",     score: ppe },
+    { factor: "Near Miss Frequency",    score: nm  },
+    { factor: "Training Gaps",          score: tg  },
+    { factor: "Permit Violations",      score: pv  },
+    { factor: "Unsafe Act Reports",     score: ua  },
+  ];
 }
 
 // ── Shared UI ──────────────────────────────────────────────────────────────
@@ -127,57 +128,195 @@ function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: strin
   );
 }
 
-// ── Tab 1: Contractor Companies ────────────────────────────────────────────
+// ── Create Vendor Modal ────────────────────────────────────────────────────
 
-function CompaniesTab({ contractors }: { contractors: Contractor[] }) {
+function CreateVendorModal({ onClose }: { onClose: () => void }) {
+  const [createVendor, { isLoading }] = useCreateVendorMutation();
+  const [form, setForm] = useState({
+    company_name: "", contact: "", email: "", phone: "",
+    trade_type: "General", status: "Active",
+    site_location: "", total_workers: "", on_site_workers: "",
+    safety_score: "", risk_score: "", contract_expiry: "", active_since: "",
+  });
+  const [error, setError] = useState("");
+
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSubmit = async () => {
+    if (!form.company_name.trim()) { setError("Company name is required"); return; }
+    try {
+      await createVendor({
+        company_name: form.company_name.trim(),
+        contact: form.contact || undefined,
+        email: form.email || undefined,
+        phone: form.phone || undefined,
+        trade_type: form.trade_type || "General",
+        status: form.status,
+        site_location: form.site_location || undefined,
+        total_workers: form.total_workers ? parseInt(form.total_workers) : undefined,
+        on_site_workers: form.on_site_workers ? parseInt(form.on_site_workers) : undefined,
+        safety_score: form.safety_score ? parseFloat(form.safety_score) : undefined,
+        risk_score: form.risk_score ? parseFloat(form.risk_score) : undefined,
+        contract_expiry: form.contract_expiry || undefined,
+        active_since: form.active_since || undefined,
+      }).unwrap();
+      onClose();
+    } catch {
+      setError("Failed to create vendor. Please try again.");
+    }
+  };
+
+  const inputCls = "w-full px-3 py-2 rounded-xl border text-sm outline-none focus:border-blue-400 transition-colors";
+  const inputStyle = { borderColor: "#E3E9F6", background: "#F9FAFB" };
+  const labelCls = "block text-[11px] font-semibold mb-1";
+  const labelStyle = { color: "#6B7280" };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "#E3E9F6" }}>
+          <h2 className="text-[16px] font-bold" style={{ color: "#111827" }}>Add Vendor / Contractor</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" style={{ color: "#6B7280" }} />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          {error && (
+            <div className="px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: "#FEF2F2", color: "#EF4444" }}>{error}</div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className={labelCls} style={labelStyle}>Company Name *</label>
+              <input className={inputCls} style={inputStyle} placeholder="e.g. Acme Safety Ltd" value={form.company_name} onChange={(e) => set("company_name", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Contact Person</label>
+              <input className={inputCls} style={inputStyle} placeholder="Full name" value={form.contact} onChange={(e) => set("contact", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Email</label>
+              <input className={inputCls} style={inputStyle} type="email" placeholder="contact@company.com" value={form.email} onChange={(e) => set("email", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Phone</label>
+              <input className={inputCls} style={inputStyle} placeholder="+1 234 567 8900" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Trade Type</label>
+              <select className={inputCls} style={inputStyle} value={form.trade_type} onChange={(e) => set("trade_type", e.target.value)}>
+                {["General","Electrical","Plumbing","Mechanical","Civil","Safety","Cleaning","Security","Catering","IT"].map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Status</label>
+              <select className={inputCls} style={inputStyle} value={form.status} onChange={(e) => set("status", e.target.value)}>
+                {["Active","Inactive","Suspended","Pending"].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelCls} style={labelStyle}>Site Location</label>
+              <input className={inputCls} style={inputStyle} placeholder="e.g. North Plant" value={form.site_location} onChange={(e) => set("site_location", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Total Workers</label>
+              <input className={inputCls} style={inputStyle} type="number" min="0" placeholder="0" value={form.total_workers} onChange={(e) => set("total_workers", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>On-Site Workers</label>
+              <input className={inputCls} style={inputStyle} type="number" min="0" placeholder="0" value={form.on_site_workers} onChange={(e) => set("on_site_workers", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Safety Score (0–100)</label>
+              <input className={inputCls} style={inputStyle} type="number" min="0" max="100" placeholder="0" value={form.safety_score} onChange={(e) => set("safety_score", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Risk Score (0–100)</label>
+              <input className={inputCls} style={inputStyle} type="number" min="0" max="100" placeholder="0" value={form.risk_score} onChange={(e) => set("risk_score", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Active Since</label>
+              <input className={inputCls} style={inputStyle} type="date" value={form.active_since} onChange={(e) => set("active_since", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls} style={labelStyle}>Contract Expiry</label>
+              <input className={inputCls} style={inputStyle} type="date" value={form.contract_expiry} onChange={(e) => set("contract_expiry", e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t" style={{ borderColor: "#E3E9F6" }}>
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors"
+            style={{ borderColor: "#E3E9F6", color: "#6B7280" }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={isLoading}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
+            style={{ background: "linear-gradient(135deg, #0F2D87, #3B52C4)", opacity: isLoading ? 0.7 : 1 }}>
+            {isLoading ? "Adding…" : "Add Vendor"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab 1: Vendor List ─────────────────────────────────────────────────────
+
+function VendorListTab({ vendors }: { vendors: Vendor[] }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showModal, setShowModal] = useState(false);
 
-  const filtered = contractors.filter((c) => {
-    const matchSearch = c.Contractor_Name.toLowerCase().includes(search.toLowerCase()) ||
-      c.Contact_Person.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || c.Status === statusFilter;
+  const filtered = vendors.filter((v) => {
+    const q = search.toLowerCase();
+    const matchSearch = v.company_name.toLowerCase().includes(q) ||
+      (v.contact ?? "").toLowerCase().includes(q) ||
+      (v.email ?? "").toLowerCase().includes(q);
+    const matchStatus = statusFilter === "all" || v.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
   return (
     <div className="space-y-5">
+      {showModal && <CreateVendorModal onClose={() => setShowModal(false)} />}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#9CA3AF" }} />
           <input
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none"
             style={{ borderColor: "#E3E9F6", background: "#F9FAFB" }}
-            placeholder="Search contractor companies…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search vendors…"
+            value={search} onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2">
-          {["all", "Active", "Inactive", "Suspended"].map((s) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          {["all", "Active", "Inactive", "Suspended", "Pending"].map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
               className="px-3 py-2 rounded-xl text-[12px] font-semibold capitalize transition-all"
               style={{ background: statusFilter === s ? "#4A57B9" : "#F1F5F9", color: statusFilter === s ? "#fff" : "#374151" }}>
               {s === "all" ? "All" : s}
             </button>
           ))}
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white"
+            style={{ background: "linear-gradient(135deg, #0F2D87, #3B52C4)" }}>
+            <Plus className="w-3.5 h-3.5" /> Add Vendor
+          </button>
         </div>
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState icon={Building2} text="No contractor companies found" />
+        <EmptyState icon={Building2} text="No vendors found" />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filtered.map((c) => {
-            const meta     = contractorMeta(c.Contractor_ID);
-            const rl       = riskLevel(meta.riskScore);
-            const expiry   = new Date(c.Contract_Expiry);
-            const daysLeft = Math.round((expiry.getTime() - Date.now()) / 86400000);
-            const expiryColor = daysLeft < 30 ? "#EF4444" : daysLeft < 90 ? "#F59E0B" : "#10B981";
+          {filtered.map((v) => {
+            const rl        = riskLevel(v.risk_score ?? 0);
+            const expiry    = v.contract_expiry ? new Date(v.contract_expiry) : null;
+            const daysLeft  = expiry ? Math.round((expiry.getTime() - Date.now()) / 86400000) : null;
+            const expiryColor = daysLeft === null ? "#9CA3AF" : daysLeft < 30 ? "#EF4444" : daysLeft < 90 ? "#F59E0B" : "#10B981";
+            const safety    = v.safety_score ?? 0;
 
             return (
-              <div key={c.Contractor_ID} className="bg-white rounded-2xl border p-5 hover:shadow-md transition-all" style={{ borderColor: "#E3E9F6" }}>
-                {/* Header */}
+              <div key={v.id} className="bg-white rounded-2xl border p-5 hover:shadow-md transition-all" style={{ borderColor: "#E3E9F6" }}>
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -185,36 +324,42 @@ function CompaniesTab({ contractors }: { contractors: Contractor[] }) {
                       <Building2 className="w-5 h-5" style={{ color: "#4A57B9" }} />
                     </div>
                     <div>
-                      <div className="text-[14px] font-bold" style={{ color: "#111827" }}>{c.Contractor_Name}</div>
-                      <div className="text-[11px]" style={{ color: "#9CA3AF" }}>ID: {c.Contractor_ID}</div>
+                      <div className="text-[14px] font-bold" style={{ color: "#111827" }}>{v.company_name}</div>
+                      <div className="text-[11px]" style={{ color: "#9CA3AF" }}>{v.trade_type}</div>
                     </div>
                   </div>
-                  <StatusBadge status={c.Status} />
+                  <StatusBadge status={v.status} />
                 </div>
 
-                {/* Contact */}
                 <div className="space-y-1.5 mb-4 text-[12px]">
-                  <div className="flex items-center gap-2" style={{ color: "#6B7280" }}>
-                    <Users className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />
-                    <span className="font-medium" style={{ color: "#374151" }}>{c.Contact_Person}</span>
-                  </div>
-                  <div className="flex items-center gap-2" style={{ color: "#6B7280" }}>
-                    <Mail className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />{c.Email}
-                  </div>
-                  <div className="flex items-center gap-2" style={{ color: "#6B7280" }}>
-                    <Phone className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />{c.Phone}
-                  </div>
-                  <div className="flex items-center gap-2" style={{ color: "#6B7280" }}>
-                    <MapPin className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />{meta.site}
-                  </div>
+                  {v.contact && (
+                    <div className="flex items-center gap-2" style={{ color: "#6B7280" }}>
+                      <Users className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />
+                      <span className="font-medium" style={{ color: "#374151" }}>{v.contact}</span>
+                    </div>
+                  )}
+                  {v.email && (
+                    <div className="flex items-center gap-2" style={{ color: "#6B7280" }}>
+                      <Mail className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />{v.email}
+                    </div>
+                  )}
+                  {v.phone && (
+                    <div className="flex items-center gap-2" style={{ color: "#6B7280" }}>
+                      <Phone className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />{v.phone}
+                    </div>
+                  )}
+                  {v.site_location && (
+                    <div className="flex items-center gap-2" style={{ color: "#6B7280" }}>
+                      <MapPin className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />{v.site_location}
+                    </div>
+                  )}
                 </div>
 
-                {/* Stats row */}
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   {[
-                    { label: "Workers", value: c.Total_Workers, color: "#4A57B9" },
-                    { label: "On Site",  value: meta.onSiteWorkers, color: "#10B981" },
-                    { label: "Incidents", value: meta.incidentCount, color: meta.incidentCount > 3 ? "#EF4444" : "#F59E0B" },
+                    { label: "Workers", value: v.total_workers ?? 0, color: "#4A57B9" },
+                    { label: "On Site",  value: v.on_site_workers ?? 0, color: "#10B981" },
+                    { label: "Incidents", value: v.incident_count ?? 0, color: (v.incident_count ?? 0) > 3 ? "#EF4444" : "#F59E0B" },
                   ].map((s) => (
                     <div key={s.label} className="rounded-xl p-2.5 text-center" style={{ background: "#F8FAFF" }}>
                       <div className="text-[16px] font-bold" style={{ color: s.color }}>{s.value}</div>
@@ -223,22 +368,25 @@ function CompaniesTab({ contractors }: { contractors: Contractor[] }) {
                   ))}
                 </div>
 
-                {/* Safety score */}
                 <div className="mb-3">
                   <div className="flex justify-between mb-1">
                     <span className="text-[11px] font-semibold" style={{ color: "#6B7280" }}>Safety Score</span>
-                    <span className="text-[12px] font-bold" style={{ color: complianceColor(c.Safety_Score) }}>{c.Safety_Score}%</span>
+                    <span className="text-[12px] font-bold" style={{ color: complianceColor(safety) }}>{safety}%</span>
                   </div>
-                  <ProgressBar value={c.Safety_Score} color={complianceColor(c.Safety_Score)} />
+                  <ProgressBar value={safety} color={complianceColor(safety)} />
                 </div>
 
-                {/* Footer */}
                 <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: "#F1F5F9" }}>
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />
-                    <span className="text-[11px]" style={{ color: expiryColor, fontWeight: 600 }}>
-                      Expires {expiry.toLocaleDateString()} {daysLeft < 90 && `(${daysLeft}d)`}
-                    </span>
+                    {expiry ? (
+                      <span className="text-[11px]" style={{ color: expiryColor, fontWeight: 600 }}>
+                        Expires {expiry.toLocaleDateString()}
+                        {daysLeft !== null && daysLeft < 90 && ` (${daysLeft}d)`}
+                      </span>
+                    ) : (
+                      <span className="text-[11px]" style={{ color: "#9CA3AF" }}>No expiry set</span>
+                    )}
                   </div>
                   <Badge label={rl.label + " Risk"} color={rl.color} bg={rl.bg} />
                 </div>
@@ -251,19 +399,23 @@ function CompaniesTab({ contractors }: { contractors: Contractor[] }) {
   );
 }
 
-// ── Tab 2: Active Workers ──────────────────────────────────────────────────
+// ── Tab 2: Contractor Management ───────────────────────────────────────────
 
-function WorkersTab({ contractors }: { contractors: Contractor[] }) {
+function ContractorManagementTab({ vendors }: { vendors: Vendor[] }) {
   const { data: employees = [], isLoading } = useListEmployeesQuery();
-  const [selectedCompany, setSelectedCompany] = useState("all");
-  const [expanded, setExpanded] = useState<string | null>(contractors[0]?.Contractor_ID ?? null);
+  const [expanded, setExpanded] = useState<string | null>(vendors[0]?.id ?? null);
 
-  const contractorWorkers = useMemo(
-    () => employees.filter((e) => (e.role ?? "").toLowerCase().includes("contractor") || (e.role ?? "").toLowerCase().includes("contract")),
+  const contractorEmployees = useMemo(
+    () => employees.filter((e) =>
+      (e.role ?? "").toLowerCase().includes("contractor") ||
+      (e.role ?? "").toLowerCase().includes("contract")
+    ),
     [employees],
   );
 
-  const totalOnSite = contractors.reduce((s, c) => s + contractorMeta(c.Contractor_ID).onSiteWorkers, 0);
+  const totalOnSite   = vendors.reduce((s, v) => s + (v.on_site_workers ?? 0), 0);
+  const totalWorkers  = vendors.reduce((s, v) => s + (v.total_workers ?? 0), 0);
+  const activeVendors = vendors.filter((v) => v.status === "Active").length;
 
   if (isLoading) return <div className="flex justify-center py-16"><RefreshCw className="w-5 h-5 animate-spin" style={{ color: "#94A3B8" }} /></div>;
 
@@ -271,9 +423,9 @@ function WorkersTab({ contractors }: { contractors: Contractor[] }) {
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: "Total Contractor Workers", value: contractors.reduce((s, c) => s + c.Total_Workers, 0), color: "#4A57B9", bg: "#EEF2FF", icon: Users },
+          { label: "Total Contractor Workers", value: totalWorkers, color: "#4A57B9", bg: "#EEF2FF", icon: Users },
           { label: "On Site Now",              value: totalOnSite,   color: "#10B981", bg: "#D1FAE5", icon: CheckCircle2 },
-          { label: "Companies Deployed",       value: contractors.filter((c) => c.Status === "Active").length, color: "#F59E0B", bg: "#FEF3C7", icon: Building2 },
+          { label: "Active Companies",         value: activeVendors, color: "#F59E0B", bg: "#FEF3C7", icon: Building2 },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-2xl border p-4 flex items-center gap-3" style={{ borderColor: "#E3E9F6" }}>
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
@@ -287,117 +439,117 @@ function WorkersTab({ contractors }: { contractors: Contractor[] }) {
         ))}
       </div>
 
-      {/* Company accordion */}
+      {contractorEmployees.length > 0 && (
+        <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
+          <div className="px-5 py-4 border-b bg-slate-50/50" style={{ borderColor: "#F1F5F9" }}>
+            <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Contractor Employees ({contractorEmployees.length})</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <TableHead cols={["Employee", "Role", "Department", "Status"]} />
+              <tbody className="divide-y" style={{ borderColor: "#F8FAFF" }}>
+                {contractorEmployees.slice(0, 20).map((e) => {
+                  const initials = (e.name ?? "?").split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase();
+                  return (
+                    <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                            style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}>
+                            {initials}
+                          </div>
+                          <div className="text-[13px] font-semibold" style={{ color: "#111827" }}>{e.name}</div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-[12px]" style={{ color: "#6B7280" }}>{e.role}</td>
+                      <td className="px-5 py-3 text-[12px]" style={{ color: "#6B7280" }}>{e.department}</td>
+                      <td className="px-5 py-3">
+                        <Badge label={e.status ?? "Active"} color="#10B981" bg="#D1FAE5" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Per-vendor worker summary */}
       <div className="space-y-3">
-        {contractors.filter((c) => c.Status === "Active").map((company) => {
-          const meta   = contractorMeta(company.Contractor_ID);
-          const isOpen = expanded === company.Contractor_ID;
-
-          /* Generate pseudo-workers for this company */
-          const pseudoWorkers = Array.from({ length: Math.min(meta.activeWorkers, 8) }, (_, i) => {
-            const empIdx  = Math.floor(seeded(company.Contractor_ID, 300 + i) * Math.max(employees.length, 1));
-            const emp     = employees[empIdx % Math.max(employees.length, 1)];
-            const zoneIdx = Math.floor(seeded(company.Contractor_ID, 310 + i) * ZONES.length);
-            const checkedIn = seeded(company.Contractor_ID, 320 + i) > 0.2;
-            return {
-              id: `${company.Contractor_ID}-w${i}`,
-              name: emp?.name ?? `Worker ${i + 1}`,
-              role: "Contractor Worker",
-              zone: ZONES[zoneIdx],
-              checkedIn,
-              checkIn: checkedIn ? `0${6 + Math.floor(seeded(company.Contractor_ID, 330 + i) * 3)}:${String(Math.floor(seeded(company.Contractor_ID, 340 + i) * 60)).padStart(2, "0")}` : null,
-            };
-          });
-
+        {vendors.filter((v) => v.status === "Active").map((vendor) => {
+          const isOpen = expanded === vendor.id;
           return (
-            <div key={company.Contractor_ID} className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
+            <div key={vendor.id} className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
               <button
                 className="w-full flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors text-left"
-                onClick={() => setExpanded(isOpen ? null : company.Contractor_ID)}
+                onClick={() => setExpanded(isOpen ? null : vendor.id)}
               >
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#EEF2FF" }}>
                   <Building2 className="w-4 h-4" style={{ color: "#4A57B9" }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[14px] font-bold" style={{ color: "#111827" }}>{company.Contractor_Name}</div>
-                  <div className="text-[11px]" style={{ color: "#9CA3AF" }}>{meta.site} · {company.Contact_Person}</div>
+                  <div className="text-[14px] font-bold" style={{ color: "#111827" }}>{vendor.company_name}</div>
+                  <div className="text-[11px]" style={{ color: "#9CA3AF" }}>
+                    {vendor.site_location ?? "No site"} · {vendor.contact ?? "No contact"}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge label={`${meta.onSiteWorkers}/${meta.activeWorkers} on site`} color="#10B981" bg="#D1FAE5" />
+                  <Badge label={`${vendor.on_site_workers ?? 0}/${vendor.total_workers ?? 0} on site`} color="#10B981" bg="#D1FAE5" />
                   {isOpen ? <ChevronDown className="w-4 h-4" style={{ color: "#94A3B8" }} /> : <ChevronRight className="w-4 h-4" style={{ color: "#94A3B8" }} />}
                 </div>
               </button>
-
               {isOpen && (
-                <div className="border-t" style={{ borderColor: "#F1F5F9" }}>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <TableHead cols={["Worker", "Zone / Location", "Check-In", "Status"]} />
-                      <tbody className="divide-y" style={{ borderColor: "#F8FAFF" }}>
-                        {pseudoWorkers.map((w) => {
-                          const initials = w.name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
-                          return (
-                            <tr key={w.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-5 py-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                                    style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}>
-                                    {initials}
-                                  </div>
-                                  <div>
-                                    <div className="text-[13px] font-semibold" style={{ color: "#111827" }}>{w.name}</div>
-                                    <div className="text-[11px]" style={{ color: "#9CA3AF" }}>{w.role}</div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-5 py-3 text-[12px]" style={{ color: "#6B7280" }}>
-                                <div className="flex items-center gap-1"><MapPin className="w-3 h-3" />{w.zone.split("–")[0].trim()}</div>
-                              </td>
-                              <td className="px-5 py-3 text-[12px] font-mono" style={{ color: w.checkedIn ? "#111827" : "#9CA3AF" }}>
-                                {w.checkIn ?? "—"}
-                              </td>
-                              <td className="px-5 py-3">
-                                <Badge label={w.checkedIn ? "On Site" : "Absent"} color={w.checkedIn ? "#10B981" : "#6B7280"} bg={w.checkedIn ? "#D1FAE5" : "#F3F4F6"} />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {meta.activeWorkers > 8 && (
-                          <tr><td colSpan={4} className="px-5 py-3 text-[12px] text-center" style={{ color: "#9CA3AF" }}>
-                            + {meta.activeWorkers - 8} more workers
-                          </td></tr>
-                        )}
-                      </tbody>
-                    </table>
+                <div className="border-t px-5 py-4 bg-slate-50/30" style={{ borderColor: "#F1F5F9" }}>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: "Total Workers",  value: vendor.total_workers ?? 0, color: "#4A57B9" },
+                      { label: "On Site",         value: vendor.on_site_workers ?? 0, color: "#10B981" },
+                      { label: "Safety Score",    value: `${vendor.safety_score ?? 0}%`, color: complianceColor(vendor.safety_score ?? 0) },
+                      { label: "Incidents",       value: vendor.incident_count ?? 0, color: "#EF4444" },
+                    ].map((s) => (
+                      <div key={s.label} className="rounded-xl p-3 text-center bg-white border" style={{ borderColor: "#E3E9F6" }}>
+                        <div className="text-[18px] font-bold" style={{ color: s.color }}>{s.value}</div>
+                        <div className="text-[10px] font-semibold mt-0.5" style={{ color: "#94A3B8" }}>{s.label}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
           );
         })}
+        {vendors.filter((v) => v.status === "Active").length === 0 && (
+          <EmptyState icon={Users} text="No active contractors" />
+        )}
       </div>
     </div>
   );
 }
 
-// ── Tab 3: Contractor Compliance ───────────────────────────────────────────
+// ── Tab 3: Vendor Compliance ───────────────────────────────────────────────
 
-function ComplianceTab({ contractors }: { contractors: Contractor[] }) {
+function VendorComplianceTab() {
+  const { data: complianceRecords = [], isLoading } = useGetVendorComplianceQuery();
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const avgCompliance = contractors.length
-    ? Math.round(contractors.reduce((s, c) => s + contractorMeta(c.Contractor_ID).complianceScore, 0) / contractors.length)
+  if (isLoading) return <div className="flex justify-center py-16"><RefreshCw className="w-5 h-5 animate-spin" style={{ color: "#94A3B8" }} /></div>;
+
+  const avgCompliance = complianceRecords.length
+    ? Math.round(complianceRecords.reduce((s, r) => s + r.overall_score, 0) / complianceRecords.length)
     : 0;
-  const compliant    = contractors.filter((c) => contractorMeta(c.Contractor_ID).complianceScore >= 80).length;
-  const nonCompliant = contractors.filter((c) => contractorMeta(c.Contractor_ID).complianceScore < 70).length;
+  const compliant    = complianceRecords.filter((r) => r.overall_score >= 80).length;
+  const nonCompliant = complianceRecords.filter((r) => r.overall_score < 70).length;
+
+  const sorted = [...complianceRecords].sort((a, b) => b.overall_score - a.overall_score);
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: "Avg Compliance Score", value: `${avgCompliance}%`, color: complianceColor(avgCompliance), bg: avgCompliance >= 85 ? "#D1FAE5" : "#FEF3C7", icon: BarChart3 },
-          { label: "Compliant (≥80%)",     value: compliant,            color: "#10B981",  bg: "#D1FAE5", icon: ShieldCheck },
-          { label: "Non-Compliant (<70%)", value: nonCompliant,         color: "#EF4444",  bg: "#FEE2E2", icon: ShieldAlert },
+          { label: "Compliant (≥80%)",     value: compliant,            color: "#10B981", bg: "#D1FAE5", icon: ShieldCheck },
+          { label: "Non-Compliant (<70%)", value: nonCompliant,         color: "#EF4444", bg: "#FEE2E2", icon: ShieldAlert },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-2xl border p-4 flex items-center gap-3" style={{ borderColor: "#E3E9F6" }}>
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
@@ -411,104 +563,120 @@ function ComplianceTab({ contractors }: { contractors: Contractor[] }) {
         ))}
       </div>
 
-      {/* Per-contractor compliance breakdown */}
-      <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
-        <div className="px-5 py-4 border-b bg-slate-50/50" style={{ borderColor: "#F1F5F9" }}>
-          <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Compliance by Company</h3>
-          <p className="text-[11px] mt-0.5" style={{ color: "#94A3B8" }}>Click to expand domain breakdown</p>
-        </div>
-        <div className="divide-y" style={{ borderColor: "#F8FAFF" }}>
-          {[...contractors].sort((a, b) => contractorMeta(b.Contractor_ID).complianceScore - contractorMeta(a.Contractor_ID).complianceScore).map((c) => {
-            const meta   = contractorMeta(c.Contractor_ID);
-            const isOpen = expanded === c.Contractor_ID;
-            const color  = complianceColor(meta.complianceScore);
-            const domains = COMPLIANCE_DOMAINS.map((d, i) => ({
-              domain: d,
-              score: Math.min(100, Math.round(meta.complianceScore + (seeded(c.Contractor_ID, 400 + i) - 0.5) * 25)),
-            }));
-
-            return (
-              <div key={c.Contractor_ID}>
-                <button
-                  className="w-full flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors text-left"
-                  onClick={() => setExpanded(isOpen ? null : c.Contractor_ID)}
-                >
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#F0F4FF" }}>
-                    <Building2 className="w-4 h-4" style={{ color: "#4A57B9" }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[13px] font-bold" style={{ color: "#111827" }}>{c.Contractor_Name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[14px] font-bold" style={{ color }}>{meta.complianceScore}%</span>
-                        {isOpen ? <ChevronDown className="w-4 h-4" style={{ color: "#94A3B8" }} /> : <ChevronRight className="w-4 h-4" style={{ color: "#94A3B8" }} />}
+      {complianceRecords.length === 0 ? (
+        <EmptyState icon={ShieldCheck} text="No compliance data yet. Add vendors and save compliance scores." />
+      ) : (
+        <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
+          <div className="px-5 py-4 border-b bg-slate-50/50" style={{ borderColor: "#F1F5F9" }}>
+            <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Compliance by Vendor</h3>
+            <p className="text-[11px] mt-0.5" style={{ color: "#94A3B8" }}>Click to expand domain breakdown</p>
+          </div>
+          <div className="divide-y" style={{ borderColor: "#F8FAFF" }}>
+            {sorted.map((r) => {
+              const isOpen = expanded === r.vendor_id;
+              const color  = complianceColor(r.overall_score);
+              return (
+                <div key={r.vendor_id}>
+                  <button
+                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors text-left"
+                    onClick={() => setExpanded(isOpen ? null : r.vendor_id)}
+                  >
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#F0F4FF" }}>
+                      <Building2 className="w-4 h-4" style={{ color: "#4A57B9" }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[13px] font-bold" style={{ color: "#111827" }}>{r.vendor_name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[14px] font-bold" style={{ color }}>{r.overall_score}%</span>
+                          {isOpen ? <ChevronDown className="w-4 h-4" style={{ color: "#94A3B8" }} /> : <ChevronRight className="w-4 h-4" style={{ color: "#94A3B8" }} />}
+                        </div>
+                      </div>
+                      <ProgressBar value={r.overall_score} color={color} />
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="px-5 pb-4 bg-slate-50/30">
+                      {r.domains.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-12">
+                          {r.domains.map(({ domain, score }) => {
+                            const dc = complianceColor(score);
+                            return (
+                              <div key={domain}>
+                                <div className="flex justify-between mb-1">
+                                  <span className="text-[12px]" style={{ color: "#374151" }}>{domain}</span>
+                                  <span className="text-[12px] font-bold" style={{ color: dc }}>{score}%</span>
+                                </div>
+                                <ProgressBar value={score} color={dc} thin />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="pl-12 text-[12px]" style={{ color: "#9CA3AF" }}>No domain scores recorded yet</p>
+                      )}
+                      <div className="mt-3 pl-12 flex items-center gap-2">
+                        <StatusBadge status={r.status} />
+                        {r.active_since && (
+                          <span className="text-[11px]" style={{ color: "#9CA3AF" }}>
+                            Active since {new Date(r.active_since).toLocaleDateString()}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <ProgressBar value={meta.complianceScore} color={color} />
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div className="px-5 pb-4 bg-slate-50/30">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-12">
-                      {domains.map(({ domain, score }) => {
-                        const dc = complianceColor(score);
-                        return (
-                          <div key={domain}>
-                            <div className="flex justify-between mb-1">
-                              <span className="text-[12px]" style={{ color: "#374151" }}>{domain}</span>
-                              <span className="text-[12px] font-bold" style={{ color: dc }}>{score}%</span>
-                            </div>
-                            <ProgressBar value={score} color={dc} thin />
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-3 pl-12 flex items-center gap-2">
-                      <StatusBadge status={c.Status} />
-                      <span className="text-[11px]" style={{ color: "#9CA3AF" }}>Active since {new Date(c.Active_Since).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-// ── Tab 4: Incident History ────────────────────────────────────────────────
+// ── Tab 4: Certifications ──────────────────────────────────────────────────
 
-const SEV_CFG: Record<string, { color: string; bg: string }> = {
-  low:      { color: "#10B981", bg: "#D1FAE5" },
-  medium:   { color: "#F59E0B", bg: "#FEF3C7" },
-  high:     { color: "#EF4444", bg: "#FEE2E2" },
-  critical: { color: "#991B1B", bg: "#FEF2F2" },
-};
-const ST_CFG: Record<string, { color: string; bg: string }> = {
-  open:          { color: "#EF4444", bg: "#FEE2E2" },
-  investigating: { color: "#F59E0B", bg: "#FEF3C7" },
-  resolved:      { color: "#10B981", bg: "#D1FAE5" },
-  closed:        { color: "#6B7280", bg: "#F3F4F6" },
-};
-
-function IncidentsTab({ contractors }: { contractors: Contractor[] }) {
-  const { data: incidents = [], isLoading } = useListIncidentsQuery();
-  const [selected, setSelected] = useState("all");
-
-  const totalInc = contractors.reduce((s, c) => s + contractorMeta(c.Contractor_ID).incidentCount, 0);
+function CertificationsTab({ vendors }: { vendors: Vendor[] }) {
+  const { data: certs = [], isLoading } = useGetVendorCertificationsQuery();
+  const [addVendorCert, { isLoading: adding }] = useAddVendorCertificationMutation();
+  const [statusFilter, setStatusFilter] = useState<"all" | "Valid" | "Expiring" | "Expired">("all");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({ vendorId: "", document_type: "", issuing_body: "", expiry_date: "" });
+  const [addError, setAddError] = useState("");
 
   if (isLoading) return <div className="flex justify-center py-16"><RefreshCw className="w-5 h-5 animate-spin" style={{ color: "#94A3B8" }} /></div>;
 
+  const filtered = statusFilter === "all" ? certs : certs.filter((c) => c.cert_status === statusFilter);
+  const valid    = certs.filter((c) => c.cert_status === "Valid").length;
+  const expiring = certs.filter((c) => c.cert_status === "Expiring").length;
+  const expired  = certs.filter((c) => c.cert_status === "Expired").length;
+
+  const handleAdd = async () => {
+    if (!addForm.vendorId || !addForm.document_type) { setAddError("Vendor and certification name are required"); return; }
+    try {
+      await addVendorCert({
+        vendorId: addForm.vendorId,
+        data: { document_type: addForm.document_type, issuing_body: addForm.issuing_body || undefined, expiry_date: addForm.expiry_date || undefined },
+      }).unwrap();
+      setShowAddForm(false);
+      setAddForm({ vendorId: "", document_type: "", issuing_body: "", expiry_date: "" });
+      setAddError("");
+    } catch {
+      setAddError("Failed to add certification");
+    }
+  };
+
+  const inputCls = "w-full px-3 py-2 rounded-xl border text-sm outline-none";
+  const inputStyle = { borderColor: "#E3E9F6", background: "#F9FAFB" };
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: "Total Contractor Incidents", value: totalInc, color: "#EF4444", bg: "#FEE2E2", icon: AlertTriangle },
-          { label: "Live Incidents (API)",        value: incidents.filter((i) => i.status === "open").length, color: "#F59E0B", bg: "#FEF3C7", icon: Clock },
-          { label: "Resolved",                    value: incidents.filter((i) => i.status === "resolved" || i.status === "closed").length, color: "#10B981", bg: "#D1FAE5", icon: CheckCircle2 },
+          { label: "Valid Certifications",  value: valid,    color: "#10B981", bg: "#D1FAE5", icon: Award },
+          { label: "Expiring Soon (≤30d)",  value: expiring, color: "#F59E0B", bg: "#FEF3C7", icon: Clock },
+          { label: "Expired",               value: expired,  color: "#EF4444", bg: "#FEE2E2", icon: XCircle },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-2xl border p-4 flex items-center gap-3" style={{ borderColor: "#E3E9F6" }}>
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
@@ -522,192 +690,93 @@ function IncidentsTab({ contractors }: { contractors: Contractor[] }) {
         ))}
       </div>
 
-      {/* Per-contractor incident bar */}
-      <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
-        <div className="px-5 py-4 border-b" style={{ borderColor: "#F1F5F9" }}>
-          <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Incident Count by Contractor</h3>
-        </div>
-        <div className="divide-y" style={{ borderColor: "#F8FAFF" }}>
-          {[...contractors].sort((a, b) => contractorMeta(b.Contractor_ID).incidentCount - contractorMeta(a.Contractor_ID).incidentCount).map((c) => {
-            const meta  = contractorMeta(c.Contractor_ID);
-            const max   = Math.max(...contractors.map((cc) => contractorMeta(cc.Contractor_ID).incidentCount), 1);
-            const pct   = (meta.incidentCount / max) * 100;
-            const color = meta.incidentCount >= 6 ? "#EF4444" : meta.incidentCount >= 3 ? "#F59E0B" : "#10B981";
-            return (
-              <div key={c.Contractor_ID} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/50">
-                <div className="w-32 min-w-[8rem] text-[12px] font-semibold truncate" style={{ color: "#374151" }}>
-                  {c.Contractor_Name.split(" ").slice(0, 2).join(" ")}
-                </div>
-                <div className="flex-1">
-                  <ProgressBar value={pct} color={color} />
-                </div>
-                <span className="text-[13px] font-bold w-6 text-right" style={{ color }}>{meta.incidentCount}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Simulated per-contractor incident log */}
-      <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
-        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "#F1F5F9" }}>
-          <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Contractor Incident Log</h3>
-        </div>
-        <div className="flex items-center gap-2 px-5 py-3 border-b flex-wrap" style={{ borderColor: "#F1F5F9" }}>
-          <button onClick={() => setSelected("all")} className="px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all"
-            style={{ background: selected === "all" ? "#4A57B9" : "#F1F5F9", color: selected === "all" ? "#fff" : "#374151" }}>All</button>
-          {contractors.slice(0, 4).map((c) => (
-            <button key={c.Contractor_ID} onClick={() => setSelected(c.Contractor_ID)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all"
-              style={{ background: selected === c.Contractor_ID ? "#4A57B9" : "#F1F5F9", color: selected === c.Contractor_ID ? "#fff" : "#374151" }}>
-              {c.Contractor_Name.split(" ")[0]}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          {(["all", "Valid", "Expiring", "Expired"] as const).map((f) => (
+            <button key={f} onClick={() => setStatusFilter(f)}
+              className="px-3 py-1.5 rounded-xl text-[12px] font-semibold capitalize transition-all"
+              style={{ background: statusFilter === f ? "#4A57B9" : "#F1F5F9", color: statusFilter === f ? "#fff" : "#374151" }}>
+              {f === "all" ? "All" : f}
             </button>
           ))}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <TableHead cols={["Incident", "Contractor", "Type", "Severity", "Status", "Date"]} />
-            <tbody className="divide-y" style={{ borderColor: "#F8FAFF" }}>
-              {contractors.filter((c) => selected === "all" || c.Contractor_ID === selected).flatMap((company) => {
-                const meta = contractorMeta(company.Contractor_ID);
-                return Array.from({ length: Math.min(meta.incidentCount, 3) }, (_, i) => {
-                  const typeIdx = Math.floor(seeded(company.Contractor_ID, 500 + i) * INC_TYPES.length);
-                  const sev    = ["low", "medium", "high"][Math.floor(seeded(company.Contractor_ID, 510 + i) * 3)] as string;
-                  const st     = ["open", "investigating", "resolved", "closed"][Math.floor(seeded(company.Contractor_ID, 520 + i) * 4)] as string;
-                  const days   = Math.floor(seeded(company.Contractor_ID, 530 + i) * 90) + 1;
-                  return (
-                    <tr key={`${company.Contractor_ID}-inc${i}`} className="hover:bg-slate-50/50">
-                      <td className="px-5 py-3.5 text-[13px] font-semibold" style={{ color: "#111827" }}>
-                        {INC_TYPES[typeIdx]} Incident
-                      </td>
-                      <td className="px-5 py-3.5 text-[12px]" style={{ color: "#6B7280" }}>{company.Contractor_Name}</td>
-                      <td className="px-5 py-3.5 text-[12px]" style={{ color: "#6B7280" }}>{INC_TYPES[typeIdx]}</td>
-                      <td className="px-5 py-3.5"><Badge label={sev.toUpperCase()} color={SEV_CFG[sev].color} bg={SEV_CFG[sev].bg} /></td>
-                      <td className="px-5 py-3.5"><Badge label={st.replace(/_/g, " ")} color={ST_CFG[st].color} bg={ST_CFG[st].bg} /></td>
-                      <td className="px-5 py-3.5 text-[12px]" style={{ color: "#9CA3AF" }}>
-                        {new Date(Date.now() - days * 86400000).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  );
-                });
-              })}
-              {incidents.slice(0, 3).map((inc) => {
-                const sev = SEV_CFG[inc.severity] ?? SEV_CFG.low;
-                const st  = ST_CFG[inc.status]    ?? ST_CFG.closed;
-                return (
-                  <tr key={`live-${inc.id}`} className="hover:bg-slate-50/50">
-                    <td className="px-5 py-3.5">
-                      <div className="text-[13px] font-semibold" style={{ color: "#111827" }}>{inc.title}</div>
-                      <div className="text-[10px] px-1.5 py-0.5 rounded-md inline-block mt-0.5" style={{ background: "#EEF2FF", color: "#4A57B9", fontWeight: 700 }}>LIVE</div>
-                    </td>
-                    <td className="px-5 py-3.5 text-[12px]" style={{ color: "#9CA3AF" }}>— (API)</td>
-                    <td className="px-5 py-3.5 text-[12px]" style={{ color: "#6B7280" }}>{inc.type}</td>
-                    <td className="px-5 py-3.5"><Badge label={inc.severity.toUpperCase()} color={sev.color} bg={sev.bg} /></td>
-                    <td className="px-5 py-3.5"><Badge label={inc.status.replace(/_/g, " ")} color={st.color} bg={st.bg} /></td>
-                    <td className="px-5 py-3.5 text-[12px]" style={{ color: "#9CA3AF" }}>{new Date(inc.occurred_at).toLocaleDateString()}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <button onClick={() => setShowAddForm(!showAddForm)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white"
+          style={{ background: "linear-gradient(135deg, #0F2D87, #3B52C4)" }}>
+          <Plus className="w-3.5 h-3.5" /> Add Certificate
+        </button>
       </div>
-    </div>
-  );
-}
 
-// ── Tab 5: Certifications ──────────────────────────────────────────────────
-
-function CertificationsTab({ contractors }: { contractors: Contractor[] }) {
-  const [statusFilter, setStatusFilter] = useState<"all" | "Valid" | "Expiring" | "Expired">("all");
-
-  const allCerts = contractors.flatMap((c) => {
-    const meta = contractorMeta(c.Contractor_ID);
-    return Array.from({ length: meta.certCount }, (_, i) => {
-      const nameIdx   = Math.floor(seeded(c.Contractor_ID, 600 + i) * CERT_NAMES.length);
-      const issuerIdx = Math.floor(seeded(c.Contractor_ID, 610 + i) * CERT_ISSUERS.length);
-      const st        = certStatus(c.Contractor_ID, i);
-      const expiryDays = st.label === "Expired" ? -(Math.floor(seeded(c.Contractor_ID, 620 + i) * 90) + 1)
-        : st.label === "Expiring" ? Math.floor(seeded(c.Contractor_ID, 620 + i) * 30) + 1
-        : Math.floor(seeded(c.Contractor_ID, 620 + i) * 300) + 100;
-      return {
-        id: `${c.Contractor_ID}-cert${i}`,
-        company: c.Contractor_Name,
-        name: CERT_NAMES[nameIdx],
-        issuer: CERT_ISSUERS[issuerIdx],
-        expiry: new Date(Date.now() + expiryDays * 86400000).toLocaleDateString(),
-        expiryDays,
-        status: st,
-      };
-    });
-  }).filter((cert) => statusFilter === "all" || cert.status.label === statusFilter);
-
-  const valid    = contractors.flatMap((c) => Array.from({ length: contractorMeta(c.Contractor_ID).certCount }, (_, i) => certStatus(c.Contractor_ID, i))).filter((s) => s.label === "Valid").length;
-  const expiring = contractors.flatMap((c) => Array.from({ length: contractorMeta(c.Contractor_ID).certCount }, (_, i) => certStatus(c.Contractor_ID, i))).filter((s) => s.label === "Expiring").length;
-  const expired  = contractors.flatMap((c) => Array.from({ length: contractorMeta(c.Contractor_ID).certCount }, (_, i) => certStatus(c.Contractor_ID, i))).filter((s) => s.label === "Expired").length;
-
-  return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          { label: "Valid Certifications",    value: valid,    color: "#10B981", bg: "#D1FAE5", icon: Award },
-          { label: "Expiring Soon (≤30d)",    value: expiring, color: "#F59E0B", bg: "#FEF3C7", icon: Clock },
-          { label: "Expired",                 value: expired,  color: "#EF4444", bg: "#FEE2E2", icon: XCircle },
-        ].map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl border p-4 flex items-center gap-3" style={{ borderColor: "#E3E9F6" }}>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
-              <s.icon className="w-5 h-5" style={{ color: s.color }} />
+      {showAddForm && (
+        <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
+          <h3 className="text-[14px] font-bold mb-4" style={{ color: "#111827" }}>Add Certification</h3>
+          {addError && <div className="mb-3 px-3 py-2 rounded-xl text-sm" style={{ background: "#FEF2F2", color: "#EF4444" }}>{addError}</div>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold mb-1" style={{ color: "#6B7280" }}>Vendor *</label>
+              <select className={inputCls} style={inputStyle} value={addForm.vendorId} onChange={(e) => setAddForm((f) => ({ ...f, vendorId: e.target.value }))}>
+                <option value="">Select vendor…</option>
+                {vendors.map((v) => <option key={v.id} value={v.id}>{v.company_name}</option>)}
+              </select>
             </div>
             <div>
-              <div className="text-[20px] font-bold" style={{ color: "#111827" }}>{s.value}</div>
-              <div className="text-[11px] font-semibold" style={{ color: "#6B7280" }}>{s.label}</div>
+              <label className="block text-[11px] font-semibold mb-1" style={{ color: "#6B7280" }}>Certification Name *</label>
+              <input className={inputCls} style={inputStyle} placeholder="e.g. ISO 45001" value={addForm.document_type} onChange={(e) => setAddForm((f) => ({ ...f, document_type: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold mb-1" style={{ color: "#6B7280" }}>Issuing Body</label>
+              <input className={inputCls} style={inputStyle} placeholder="e.g. BSI Group" value={addForm.issuing_body} onChange={(e) => setAddForm((f) => ({ ...f, issuing_body: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold mb-1" style={{ color: "#6B7280" }}>Expiry Date</label>
+              <input className={inputCls} style={inputStyle} type="date" value={addForm.expiry_date} onChange={(e) => setAddForm((f) => ({ ...f, expiry_date: e.target.value }))} />
             </div>
           </div>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2">
-        {(["all", "Valid", "Expiring", "Expired"] as const).map((f) => (
-          <button key={f} onClick={() => setStatusFilter(f)}
-            className="px-3 py-1.5 rounded-xl text-[12px] font-semibold capitalize transition-all"
-            style={{ background: statusFilter === f ? "#4A57B9" : "#F1F5F9", color: statusFilter === f ? "#fff" : "#374151" }}>
-            {f === "all" ? "All" : f}
-          </button>
-        ))}
-      </div>
+          <div className="flex gap-3 mt-4">
+            <button onClick={() => setShowAddForm(false)} className="px-4 py-2 rounded-xl border text-sm font-semibold" style={{ borderColor: "#E3E9F6", color: "#6B7280" }}>Cancel</button>
+            <button onClick={handleAdd} disabled={adding} className="px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: "linear-gradient(135deg, #0F2D87, #3B52C4)" }}>
+              {adding ? "Adding…" : "Add Certificate"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
         <div className="px-5 py-4 border-b" style={{ borderColor: "#F1F5F9" }}>
           <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Certification Register</h3>
-          <p className="text-[11px] mt-0.5" style={{ color: "#94A3B8" }}>{allCerts.length} certifications</p>
+          <p className="text-[11px] mt-0.5" style={{ color: "#94A3B8" }}>{filtered.length} certification{filtered.length !== 1 ? "s" : ""}</p>
         </div>
-        {allCerts.length === 0 ? (
+        {filtered.length === 0 ? (
           <EmptyState icon={Award} text="No certifications match this filter" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <TableHead cols={["Certification", "Contractor", "Issuing Body", "Expiry", "Status"]} />
+              <TableHead cols={["Certification", "Vendor", "Issuing Body", "Expiry", "Status"]} />
               <tbody className="divide-y" style={{ borderColor: "#F8FAFF" }}>
-                {allCerts.map((cert) => (
-                  <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <Award className="w-3.5 h-3.5 flex-shrink-0" style={{ color: cert.status.color }} />
-                        <span className="text-[13px] font-semibold" style={{ color: "#111827" }}>{cert.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-[12px]" style={{ color: "#6B7280" }}>{cert.company}</td>
-                    <td className="px-5 py-3.5 text-[12px]" style={{ color: "#6B7280" }}>{cert.issuer}</td>
-                    <td className="px-5 py-3.5 text-[12px]" style={{ color: cert.expiryDays < 30 ? "#EF4444" : "#9CA3AF", fontWeight: cert.expiryDays < 30 ? 700 : 400 }}>
-                      {cert.expiry}
-                      {cert.expiryDays > 0 && cert.expiryDays < 30 && <span className="ml-1">({cert.expiryDays}d left)</span>}
-                      {cert.expiryDays < 0 && <span className="ml-1">({Math.abs(cert.expiryDays)}d ago)</span>}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <Badge label={cert.status.label} color={cert.status.color} bg={cert.status.bg} />
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((cert) => {
+                  const st = certStatusStyle(cert.cert_status);
+                  return (
+                    <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <Award className="w-3.5 h-3.5 flex-shrink-0" style={{ color: st.color }} />
+                          <span className="text-[13px] font-semibold" style={{ color: "#111827" }}>{cert.document_type}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-[12px]" style={{ color: "#6B7280" }}>{cert.vendor_name}</td>
+                      <td className="px-5 py-3.5 text-[12px]" style={{ color: "#6B7280" }}>{cert.issuing_body ?? "—"}</td>
+                      <td className="px-5 py-3.5 text-[12px]"
+                        style={{ color: (cert.days_left ?? 0) < 30 ? "#EF4444" : "#9CA3AF", fontWeight: (cert.days_left ?? 0) < 30 ? 700 : 400 }}>
+                        {cert.expiry_date ? new Date(cert.expiry_date).toLocaleDateString() : "—"}
+                        {cert.days_left !== null && cert.days_left > 0 && cert.days_left < 30 && ` (${cert.days_left}d left)`}
+                        {cert.days_left !== null && cert.days_left < 0 && ` (${Math.abs(cert.days_left)}d ago)`}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <Badge label={cert.cert_status} color={st.color} bg={st.bg} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -717,22 +786,27 @@ function CertificationsTab({ contractors }: { contractors: Contractor[] }) {
   );
 }
 
-// ── Tab 6: Contractor Risk Score ───────────────────────────────────────────
+// ── Tab 5: Vendor Risk Score ───────────────────────────────────────────────
 
-function RiskScoreTab({ contractors }: { contractors: Contractor[] }) {
+function VendorRiskScoreTab() {
+  const { data: riskScores = [], isLoading } = useGetVendorRiskScoresQuery();
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const sorted = [...contractors].sort((a, b) => contractorMeta(b.Contractor_ID).riskScore - contractorMeta(a.Contractor_ID).riskScore);
-  const highRisk = contractors.filter((c) => contractorMeta(c.Contractor_ID).riskScore >= 70).length;
-  const avgRisk  = contractors.length ? Math.round(contractors.reduce((s, c) => s + contractorMeta(c.Contractor_ID).riskScore, 0) / contractors.length) : 0;
+  if (isLoading) return <div className="flex justify-center py-16"><RefreshCw className="w-5 h-5 animate-spin" style={{ color: "#94A3B8" }} /></div>;
+
+  const highRisk = riskScores.filter((r) => r.risk_score >= 70).length;
+  const lowRisk  = riskScores.filter((r) => r.risk_score < 30).length;
+  const avgRisk  = riskScores.length
+    ? Math.round(riskScores.reduce((s, r) => s + r.risk_score, 0) / riskScores.length)
+    : 0;
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: "Avg Risk Score",     value: `${avgRisk}/100`,  color: riskLevel(avgRisk).color,  bg: riskLevel(avgRisk).bg,   icon: Zap },
-          { label: "High Risk (≥70)",    value: highRisk,           color: "#EF4444", bg: "#FEE2E2",  icon: ShieldAlert },
-          { label: "Low Risk (<30)",      value: contractors.filter((c) => contractorMeta(c.Contractor_ID).riskScore < 30).length, color: "#10B981", bg: "#D1FAE5", icon: ShieldCheck },
+          { label: "Avg Risk Score",  value: `${avgRisk}/100`, color: riskLevel(avgRisk).color,  bg: riskLevel(avgRisk).bg,   icon: Zap },
+          { label: "High Risk (≥70)", value: highRisk,          color: "#EF4444", bg: "#FEE2E2",  icon: ShieldAlert },
+          { label: "Low Risk (<30)",  value: lowRisk,           color: "#10B981", bg: "#D1FAE5",  icon: ShieldCheck },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-2xl border p-4 flex items-center gap-3" style={{ borderColor: "#E3E9F6" }}>
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
@@ -746,126 +820,119 @@ function RiskScoreTab({ contractors }: { contractors: Contractor[] }) {
         ))}
       </div>
 
-      {/* Risk leaderboard */}
-      <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
-        <div className="px-5 py-4 border-b bg-slate-50/50" style={{ borderColor: "#F1F5F9" }}>
-          <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Contractor Risk Rankings</h3>
-          <p className="text-[11px] mt-0.5" style={{ color: "#94A3B8" }}>Higher score = higher risk. Click to expand factor breakdown.</p>
-        </div>
-        <div className="divide-y" style={{ borderColor: "#F8FAFF" }}>
-          {sorted.map((c, idx) => {
-            const meta   = contractorMeta(c.Contractor_ID);
-            const rl     = riskLevel(meta.riskScore);
-            const isOpen = expanded === c.Contractor_ID;
+      {riskScores.length === 0 ? (
+        <EmptyState icon={Zap} text="No vendors found. Add vendors with risk scores to see rankings." />
+      ) : (
+        <>
+          <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
+            <div className="px-5 py-4 border-b bg-slate-50/50" style={{ borderColor: "#F1F5F9" }}>
+              <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Vendor Risk Rankings</h3>
+              <p className="text-[11px] mt-0.5" style={{ color: "#94A3B8" }}>Higher score = higher risk. Click to expand factor breakdown.</p>
+            </div>
+            <div className="divide-y" style={{ borderColor: "#F8FAFF" }}>
+              {riskScores.map((r, idx) => {
+                const rl      = riskLevel(r.risk_score);
+                const isOpen  = expanded === r.vendor_id;
+                const factors = computeRiskFactors(r);
 
-            const factors = RISK_FACTORS.map((f, i) => ({
-              factor: f,
-              score: Math.min(100, Math.round(meta.riskScore + (seeded(c.Contractor_ID, 700 + i) - 0.5) * 30)),
-            }));
-
-            return (
-              <div key={c.Contractor_ID}>
-                <button
-                  className="w-full flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors text-left"
-                  onClick={() => setExpanded(isOpen ? null : c.Contractor_ID)}
-                >
-                  <span className="text-[15px] font-bold w-6" style={{ color: idx === 0 ? "#EF4444" : "#CBD5E1" }}>#{idx + 1}</span>
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#F0F4FF" }}>
-                    <Building2 className="w-4 h-4" style={{ color: "#4A57B9" }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[13px] font-bold" style={{ color: "#111827" }}>{c.Contractor_Name}</span>
-                      <div className="flex items-center gap-3">
-                        <Badge label={rl.label + " Risk"} color={rl.color} bg={rl.bg} />
-                        <span className="text-[14px] font-bold" style={{ color: rl.color }}>{meta.riskScore}</span>
-                        {isOpen ? <ChevronDown className="w-4 h-4" style={{ color: "#94A3B8" }} /> : <ChevronRight className="w-4 h-4" style={{ color: "#94A3B8" }} />}
+                return (
+                  <div key={r.vendor_id}>
+                    <button
+                      className="w-full flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors text-left"
+                      onClick={() => setExpanded(isOpen ? null : r.vendor_id)}
+                    >
+                      <span className="text-[15px] font-bold w-6" style={{ color: idx === 0 ? "#EF4444" : "#CBD5E1" }}>#{idx + 1}</span>
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#F0F4FF" }}>
+                        <Building2 className="w-4 h-4" style={{ color: "#4A57B9" }} />
                       </div>
-                    </div>
-                    <ProgressBar value={meta.riskScore} color={rl.color} />
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div className="px-5 pb-5 bg-slate-50/30">
-                    <div className="pl-14 space-y-3">
-                      <div className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#94A3B8" }}>Risk Factor Breakdown</div>
-                      {factors.map(({ factor, score }) => {
-                        const fc = riskLevel(score).color;
-                        return (
-                          <div key={factor}>
-                            <div className="flex justify-between mb-1">
-                              <span className="text-[12px]" style={{ color: "#374151" }}>{factor}</span>
-                              <span className="text-[12px] font-bold" style={{ color: fc }}>{score}/100</span>
-                            </div>
-                            <ProgressBar value={score} color={fc} thin />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[13px] font-bold" style={{ color: "#111827" }}>{r.vendor_name}</span>
+                          <div className="flex items-center gap-3">
+                            <Badge label={rl.label + " Risk"} color={rl.color} bg={rl.bg} />
+                            <span className="text-[14px] font-bold" style={{ color: rl.color }}>{r.risk_score}</span>
+                            {isOpen ? <ChevronDown className="w-4 h-4" style={{ color: "#94A3B8" }} /> : <ChevronRight className="w-4 h-4" style={{ color: "#94A3B8" }} />}
                           </div>
-                        );
-                      })}
-
-                      {/* Recommendations */}
-                      {meta.riskScore >= 50 && (
-                        <div className="mt-4 rounded-xl p-3 border-l-4" style={{ background: "#FFF8F0", borderLeftColor: "#F59E0B" }}>
-                          <div className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: "#D97706" }}>Recommendations</div>
-                          <ul className="space-y-1">
-                            {factors.filter((f) => f.score >= 60).slice(0, 2).map((f) => (
-                              <li key={f.factor} className="text-[12px] flex items-center gap-1.5" style={{ color: "#374151" }}>
-                                <AlertCircle className="w-3 h-3 flex-shrink-0" style={{ color: "#F59E0B" }} />
-                                Review and remediate: {f.factor}
-                              </li>
-                            ))}
-                          </ul>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                        <ProgressBar value={r.risk_score} color={rl.color} />
+                      </div>
+                    </button>
 
-      {/* Risk trend summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingDown className="w-4 h-4" style={{ color: "#10B981" }} />
-            <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Improving Contractors</h3>
+                    {isOpen && (
+                      <div className="px-5 pb-5 bg-slate-50/30">
+                        <div className="pl-14 space-y-3">
+                          <div className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#94A3B8" }}>Risk Factor Breakdown</div>
+                          {factors.map(({ factor, score }) => {
+                            const fc = riskLevel(score).color;
+                            return (
+                              <div key={factor}>
+                                <div className="flex justify-between mb-1">
+                                  <span className="text-[12px]" style={{ color: "#374151" }}>{factor}</span>
+                                  <span className="text-[12px] font-bold" style={{ color: fc }}>{score}/100</span>
+                                </div>
+                                <ProgressBar value={score} color={fc} thin />
+                              </div>
+                            );
+                          })}
+                          {r.risk_score >= 50 && (
+                            <div className="mt-4 rounded-xl p-3 border-l-4" style={{ background: "#FFF8F0", borderLeftColor: "#F59E0B" }}>
+                              <div className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: "#D97706" }}>Recommendations</div>
+                              <ul className="space-y-1">
+                                {factors.filter((f) => f.score >= 60).slice(0, 2).map((f) => (
+                                  <li key={f.factor} className="text-[12px] flex items-center gap-1.5" style={{ color: "#374151" }}>
+                                    <AlertCircle className="w-3 h-3 flex-shrink-0" style={{ color: "#F59E0B" }} />
+                                    Review and remediate: {f.factor}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="space-y-3">
-            {sorted.filter((_, i) => i >= sorted.length - 3).reverse().map((c) => {
-              const meta = contractorMeta(c.Contractor_ID);
-              return (
-                <div key={c.Contractor_ID} className="flex items-center gap-3">
-                  <TrendingDown className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#10B981" }} />
-                  <span className="text-[12px] flex-1" style={{ color: "#374151" }}>{c.Contractor_Name}</span>
-                  <Badge label={`Score ${meta.riskScore}`} color="#10B981" bg="#D1FAE5" />
-                </div>
-              );
-            })}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingDown className="w-4 h-4" style={{ color: "#10B981" }} />
+                <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Lowest Risk</h3>
+              </div>
+              <div className="space-y-3">
+                {[...riskScores].reverse().slice(0, 3).map((r) => (
+                  <div key={r.vendor_id} className="flex items-center gap-3">
+                    <TrendingDown className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#10B981" }} />
+                    <span className="text-[12px] flex-1" style={{ color: "#374151" }}>{r.vendor_name}</span>
+                    <Badge label={`Score ${r.risk_score}`} color="#10B981" bg="#D1FAE5" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingUp className="w-4 h-4" style={{ color: "#EF4444" }} />
+                <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Needs Attention</h3>
+              </div>
+              <div className="space-y-3">
+                {riskScores.slice(0, 3).map((r) => {
+                  const rl = riskLevel(r.risk_score);
+                  return (
+                    <div key={r.vendor_id} className="flex items-center gap-3">
+                      <TrendingUp className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#EF4444" }} />
+                      <span className="text-[12px] flex-1" style={{ color: "#374151" }}>{r.vendor_name}</span>
+                      <Badge label={rl.label} color={rl.color} bg={rl.bg} />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-4 h-4" style={{ color: "#EF4444" }} />
-            <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>Needs Attention</h3>
-          </div>
-          <div className="space-y-3">
-            {sorted.slice(0, 3).map((c) => {
-              const meta = contractorMeta(c.Contractor_ID);
-              const rl   = riskLevel(meta.riskScore);
-              return (
-                <div key={c.Contractor_ID} className="flex items-center gap-3">
-                  <TrendingUp className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#EF4444" }} />
-                  <span className="text-[12px] flex-1" style={{ color: "#374151" }}>{c.Contractor_Name}</span>
-                  <Badge label={rl.label} color={rl.color} bg={rl.bg} />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -873,36 +940,34 @@ function RiskScoreTab({ contractors }: { contractors: Contractor[] }) {
 // ── Main Page ──────────────────────────────────────────────────────────────
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ElementType }> = [
-  { id: "companies",      label: "Contractor Companies", icon: Building2 },
-  { id: "workers",        label: "Active Workers",        icon: Users },
-  { id: "compliance",     label: "Compliance",            icon: ShieldCheck },
-  { id: "incidents",      label: "Incident History",      icon: AlertTriangle },
-  { id: "certifications", label: "Certifications",        icon: Award },
-  { id: "risk",           label: "Risk Score",            icon: Zap },
+  { id: "vendors",         label: "Vendor List",           icon: Building2 },
+  { id: "workers",         label: "Contractor Management", icon: Users },
+  { id: "compliance",      label: "Vendor Compliance",     icon: ShieldCheck },
+  { id: "certifications",  label: "Certifications",        icon: Award },
+  { id: "risk",            label: "Vendor Risk Score",     icon: Zap },
 ];
 
 export function ContractorsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("companies");
-  const { data: contractors = [], isLoading } = useGetContractorsQuery();
+  const [activeTab, setActiveTab] = useState<TabId>("vendors");
+  const { data: vendors = [], isLoading } = useGetVendorsQuery();
 
-  const totalWorkers  = contractors.reduce((s, c) => s + c.Total_Workers, 0);
-  const activeCompanies = contractors.filter((c) => c.Status === "Active").length;
-  const avgSafetyScore  = contractors.length
-    ? Math.round(contractors.reduce((s, c) => s + c.Safety_Score, 0) / contractors.length)
+  const totalWorkers    = vendors.reduce((s, v) => s + (v.total_workers ?? 0), 0);
+  const activeCompanies = vendors.filter((v) => v.status === "Active").length;
+  const avgSafetyScore  = vendors.length
+    ? Math.round(vendors.reduce((s, v) => s + (v.safety_score ?? 0), 0) / vendors.length)
     : 0;
-  const highRiskCount   = contractors.filter((c) => contractorMeta(c.Contractor_ID).riskScore >= 70).length;
+  const highRiskCount   = vendors.filter((v) => (v.risk_score ?? 0) >= 70).length;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between rounded-2xl border px-5 py-4" style={{ borderColor: "#DCE4F3", background: "#FFFFFF" }}>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #0F2D87, #3B52C4)" }}>
             <Building2 className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-[18px] font-bold" style={{ color: "#111827" }}>Contractors</h1>
-            <p className="text-[12px]" style={{ color: "#64748B" }}>Company profiles, active workers, compliance, incidents, certifications & risk scores</p>
+            <h1 className="text-[18px] font-bold" style={{ color: "#111827" }}>Vendors & Contractors</h1>
+            <p className="text-[12px]" style={{ color: "#64748B" }}>Vendor list, contractor management, compliance, certifications & risk scores</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 text-[12px]" style={{ color: "#94A3B8" }}>
@@ -911,7 +976,6 @@ export function ContractorsPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
       {isLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -924,14 +988,13 @@ export function ContractorsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KpiCard icon={Building2}  label="Contractor Companies" value={contractors.length}  sub={`${activeCompanies} active`}             color="#4A57B9" bg="#EEF2FF" />
-          <KpiCard icon={Users}      label="Total Workers"         value={totalWorkers}         sub="across all companies"                     color="#10B981" bg="#D1FAE5" />
-          <KpiCard icon={Star}       label="Avg Safety Score"      value={`${avgSafetyScore}%`} sub="across active contractors"               color={complianceColor(avgSafetyScore)} bg={avgSafetyScore >= 85 ? "#D1FAE5" : "#FEF3C7"} />
-          <KpiCard icon={ShieldAlert} label="High Risk Companies"  value={highRiskCount}        sub="require immediate review"                 color="#EF4444" bg="#FEE2E2" />
+          <KpiCard icon={Building2}   label="Vendor Companies"  value={vendors.length}     sub={`${activeCompanies} active`}        color="#4A57B9" bg="#EEF2FF" />
+          <KpiCard icon={Users}       label="Total Workers"     value={totalWorkers}        sub="across all vendors"                 color="#10B981" bg="#D1FAE5" />
+          <KpiCard icon={Star}        label="Avg Safety Score"  value={`${avgSafetyScore}%`} sub="across active vendors"            color={complianceColor(avgSafetyScore)} bg={avgSafetyScore >= 85 ? "#D1FAE5" : "#FEF3C7"} />
+          <KpiCard icon={ShieldAlert} label="High Risk Vendors" value={highRiskCount}       sub="require immediate review"           color="#EF4444" bg="#FEE2E2" />
         </div>
       )}
 
-      {/* Tabs */}
       <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
         <div className="flex overflow-x-auto border-b" style={{ borderColor: "#F1F5F9" }}>
           {TABS.map((tab) => {
@@ -956,16 +1019,13 @@ export function ContractorsPage() {
             <div className="flex items-center justify-center py-16">
               <RefreshCw className="w-5 h-5 animate-spin" style={{ color: "#94A3B8" }} />
             </div>
-          ) : contractors.length === 0 ? (
-            <EmptyState icon={Building2} text="No contractor data available" />
           ) : (
             <>
-              {activeTab === "companies"      && <CompaniesTab      contractors={contractors} />}
-              {activeTab === "workers"        && <WorkersTab        contractors={contractors} />}
-              {activeTab === "compliance"     && <ComplianceTab     contractors={contractors} />}
-              {activeTab === "incidents"      && <IncidentsTab      contractors={contractors} />}
-              {activeTab === "certifications" && <CertificationsTab contractors={contractors} />}
-              {activeTab === "risk"           && <RiskScoreTab      contractors={contractors} />}
+              {activeTab === "vendors"        && <VendorListTab         vendors={vendors} />}
+              {activeTab === "workers"        && <ContractorManagementTab vendors={vendors} />}
+              {activeTab === "compliance"     && <VendorComplianceTab />}
+              {activeTab === "certifications" && <CertificationsTab     vendors={vendors} />}
+              {activeTab === "risk"           && <VendorRiskScoreTab />}
             </>
           )}
         </div>

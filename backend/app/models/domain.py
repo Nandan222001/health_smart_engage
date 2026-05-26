@@ -3,11 +3,14 @@ from app.models.base import TenantScopedMixin
 from app.models.foundation import OrganisationNode
 from app.models.auth import User, Role
 from app.models.people import Employee, Certification, TrainingRequirement, TrainingCompletion
-from app.models.vendors import Vendor, VendorDocument
-from app.models.assets import Asset, AssetInspection
+from app.models.vendors import Vendor, VendorDocument, VendorCompliance
+from app.models.assets import Asset, AssetInspection, AssetMaintenanceLog
 from app.models.risks import RiskAssessment, HazardObservation
 from app.models.permits import Permit, PermitApproval
-from app.models.compliance import AuditChecklist, AuditExecution, Finding, Capa
+from app.models.compliance import (
+    AuditChecklist, AuditExecution, Finding, Capa,
+    ComplianceStandard, RegulatoryRequirement, ComplianceDocument,
+)
 from app.models.incidents import Incident, Investigation
 from app.models.knowledge import KnowledgeDocument
 from app.models.files import FileObject
