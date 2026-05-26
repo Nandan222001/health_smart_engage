@@ -65,7 +65,8 @@ export const baseApi = createApi({
     "Tenant", "OrgNode", "Role", "Permission", "Workflow",
     "Employee", "Training", "Vendor", "Asset", "Permit",
     "Audit", "CAPA", "Risk", "Hazard", "Incident",
-    "OrgSetup", "Activity",
+    "OrgSetup", "Activity", "EscalationRule",
+    "Import", "ApiIntegration", "Report",
   ],
   endpoints: () => ({}),
 });

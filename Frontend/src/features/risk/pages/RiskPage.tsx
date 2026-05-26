@@ -1,227 +1,667 @@
-import { MoreHorizontal } from "lucide-react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useState } from "react";
+import { useSearchParams } from "react-router";
+import { Loader2, Plus, Search, X, ChevronRight } from "lucide-react";
+import {
+  useListRiskAssessmentsQuery,
+  useCreateRiskAssessmentMutation,
+  useGetRiskMatrixQuery,
+  useGetHighRiskAreasQuery,
+  useCloseRiskAssessmentMutation,
+} from "@/features/hazards/api/hazardsApi";
+import type {
+  RiskAssessmentCreatePayload,
+  HighRiskArea,
+  RiskMatrixData,
+} from "@/features/hazards/api/hazardsApi";
 
-const residualTrend = [
-  { q: "Q1", risk: 90 },
-  { q: "Q2", risk: 64 },
-  { q: "Q3", risk: 48 },
-  { q: "Q4", risk: 34 },
-];
-
-const zoneRisk = [
-  { zone: "Site A - Ops", value: 26 },
-  { zone: "Site B - Log", value: 14 },
-  { zone: "Team C - Dev", value: 6 },
-];
-
-const matrixCols = ["Frequent 5", "Probable 4", "Occasional 3", "Remote 2", "Improbable 1"];
-const matrixRows = ["Catastrophic 5", "Significant 4", "Moderate 3", "Low 2", "Negligible 1"];
-
-const matrixCells = [
-  [
-    { score: 25, text: "Catastrophic", tone: "stop" },
-    { score: 20, text: "Catastrophic", tone: "stop" },
-    { score: 15, text: "Catastrophic", tone: "stop" },
-    { score: 12, text: "Catastrophic", tone: "urgent" },
-    { score: 5, text: "Catastrophic", tone: "action" },
-  ],
-  [
-    { score: 25, text: "Catastrophic", tone: "stop" },
-    { score: 20, text: "Catastrophic", tone: "stop" },
-    { score: 15, text: "Urgent Risk", tone: "urgent" },
-    { score: 10, text: "Acceptable", tone: "action" },
-    { score: 4, text: "Acceptable", tone: "monitor" },
-  ],
-  [
-    { score: 16, text: "Urgent Risk", tone: "stop" },
-    { score: 13, text: "Urgent Risk", tone: "urgent" },
-    { score: 10, text: "Acceptable", tone: "action" },
-    { score: 5, text: "Acceptable", tone: "action" },
-    { score: 4, text: "Acceptable", tone: "monitor" },
-  ],
-  [
-    { score: 13, text: "Urgent Risk", tone: "urgent" },
-    { score: 10, text: "Acceptable", tone: "action" },
-    { score: 5, text: "Acceptable", tone: "action" },
-    { score: 3, text: "Acceptable", tone: "monitor" },
-    { score: 2, text: "Acceptable", tone: "monitor" },
-  ],
-  [
-    { score: 8, text: "Acceptable", tone: "action" },
-    { score: 4, text: "Acceptable", tone: "monitor" },
-    { score: 2, text: "Acceptable", tone: "monitor" },
-    { score: 1, text: "Acceptable", tone: "monitor" },
-    { score: 1, text: "Acceptable", tone: "monitor" },
-  ],
-];
-
-const taskRows = [
-  { id: "T-001", desc: "Mitigate High Risk HVAC Issue", owner: "J. Doe", due: "Jun 25, 2024", status: "In Progress (Amber)" },
-  { id: "T-002", desc: "Update Security Protocol", owner: "A. Smith", due: "Jun 30, 2024", status: "Pending (Yellow)" },
-  { id: "T-003", desc: "Resolve High Risk Frosted Invert", owner: "J. Doe", due: "Jun 25, 2024", status: "In Progress (Amber)" },
-];
-
-const agingBars = [
-  { bucket: "0-30 Days", low: 7, medium: 4, high: 2, critical: 1, line: 2 },
-  { bucket: "31-60 Days", low: 5, medium: 6, high: 3, critical: 1, line: 5 },
-  { bucket: "61-90 Days", low: 3, medium: 4, high: 5, critical: 2, line: 6 },
-  { bucket: ">90 Days", low: 2, medium: 5, high: 6, critical: 4, line: 7 },
-];
-
-function toneStyle(tone: string) {
-  if (tone === "stop") return { bg: "#E15759", text: "#FFFFFF" };
-  if (tone === "urgent") return { bg: "#E9A23B", text: "#111827" };
-  if (tone === "action") return { bg: "#F1D458", text: "#111827" };
-  return { bg: "#7CC17E", text: "#111827" };
+// Extended interface that matches backend response (score-based, not level-based)
+interface RiskAssessmentExtended {
+  id: string;
+  title: string;
+  hazard_description?: string;
+  likelihood: number;
+  consequence: number;
+  risk_score: number;
+  residual_risk_score?: number;
+  status: string;
+  location_id?: string;
+  department?: string;
 }
 
-function KpiCard({ title, value, subtitle, hint, valueColor = "#1F2937" }: Readonly<{ title: string; value: string; subtitle: string; hint: string; valueColor?: string }>) {
+const STATUS_COLORS: Record<string, string> = {
+  open: "#EF4444",
+  in_progress: "#F59E0B",
+  closed: "#10B981",
+  draft: "#9CA3AF",
+  active: "#3B82F6",
+  archived: "#9CA3AF",
+};
+
+function statusStyle(status: string) {
+  const color = STATUS_COLORS[status] ?? "#9CA3AF";
+  return { background: color + "1A", color };
+}
+
+function riskScoreColor(score: number): string {
+  if (score >= 15) return "#EF4444";
+  if (score >= 10) return "#F59E0B";
+  if (score >= 5) return "#3B82F6";
+  return "#10B981";
+}
+
+function riskScoreLabel(score: number): string {
+  if (score >= 15) return "Critical";
+  if (score >= 10) return "High";
+  if (score >= 5) return "Medium";
+  return "Low";
+}
+
+function matrixCellColor(likelihood: number, consequence: number): string {
+  const score = likelihood * consequence;
+  if (score >= 15) return "#EF4444";
+  if (score >= 10) return "#F59E0B";
+  if (score >= 5) return "#FDE68A";
+  return "#D1FAE5";
+}
+
+function matrixCellTextColor(likelihood: number, consequence: number): string {
+  const score = likelihood * consequence;
+  if (score >= 10) return "#FFFFFF";
+  if (score >= 5) return "#92400E";
+  return "#065F46";
+}
+
+// ─────────────────────────────────────────────────
+// Risk Assessments (Default) View
+// ─────────────────────────────────────────────────
+function RiskAssessmentsView() {
+  const { data: rawData, isLoading, isError } = useListRiskAssessmentsQuery();
+  const [createAssessment, { isLoading: creating }] = useCreateRiskAssessmentMutation();
+  const [closeAssessment, { isLoading: closing }] = useCloseRiskAssessmentMutation();
+
+  const [search, setSearch] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [form, setForm] = useState<RiskAssessmentCreatePayload>({
+    title: "",
+    hazard_description: "",
+    likelihood: 1,
+    consequence: 1,
+    department: "",
+  });
+
+  // The baseApi unwraps { data: { items: [...] } } to just the array.
+  // Handle both array and object shapes defensively.
+  const items: RiskAssessmentExtended[] = Array.isArray(rawData)
+    ? (rawData as unknown as RiskAssessmentExtended[])
+    : ((rawData as unknown as { items?: RiskAssessmentExtended[] })?.items ?? []);
+
+  const total = items.length;
+  const critical = items.filter((r) => (r.risk_score ?? 0) >= 15).length;
+  const high = items.filter((r) => (r.risk_score ?? 0) >= 10 && (r.risk_score ?? 0) < 15).length;
+  const draft = items.filter((r) => r.status === "draft").length;
+
+  const filtered = items.filter((r) =>
+    r.title.toLowerCase().includes(search.toLowerCase())
+  );
+
+  async function handleSave() {
+    if (!form.title || !form.hazard_description) return;
+    await createAssessment(form as unknown as Partial<import("@/features/hazards/api/hazardsApi").RiskAssessment>);
+    setShowForm(false);
+    setForm({ title: "", hazard_description: "", likelihood: 1, consequence: 1, department: "" });
+  }
+
+  async function handleClose(id: string) {
+    setClosingId(id);
+    await closeAssessment(id);
+    setClosingId(null);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="animate-spin w-8 h-8" style={{ color: "#4A57B9" }} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="bg-white rounded-2xl border p-8 text-center" style={{ borderColor: "#E3E9F6" }}>
+        <p className="text-sm" style={{ color: "#EF4444" }}>Failed to load risk assessments. Please try again.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-[0_6px_16px_rgba(15,23,42,0.08)]" style={{ borderColor: '#D8E2F4' }}>
-      <div className="mb-1 text-[18px]" style={{ color: '#111827', fontWeight: 700 }}>{title}</div>
-      <div className="text-[56px] leading-none" style={{ color: valueColor, fontWeight: 700 }}>{value}</div>
-      <div className="mt-1 text-[22px]" style={{ color: '#64748B' }}>{subtitle}</div>
-      <div className="mt-1 text-[13px]" style={{ color: '#2F8C77', fontWeight: 600 }}>{hint}</div>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: "#111827" }}>Risk Assessments</h1>
+          <p className="text-sm mt-1" style={{ color: "#6B7280" }}>Manage and track risk assessment records</p>
+        </div>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold"
+          style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}
+        >
+          {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {showForm ? "Cancel" : "New Assessment"}
+        </button>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { label: "Total", value: total, color: "#4A57B9" },
+          { label: "Critical (≥15)", value: critical, color: "#EF4444" },
+          { label: "High (10–14)", value: high, color: "#F59E0B" },
+          { label: "Draft", value: draft, color: "#9CA3AF" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
+            <div className="text-2xl font-bold" style={{ color }}>{value}</div>
+            <div className="text-xs font-medium mt-0.5" style={{ color: "#6B7280" }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Inline Form */}
+      {showForm && (
+        <div className="bg-white rounded-2xl border p-5 space-y-4" style={{ borderColor: "#E3E9F6" }}>
+          <h2 className="text-sm font-bold" style={{ color: "#111827" }}>New Risk Assessment</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium" style={{ color: "#6B7280" }}>Title *</label>
+              <input
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                style={{ borderColor: "#E3E9F6" }}
+                placeholder="Assessment title"
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium" style={{ color: "#6B7280" }}>Department</label>
+              <input
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                style={{ borderColor: "#E3E9F6" }}
+                placeholder="e.g. Operations"
+                value={form.department ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <label className="text-xs font-medium" style={{ color: "#6B7280" }}>Hazard Description *</label>
+              <textarea
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-none"
+                style={{ borderColor: "#E3E9F6" }}
+                rows={2}
+                placeholder="Describe the hazard"
+                value={form.hazard_description}
+                onChange={(e) => setForm((f) => ({ ...f, hazard_description: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium" style={{ color: "#6B7280" }}>Likelihood (1–5)</label>
+              <select
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                style={{ borderColor: "#E3E9F6" }}
+                value={form.likelihood}
+                onChange={(e) => setForm((f) => ({ ...f, likelihood: Number(e.target.value) }))}
+              >
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium" style={{ color: "#6B7280" }}>Consequence (1–5)</label>
+              <select
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                style={{ borderColor: "#E3E9F6" }}
+                value={form.consequence}
+                onChange={(e) => setForm((f) => ({ ...f, consequence: Number(e.target.value) }))}
+              >
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleSave}
+              disabled={creating || !form.title || !form.hazard_description}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
+              style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}
+            >
+              {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Save Assessment
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#9CA3AF" }} />
+        <input
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none"
+          style={{ borderColor: "#E3E9F6", background: "#F9FAFB" }}
+          placeholder="Search assessments…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
+        <table className="w-full text-sm">
+          <thead>
+            <tr style={{ background: "#F8FAFF", borderBottom: "1px solid #E9EEF8" }}>
+              {["Title", "Likelihood", "Consequence", "Risk Score", "Status", "Actions"].map((h) => (
+                <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-center py-12 text-sm" style={{ color: "#6B7280" }}>
+                  No risk assessments found
+                </td>
+              </tr>
+            ) : (
+              filtered.map((r) => {
+                const score = r.risk_score ?? r.likelihood * r.consequence;
+                const scoreColor = riskScoreColor(score);
+                return (
+                  <tr key={r.id} className="border-t hover:bg-gray-50 transition-colors" style={{ borderColor: "#F3F4F6" }}>
+                    <td className="px-5 py-3.5">
+                      <div className="text-sm font-semibold" style={{ color: "#111827" }}>{r.title}</div>
+                      {r.department && (
+                        <div className="text-xs" style={{ color: "#9CA3AF" }}>{r.department}</div>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{r.likelihood}</td>
+                    <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{r.consequence}</td>
+                    <td className="px-5 py-3.5">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                        style={{ background: scoreColor + "1A", color: scoreColor }}
+                      >
+                        {score} — {riskScoreLabel(score)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize"
+                        style={statusStyle(r.status)}
+                      >
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {r.status !== "closed" && r.status !== "archived" && (
+                        <button
+                          onClick={() => handleClose(r.id)}
+                          disabled={closing && closingId === r.id}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:opacity-50 hover:bg-gray-50 transition-colors"
+                          style={{ borderColor: "#E3E9F6", color: "#6B7280" }}
+                        >
+                          {closing && closingId === r.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : null}
+                          Close
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-export function RiskPage() {
+// ─────────────────────────────────────────────────
+// Risk Matrix View
+// ─────────────────────────────────────────────────
+function RiskMatrixView() {
+  const { data: rawMatrixData, isLoading, isError } = useGetRiskMatrixQuery();
+  const [selectedCell, setSelectedCell] = useState<{ l: number; c: number } | null>(null);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="animate-spin w-8 h-8" style={{ color: "#4A57B9" }} />
+      </div>
+    );
+  }
+
+  if (isError || !rawMatrixData) {
+    return (
+      <div className="bg-white rounded-2xl border p-8 text-center" style={{ borderColor: "#E3E9F6" }}>
+        <p className="text-sm" style={{ color: "#EF4444" }}>Failed to load risk matrix data.</p>
+      </div>
+    );
+  }
+
+  // The baseApi may unwrap { data: { items: [...] } } to an array,
+  // but risk matrix returns an object — handle both shapes defensively.
+  const data: RiskMatrixData = Array.isArray(rawMatrixData)
+    ? { matrix_counts: {}, total_assessments: 0, by_level: { critical: 0, high: 0, medium: 0, low: 0 }, assessments: [] }
+    : (rawMatrixData as unknown as RiskMatrixData);
+
+  const { matrix_counts, total_assessments, by_level, assessments } = data;
+  const medLow = (by_level?.medium ?? 0) + (by_level?.low ?? 0);
+
+  const filteredAssessments = selectedCell
+    ? (assessments ?? []).filter(
+        (a) => a.likelihood === selectedCell.l && a.consequence === selectedCell.c
+      )
+    : [];
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Header */}
       <div>
-        <h1>Welcome , User</h1>
+        <h1 className="text-2xl font-bold" style={{ color: "#111827" }}>Risk Matrix</h1>
+        <p className="text-sm mt-1" style={{ color: "#6B7280" }}>5×5 likelihood vs consequence matrix</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <KpiCard title="Control Effectiveness Score" value="92%" subtitle="Effective" hint="▲ 80%" />
-        <KpiCard title="Unverified Controls" value="14" subtitle="Pending Review" hint="" />
-        <KpiCard title="Risk Escalations ⚠" value="5" subtitle="Requires Immediate Action" hint="" />
+      {/* Stat Cards */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { label: "Total Assessments", value: total_assessments ?? 0, color: "#4A57B9" },
+          { label: "Critical", value: by_level?.critical ?? 0, color: "#EF4444" },
+          { label: "High", value: by_level?.high ?? 0, color: "#F59E0B" },
+          { label: "Medium / Low", value: medLow, color: "#3B82F6" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
+            <div className="text-2xl font-bold" style={{ color }}>{value}</div>
+            <div className="text-xs font-medium mt-0.5" style={{ color: "#6B7280" }}>{label}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.65fr_0.9fr]">
-        <div className="rounded-2xl border bg-white p-4 shadow-[0_6px_16px_rgba(15,23,42,0.08)]" style={{ borderColor: '#D8E2F4' }}>
-          <div className="mb-2 text-[18px]" style={{ color: '#111827', fontWeight: 700 }}>Residual Risk Trend</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={residualTrend}>
-              <CartesianGrid stroke="#E2E8F0" vertical={false} />
-              <XAxis dataKey="q" tick={{ fill: '#475569', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#475569', fontSize: 12 }} axisLine={false} tickLine={false} domain={[0, 100]} />
-              <Tooltip />
-              <Area type="monotone" dataKey="risk" stroke="#5E6FA6" fill="#7E8DBA" fillOpacity={0.55} strokeWidth={2} />
-            </AreaChart>
-          </ResponsiveContainer>
+      {/* Matrix */}
+      <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
+        <h2 className="text-sm font-bold mb-4" style={{ color: "#111827" }}>Click a cell to view assessments</h2>
+        <div className="overflow-x-auto">
+          <table className="border-collapse">
+            <thead>
+              <tr>
+                <th className="px-3 py-2 text-xs text-left font-semibold" style={{ color: "#6B7280", minWidth: 80 }}>
+                  C ↓ / L →
+                </th>
+                {[1, 2, 3, 4, 5].map((l) => (
+                  <th key={l} className="px-2 py-2 text-xs font-semibold text-center" style={{ color: "#6B7280", minWidth: 64 }}>
+                    L={l}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[5, 4, 3, 2, 1].map((consequence) => (
+                <tr key={consequence}>
+                  <td className="px-3 py-2 text-xs font-semibold" style={{ color: "#6B7280" }}>C={consequence}</td>
+                  {[1, 2, 3, 4, 5].map((likelihood) => {
+                    const key = `${likelihood}_${consequence}`;
+                    const count = (matrix_counts ?? {})[key] ?? 0;
+                    const bgColor = matrixCellColor(likelihood, consequence);
+                    const textColor = matrixCellTextColor(likelihood, consequence);
+                    const isSelected =
+                      selectedCell?.l === likelihood && selectedCell?.c === consequence;
+                    return (
+                      <td key={key} className="px-1 py-1">
+                        <button
+                          onClick={() =>
+                            setSelectedCell(
+                              isSelected ? null : { l: likelihood, c: consequence }
+                            )
+                          }
+                          className="w-16 h-12 rounded-lg flex flex-col items-center justify-center transition-all hover:opacity-90"
+                          style={{
+                            background: bgColor,
+                            color: textColor,
+                            outline: isSelected ? `2px solid #4A57B9` : "none",
+                            outlineOffset: 2,
+                          }}
+                        >
+                          <span className="text-base font-bold leading-none">{likelihood * consequence}</span>
+                          <span className="text-[10px] font-medium mt-0.5">{count > 0 ? `${count} item${count !== 1 ? "s" : ""}` : "—"}</span>
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        <div className="rounded-2xl border bg-white p-4 shadow-[0_6px_16px_rgba(15,23,42,0.08)]" style={{ borderColor: '#6BD0D7' }}>
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-[18px]" style={{ color: '#111827', fontWeight: 700 }}>Risk Matrix</div>
-            <MoreHorizontal className="h-4 w-4" style={{ color: '#64748B' }} />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+        {/* Legend */}
+        <div className="mt-4 flex flex-wrap gap-4 text-xs" style={{ color: "#6B7280" }}>
+          {[
+            { bg: "#EF4444", label: "Critical (≥15)" },
+            { bg: "#F59E0B", label: "High (10–14)" },
+            { bg: "#FDE68A", label: "Medium (5–9)" },
+            { bg: "#D1FAE5", label: "Low (<5)" },
+          ].map(({ bg, label }) => (
+            <span key={label} className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded" style={{ background: bg }} />
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Selected cell assessments */}
+      {selectedCell && (
+        <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
+          <h2 className="text-sm font-bold mb-3" style={{ color: "#111827" }}>
+            Assessments for L={selectedCell.l}, C={selectedCell.c} (Score: {selectedCell.l * selectedCell.c})
+          </h2>
+          {filteredAssessments.length === 0 ? (
+            <p className="text-sm text-center py-4" style={{ color: "#6B7280" }}>No assessments for this cell</p>
+          ) : (
+            <table className="w-full text-sm">
               <thead>
-                <tr>
-                  <th className="px-2 py-2 text-[12px]" style={{ color: '#475569', fontWeight: 700 }}>Impact ↓ / Likelihood →</th>
-                  {matrixCols.map((col) => (
-                    <th key={col} className="px-2 py-2 text-[12px]" style={{ color: '#475569', fontWeight: 700 }}>{col}</th>
+                <tr style={{ background: "#F8FAFF", borderBottom: "1px solid #E9EEF8" }}>
+                  {["Title", "Risk Score", "Status"].map((h) => (
+                    <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {matrixRows.map((row, rowIdx) => (
-                  <tr key={row}>
-                    <td className="px-2 py-2 text-[12px]" style={{ color: '#334155', fontWeight: 700 }}>{row}</td>
-                    {matrixCells[rowIdx].map((cell, colIdx) => {
-                      const tone = toneStyle(cell.tone);
-                      return (
-                        <td key={`${row}-${colIdx}`} className="px-1 py-1">
-                          <div className="rounded-md px-2 py-1 text-center" style={{ background: tone.bg, color: tone.text }}>
-                            <div className="text-[14px] leading-none" style={{ fontWeight: 800 }}>{cell.score}</div>
-                            <div className="text-[11px]" style={{ fontWeight: 600 }}>{cell.text}</div>
-                          </div>
-                        </td>
-                      );
-                    })}
+                {filteredAssessments.map((a) => (
+                  <tr key={a.id} className="border-t" style={{ borderColor: "#F3F4F6" }}>
+                    <td className="px-4 py-3 text-sm font-medium" style={{ color: "#111827" }}>{a.title}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                        style={{ background: riskScoreColor(a.risk_score) + "1A", color: riskScoreColor(a.risk_score) }}
+                      >
+                        {a.risk_score}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize"
+                        style={statusStyle(a.status)}
+                      >
+                        {a.status}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-4 text-[12px]" style={{ color: '#475569' }}>
-            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ background: '#E15759' }} />Stop</span>
-            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ background: '#E9A23B' }} />Urgent Action</span>
-            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ background: '#F1D458' }} />Action</span>
-            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ background: '#7CC17E' }} />Monitor/No Action</span>
-          </div>
+          )}
         </div>
+      )}
+    </div>
+  );
+}
 
-        <div className="rounded-2xl border bg-white p-4 shadow-[0_6px_16px_rgba(15,23,42,0.08)]" style={{ borderColor: '#D8E2F4' }}>
-          <div className="mb-2 text-[18px]" style={{ color: '#111827', fontWeight: 700 }}>Risk by Zone/Site/Team</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={zoneRisk} layout="vertical" barSize={24}>
-              <CartesianGrid stroke="#E2E8F0" vertical={false} />
-              <XAxis type="number" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 30]} />
-              <YAxis type="category" dataKey="zone" tick={{ fill: '#334155', fontSize: 12 }} axisLine={false} tickLine={false} width={88} />
-              <Tooltip />
-              <Bar dataKey="value" radius={[4, 4, 4, 4]} fill="#E9B13D" />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="mt-2 h-2 rounded-full" style={{ background: '#F3F4F6' }}>
-            <div className="h-full rounded-full" style={{ width: '84%', background: '#E9B13D' }} />
-          </div>
+// ─────────────────────────────────────────────────
+// High-Risk Areas View
+// ─────────────────────────────────────────────────
+function HighRiskAreasView() {
+  const { data: rawData, isLoading, isError } = useGetHighRiskAreasQuery();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="animate-spin w-8 h-8" style={{ color: "#4A57B9" }} />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="bg-white rounded-2xl border p-8 text-center" style={{ borderColor: "#E3E9F6" }}>
+        <p className="text-sm" style={{ color: "#EF4444" }}>Failed to load high-risk areas.</p>
+      </div>
+    );
+  }
+
+  // baseApi unwraps { data: { items: [...] } } → just the items array.
+  // Handle both shapes defensively.
+  const items: HighRiskArea[] = Array.isArray(rawData)
+    ? (rawData as unknown as HighRiskArea[])
+    : ((rawData as unknown as { items?: HighRiskArea[] })?.items ?? []);
+  const total = items.length;
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold" style={{ color: "#111827" }}>High-Risk Areas</h1>
+        <p className="text-sm mt-1" style={{ color: "#6B7280" }}>Assessments with risk score ≥ 15</p>
+      </div>
+
+      {/* Stat Card */}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
+          <div className="text-2xl font-bold" style={{ color: "#EF4444" }}>{total}</div>
+          <div className="text-xs font-medium mt-0.5" style={{ color: "#6B7280" }}>Total High-Risk</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.25fr_1fr]">
-        <div className="rounded-2xl border bg-white p-4 shadow-[0_6px_16px_rgba(15,23,42,0.08)]" style={{ borderColor: '#D8E2F4' }}>
-          <div className="mb-3 text-[18px]" style={{ color: '#111827', fontWeight: 700 }}>Action/High Risk Active Tasks Table</div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
-              <thead>
-                <tr style={{ background: '#F8FAFC' }}>
-                  {["Task ID", "Description", "Owner", "Due Date", "Status"].map((h) => (
-                    <th key={h} className="px-2 py-2 text-left text-[12px] uppercase" style={{ color: '#64748B', fontWeight: 700 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {taskRows.map((row) => (
-                  <tr key={row.id} style={{ borderTop: '1px solid #E2E8F0' }}>
-                    <td className="px-2 py-2 text-[13px]" style={{ color: '#1F2937', fontWeight: 700 }}>{row.id}</td>
-                    <td className="px-2 py-2 text-[13px]" style={{ color: '#334155' }}>{row.desc}</td>
-                    <td className="px-2 py-2 text-[13px]" style={{ color: '#334155' }}>{row.owner}</td>
-                    <td className="px-2 py-2 text-[13px]" style={{ color: '#334155' }}>{row.due}</td>
-                    <td className="px-2 py-2 text-[13px]" style={{ color: '#A16207', fontWeight: 600 }}>{row.status}</td>
-                  </tr>
+      {/* Table */}
+      <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 space-y-3">
+            <ChevronRight className="w-10 h-10" style={{ color: "#D1D5DB" }} />
+            <p className="text-sm font-medium" style={{ color: "#6B7280" }}>No high-risk areas found</p>
+            <p className="text-xs" style={{ color: "#9CA3AF" }}>Assessments with risk score ≥ 15 will appear here</p>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: "#F8FAFF", borderBottom: "1px solid #E9EEF8" }}>
+                {["Title", "Risk Score", "Likelihood", "Consequence", "Location", "Status"].map((h) => (
+                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{h}</th>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-4 shadow-[0_6px_16px_rgba(15,23,42,0.08)]" style={{ borderColor: '#D8E2F4' }}>
-          <div className="mb-3 text-[18px]" style={{ color: '#111827', fontWeight: 700 }}>Risk Aging</div>
-          <div className="flex gap-2 text-[12px]">
-            {['0-30 Days', '31-60 Days', '61-90 Days', '>90 Days'].map((label) => (
-              <span key={label} className="rounded-full px-3 py-1" style={{ background: '#EEF2FF', color: '#334155', fontWeight: 700 }}>{label}</span>
-            ))}
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={agingBars} margin={{ top: 18 }}>
-              <CartesianGrid stroke="#E2E8F0" vertical={false} />
-              <XAxis dataKey="bucket" tick={{ fill: '#475569', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis hide />
-              <Tooltip />
-              <Bar dataKey="low" stackId="a" fill="#7CC17E" />
-              <Bar dataKey="medium" stackId="a" fill="#F1D458" />
-              <Bar dataKey="high" stackId="a" fill="#E9A23B" />
-              <Bar dataKey="critical" stackId="a" fill="#E15759" />
-              <Line type="monotone" dataKey="line" stroke="#6276B6" strokeWidth={2} dot={{ r: 3 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((area) => {
+                const scoreBg = area.risk_score >= 20 ? "#EF4444" : "#F59E0B";
+                return (
+                  <tr key={area.id} className="border-t hover:bg-gray-50 transition-colors" style={{ borderColor: "#F3F4F6" }}>
+                    <td className="px-5 py-3.5">
+                      <div className="text-sm font-semibold" style={{ color: "#111827" }}>{area.title}</div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-xs font-bold"
+                        style={{ background: scoreBg + "1A", color: scoreBg }}
+                      >
+                        {area.risk_score}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{area.likelihood}</td>
+                    <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{area.consequence}</td>
+                    <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{area.location_id ?? "—"}</td>
+                    <td className="px-5 py-3.5">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize"
+                        style={statusStyle(area.status)}
+                      >
+                        {area.status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────
+// Navigation Tab Bar
+// ─────────────────────────────────────────────────
+const TABS = [
+  { key: "", label: "Risk Assessments" },
+  { key: "matrix", label: "Risk Matrix" },
+  { key: "high-risk", label: "High-Risk Areas" },
+] as const;
+
+// ─────────────────────────────────────────────────
+// Main RiskPage
+// ─────────────────────────────────────────────────
+export function RiskPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get("tab") ?? "";
+
+  function setTab(key: string) {
+    if (key === "") {
+      setSearchParams({});
+    } else {
+      setSearchParams({ tab: key });
+    }
+  }
+
+  return (
+    <div className="p-6 space-y-5">
+      {/* Tab Bar */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+            style={
+              tab === key
+                ? { background: "#fff", color: "#4A57B9", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
+                : { color: "#6B7280" }
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      {tab === "matrix" ? (
+        <RiskMatrixView />
+      ) : tab === "high-risk" ? (
+        <HighRiskAreasView />
+      ) : (
+        <RiskAssessmentsView />
+      )}
     </div>
   );
 }
