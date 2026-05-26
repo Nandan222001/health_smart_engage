@@ -556,6 +556,75 @@ class DomainDispatcher:
             res = repo.update(RiskAssessment, user.tenant_id, path_params.get("assessmentId"), {"status": "closed"})
             return {"id": res.id, "status": res.status}
 
+        # Incident Commands
+        if operation == "incidents_create":
+            from app.models.incidents import Incident as _Inc
+            import uuid as _uuid, random as _random
+            ref = f"INC-{_random.randint(10000,99999)}"
+            rec = _Inc(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                incident_ref=ref, reporter_user_id=user.user_id,
+                incident_type=data.get("incident_type", "incident_report"),
+                severity=data.get("severity", "unclassified"),
+                location_id=data.get("location_id"),
+                description=data.get("description", ""),
+                is_confidential=bool(data.get("is_confidential", False)),
+                status="reported",
+            )
+            db.add(rec); db.flush()
+            return {"id": rec.id, "ref": rec.incident_ref, "status": rec.status}
+
+        if operation == "incidents_update":
+            from app.models.incidents import Incident as _Inc
+            from sqlalchemy import select as _sel
+            inc_id = path_params.get("incidentId")
+            rec = db.scalars(_sel(_Inc).where(_Inc.id == inc_id, _Inc.tenant_id == user.tenant_id)).first()
+            allowed = {"severity", "status", "description", "is_confidential"}
+            if rec:
+                for k, v in data.items():
+                    if k in allowed: setattr(rec, k, v)
+            return {"id": inc_id, "status": rec.status if rec else "unknown"}
+
+        if operation in ("incidents_unsafe_acts_create", "incidents_unsafe_conditions_create"):
+            from app.models.incidents import Incident as _Inc
+            import uuid as _uuid, random as _random
+            itype = "unsafe_act" if operation == "incidents_unsafe_acts_create" else "unsafe_condition"
+            ref = f"{'UA' if itype=='unsafe_act' else 'UC'}-{_random.randint(10000,99999)}"
+            rec = _Inc(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                incident_ref=ref, reporter_user_id=user.user_id,
+                incident_type=itype,
+                severity=data.get("severity", "unclassified"),
+                location_id=data.get("location_id"),
+                description=data.get("description", ""),
+                is_confidential=False, status="reported",
+            )
+            db.add(rec); db.flush()
+            return {"id": rec.id, "ref": rec.incident_ref, "status": rec.status}
+
+        if operation == "incident_rca_create":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            inc_id = path_params.get("incidentId")
+            rec = repo.create(user.tenant_id, "incidents", "rca", {**data, "incident_id": inc_id}, status="draft")
+            return {"id": rec.id}
+
+        if operation == "incident_corrective_actions_create":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            rec = repo.create(user.tenant_id, "incidents", "corrective_action", data, status=data.get("status", "open"))
+            return {"id": rec.id, **rec.payload}
+
+        if operation == "incident_corrective_actions_update":
+            from app.models.generic_record import GenericRecord
+            from sqlalchemy import select as _sel
+            action_id = path_params.get("actionId")
+            rec = db.scalars(_sel(GenericRecord).where(GenericRecord.id == action_id, GenericRecord.tenant_id == user.tenant_id)).first()
+            if rec:
+                rec.payload = {**rec.payload, **data}
+                if "status" in data: rec.status = data["status"]
+            return {"id": action_id, **(rec.payload if rec else {})}
+
         return None
 
     def execute_special_query(
@@ -1562,22 +1631,9 @@ class DomainDispatcher:
 
         if operation == "incidents_list":
             items = svc["compliance"].list_incidents(user, {})
-            return {
-                "items": [
-                    {
-                        "id": i.id,
-                        "ref": i.incident_ref,
-                        "title": i.description[:60] if i.description else f"Incident {i.id[:8]}",
-                        "description": i.description,
-                        "severity": i.severity,
-                        "status": i.status,
-                        "incident_type": i.incident_type,
-                        "is_confidential": i.is_confidential,
-                    }
-                    for i in items
-                ],
-                "total": len(items),
-            }
+            def _inc_to_dict(i):
+                return {"id": i.id, "ref": i.incident_ref, "title": i.description[:60] if i.description else f"Incident {i.id[:8]}", "description": i.description, "severity": i.severity, "status": i.status, "incident_type": i.incident_type, "is_confidential": i.is_confidential, "reported_by": i.reporter_user_id, "occurred_at": str(i.created_at) if i.created_at else None}
+            return {"items": [_inc_to_dict(i) for i in items], "total": len(items)}
 
         # ── Sites & Zones Queries ─────────────────────────────────────────────
         if operation == "sites_list":
@@ -1600,5 +1656,78 @@ class DomainDispatcher:
             repo = GenericRepository(db)
             items = repo.list_by_type(user.tenant_id, "workflow", "escalation_rule", limit=200)
             return {"items": [{"id": r.id, **r.payload} for r in items], "total": len(items)}
+
+        # ── Incident Module Queries ───────────────────────────────────────────────────
+        def _inc_to_dict(i):
+            return {
+                "id": i.id, "ref": i.incident_ref,
+                "title": i.description[:60] if i.description else f"Incident {i.id[:8]}",
+                "description": i.description,
+                "severity": i.severity, "status": i.status,
+                "incident_type": i.incident_type,
+                "is_confidential": i.is_confidential,
+                "reported_by": i.reporter_user_id,
+                "occurred_at": str(i.created_at) if i.created_at else None,
+            }
+
+        if operation == "incidents_unsafe_acts_list":
+            from app.models.incidents import Incident as _Inc
+            from sqlalchemy import select as _sel
+            items = db.scalars(_sel(_Inc).where(_Inc.tenant_id == user.tenant_id, _Inc.incident_type == "unsafe_act").order_by(_Inc.created_at.desc())).all()
+            return {"items": [_inc_to_dict(i) for i in items], "total": len(items)}
+
+        if operation == "incidents_unsafe_conditions_list":
+            from app.models.incidents import Incident as _Inc
+            from sqlalchemy import select as _sel
+            items = db.scalars(_sel(_Inc).where(_Inc.tenant_id == user.tenant_id, _Inc.incident_type == "unsafe_condition").order_by(_Inc.created_at.desc())).all()
+            return {"items": [_inc_to_dict(i) for i in items], "total": len(items)}
+
+        if operation == "incident_investigations_list":
+            from app.models.incidents import Investigation as _Inv
+            from sqlalchemy import select as _sel
+            inc_id = path_params.get("incidentId")
+            items = db.scalars(_sel(_Inv).where(_Inv.tenant_id == user.tenant_id, _Inv.incident_id == inc_id)).all()
+            return {"items": [{"id": i.id, "incident_id": i.incident_id, "lead_user_id": i.lead_user_id, "rca_method": i.rca_method, "findings": i.findings, "status": i.status} for i in items], "total": len(items)}
+
+        if operation == "incident_rca_get":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            inc_id = path_params.get("incidentId")
+            items = repo.list_by_type(user.tenant_id, "incidents", "rca", limit=50)
+            rca_items = [r for r in items if r.payload.get("incident_id") == inc_id]
+            return {"items": [{"id": r.id, **r.payload} for r in rca_items]}
+
+        if operation == "incident_corrective_actions_list":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            items = repo.list_by_type(user.tenant_id, "incidents", "corrective_action", limit=500)
+            return {"items": [{"id": r.id, "status": r.status, **r.payload} for r in items], "total": len(items)}
+
+        if operation == "incidents_analytics_get":
+            from app.models.incidents import Incident as _Inc
+            from sqlalchemy import select as _sel
+            all_incidents = db.scalars(_sel(_Inc).where(_Inc.tenant_id == user.tenant_id)).all()
+            total = len(all_incidents)
+            by_type = {}
+            by_severity = {}
+            by_status = {}
+            for i in all_incidents:
+                by_type[i.incident_type] = by_type.get(i.incident_type, 0) + 1
+                by_severity[i.severity] = by_severity.get(i.severity, 0) + 1
+                by_status[i.status] = by_status.get(i.status, 0) + 1
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            ca_items = repo.list_by_type(user.tenant_id, "incidents", "corrective_action", limit=500)
+            open_ca = len([c for c in ca_items if c.status in ("open", "in_progress")])
+            closed_ca = len([c for c in ca_items if c.status == "closed"])
+            return {
+                "total_incidents": total,
+                "by_type": by_type,
+                "by_severity": by_severity,
+                "by_status": by_status,
+                "open_corrective_actions": open_ca,
+                "closed_corrective_actions": closed_ca,
+                "trir": round((total * 200000) / max(total * 2000, 1), 2),
+            }
 
         return None
