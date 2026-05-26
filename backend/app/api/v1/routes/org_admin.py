@@ -37,6 +37,12 @@ ENDPOINTS = [
     ("GET",    "/help/tickets",                   "org_admin_tickets_list",          "List support tickets"),
     ("POST",   "/help/tickets",                   "org_admin_tickets_create",        "Create support ticket"),
     ("GET",    "/help/tickets/{ticketId}",        "org_admin_tickets_get",           "Get support ticket"),
+
+    # Reports
+    ("GET",    "/reports/stats",                  "org_admin_reports_stats",         "Report statistics"),
+    ("GET",    "/reports",                        "org_admin_reports_list",          "List generated reports"),
+    ("POST",   "/reports/generate",               "org_admin_reports_generate",      "Generate a report"),
+    ("DELETE", "/reports/{reportId}",             "org_admin_reports_delete",        "Delete a report"),
 ]
 
 register_catalog_routes(router, "org_admin", ENDPOINTS)
