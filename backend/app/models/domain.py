@@ -7,7 +7,10 @@ from app.models.vendors import Vendor, VendorDocument, VendorCompliance
 from app.models.assets import Asset, AssetInspection, AssetMaintenanceLog
 from app.models.risks import RiskAssessment, HazardObservation
 from app.models.permits import Permit, PermitApproval
-from app.models.compliance import AuditChecklist, AuditExecution, Finding, Capa
+from app.models.compliance import (
+    AuditChecklist, AuditExecution, Finding, Capa,
+    ComplianceStandard, RegulatoryRequirement, ComplianceDocument,
+)
 from app.models.incidents import Incident, Investigation
 from app.models.knowledge import KnowledgeDocument
 from app.models.files import FileObject
