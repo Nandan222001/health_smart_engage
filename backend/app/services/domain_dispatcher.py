@@ -431,6 +431,64 @@ class DomainDispatcher:
         if operation == "org_setup_activate":
             return svc["org_setup"].activate(user, data)
 
+        # ── Risk Module Commands ──────────────────────────────────────────────────────
+
+        if operation == "risk_assessments_create":
+            import uuid as _uuid
+            payload = {**data}
+            payload.setdefault("id", str(_uuid.uuid4()))
+            # Compute risk_score
+            likelihood = int(payload.get("likelihood", 1))
+            consequence = int(payload.get("consequence", 1))
+            payload["likelihood"] = likelihood
+            payload["consequence"] = consequence
+            payload["risk_score"] = likelihood * consequence
+            payload.setdefault("status", "draft")
+            # task_name from title or hazard_description
+            if "title" in payload and "task_name" not in payload:
+                payload["task_name"] = payload.pop("title")
+            if "hazard_description" not in payload:
+                payload["hazard_description"] = payload.get("task_name", "Unspecified hazard")
+            res = svc["compliance"].create_risk_assessment(user, payload)
+            return {"id": res.id, "risk_score": res.risk_score, "status": res.status}
+
+        if operation == "hazards_create":
+            from app.models.risks import HazardObservation
+            from app.repositories.domain_repository import DomainRepository
+            import uuid as _uuid
+            repo = DomainRepository(svc["compliance"].db)
+            payload = {**data, "id": str(_uuid.uuid4()), "status": "logged"}
+            if "title" in payload and "description" not in payload:
+                payload["description"] = payload.pop("title")
+            res = repo.create(HazardObservation, user.tenant_id, payload)
+            return {"id": res.id, "status": res.status}
+
+        if operation == "hazards_update":
+            from app.models.risks import HazardObservation
+            from app.repositories.domain_repository import DomainRepository
+            repo = DomainRepository(svc["compliance"].db)
+            res = repo.update(HazardObservation, user.tenant_id, path_params.get("hazardId"), data)
+            return {"id": res.id, "status": res.status}
+
+        if operation == "near_miss_create":
+            from app.models.incidents import Incident
+            from app.repositories.domain_repository import DomainRepository
+            import uuid as _uuid
+            repo = DomainRepository(svc["compliance"].db)
+            payload = {**data, "id": str(_uuid.uuid4()), "incident_type": "near_miss", "status": "open"}
+            payload.setdefault("incident_ref", f"NM-{payload['id'][:8].upper()}")
+            if "title" in payload and "description" not in payload:
+                payload["description"] = payload.pop("title")
+            res = repo.create(Incident, user.tenant_id, payload)
+            return {"id": res.id, "ref": res.incident_ref, "status": res.status}
+
+        if operation == "risk_assessment_close":
+            from app.models.risks import RiskAssessment
+            from app.repositories.domain_repository import DomainRepository
+            repo = DomainRepository(svc["compliance"].db)
+            res = repo.update(RiskAssessment, user.tenant_id, path_params.get("assessmentId"), {"status": "closed"})
+            return {"id": res.id, "status": res.status}
+
         return None
 
     def execute_special_query(
@@ -1315,5 +1373,143 @@ class DomainDispatcher:
             return svc["org_setup"].list_imports(user)
         if operation == "org_setup_step7_get":
             return svc["org_setup"].get_step7(user)
+
+        # ── Risk Module Queries ───────────────────────────────────────────────────────
+
+        if operation == "risk_assessments_list":
+            items = svc["compliance"].list_risk_assessments(user, {})
+            return {
+                "items": [
+                    {
+                        "id": r.id,
+                        "title": r.task_name or f"Assessment {r.id[:8]}",
+                        "hazard_description": r.hazard_description,
+                        "likelihood": r.likelihood,
+                        "consequence": r.consequence,
+                        "risk_score": r.risk_score,
+                        "residual_risk_score": r.residual_risk_score,
+                        "status": r.status,
+                        "location_id": r.location_id,
+                        "asset_id": r.asset_id,
+                    }
+                    for r in items
+                ],
+                "total": len(items),
+            }
+
+        if operation == "risk_matrix_get":
+            # Aggregate risk assessments into a 5x5 matrix
+            items = svc["compliance"].list_risk_assessments(user, {})
+            # Build matrix: key = (likelihood, consequence), value = count of assessments
+            matrix: dict[str, int] = {}
+            for r in items:
+                key = f"{r.likelihood}_{r.consequence}"
+                matrix[key] = matrix.get(key, 0) + 1
+            # Summary stats
+            critical = [r for r in items if r.risk_score >= 15]
+            high = [r for r in items if 10 <= r.risk_score < 15]
+            medium = [r for r in items if 5 <= r.risk_score < 10]
+            low = [r for r in items if r.risk_score < 5]
+            return {
+                "matrix_counts": matrix,
+                "total_assessments": len(items),
+                "by_level": {
+                    "critical": len(critical),
+                    "high": len(high),
+                    "medium": len(medium),
+                    "low": len(low),
+                },
+                "assessments": [
+                    {"id": r.id, "title": r.task_name or r.hazard_description[:40], "likelihood": r.likelihood, "consequence": r.consequence, "risk_score": r.risk_score, "status": r.status}
+                    for r in items
+                ],
+            }
+
+        if operation == "risk_high_risk_areas_get":
+            items = svc["compliance"].list_risk_assessments(user, {})
+            high_risk = [r for r in items if r.risk_score >= 15]
+            return {
+                "items": [
+                    {
+                        "id": r.id,
+                        "title": r.task_name or r.hazard_description[:60],
+                        "risk_score": r.risk_score,
+                        "likelihood": r.likelihood,
+                        "consequence": r.consequence,
+                        "location_id": r.location_id,
+                        "status": r.status,
+                    }
+                    for r in sorted(high_risk, key=lambda x: x.risk_score, reverse=True)
+                ],
+                "total": len(high_risk),
+            }
+
+        if operation == "hazards_list":
+            items = svc["compliance"].list_hazards(user, {})
+            return {
+                "items": [
+                    {
+                        "id": h.id,
+                        "title": h.description[:60] if h.description else f"Hazard {h.id[:8]}",
+                        "description": h.description,
+                        "severity": h.severity,
+                        "status": h.status,
+                        "location_id": h.location_id,
+                        "assigned_to_user_id": h.assigned_to_user_id,
+                        "photo_file_id": h.photo_file_id,
+                    }
+                    for h in items
+                ],
+                "total": len(items),
+            }
+
+        if operation == "near_miss_list":
+            # Near miss = incidents where incident_type contains "near"
+            from sqlalchemy import select as sa_select
+            from app.models.incidents import Incident
+            from sqlalchemy import or_
+            items = svc["compliance"].db.scalars(
+                sa_select(Incident).where(
+                    Incident.tenant_id == user.tenant_id,
+                    or_(
+                        Incident.incident_type.ilike("%near%"),
+                        Incident.incident_type == "near_miss",
+                    )
+                ).order_by(Incident.created_at.desc())
+            ).all()
+            return {
+                "items": [
+                    {
+                        "id": i.id,
+                        "ref": i.incident_ref,
+                        "title": i.description[:60] if i.description else f"Near Miss {i.id[:8]}",
+                        "description": i.description,
+                        "severity": i.severity,
+                        "status": i.status,
+                        "incident_type": i.incident_type,
+                    }
+                    for i in items
+                ],
+                "total": len(items),
+            }
+
+        if operation == "incidents_list":
+            items = svc["compliance"].list_incidents(user, {})
+            return {
+                "items": [
+                    {
+                        "id": i.id,
+                        "ref": i.incident_ref,
+                        "title": i.description[:60] if i.description else f"Incident {i.id[:8]}",
+                        "description": i.description,
+                        "severity": i.severity,
+                        "status": i.status,
+                        "incident_type": i.incident_type,
+                        "is_confidential": i.is_confidential,
+                    }
+                    for i in items
+                ],
+                "total": len(items),
+            }
 
         return None
