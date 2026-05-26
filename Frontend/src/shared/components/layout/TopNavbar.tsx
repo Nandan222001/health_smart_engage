@@ -37,7 +37,7 @@ export function TopNavbar({ darkMode, onToggleDarkMode, onOpenSidebar }: TopNavb
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const currentPage = breadcrumbMap[location.pathname] || "Dashboard";
-  const orgLabel = (user?.companyName || user?.orgCode || "").trim();
+  const orgLabel = user?.companyName?.trim() || "";
 
   const handleLogout = () => {
     logout();
@@ -68,11 +68,11 @@ export function TopNavbar({ darkMode, onToggleDarkMode, onOpenSidebar }: TopNavb
       </button>
 
       {/* Breadcrumb */}
-      <div className="hidden items-center gap-1.5 text-[13px] md:flex" style={{ color: '#9CA3AF' }}>
-        <span>HSE Intelligence</span>
+      <div className="flex-1 flex items-center gap-1.5 text-[13px]" style={{ color: '#9CA3AF' }}>
+        <span className="hidden md:inline">HSE Intelligence</span>
         {orgLabel && (
           <>
-            <ChevronRight className="w-3.5 h-3.5" />
+            <ChevronRight className="w-3.5 h-3.5 hidden md:inline" />
             <span
               className="text-[11px] px-2 py-0.5 rounded-full"
               style={{
@@ -89,25 +89,8 @@ export function TopNavbar({ darkMode, onToggleDarkMode, onOpenSidebar }: TopNavb
         <span style={{ color: darkMode ? '#EEF4FF' : '#0A0A0A', fontWeight: 500 }}>{currentPage}</span>
       </div>
 
-      {/* Search */}
-      <div className="hidden flex-1 justify-center px-4 lg:flex xl:px-8">
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#1D4ED8' }} />
-          <input
-            type="text"
-            placeholder="Search violations, zones, users..."
-            className="w-full h-10 pl-10 pr-4 rounded-lg text-[13px] border transition-all"
-            style={{
-              background: darkMode ? '#132647' : '#F3F7FF',
-              borderColor: darkMode ? '#1E3663' : '#DBE7FF',
-              color: darkMode ? '#EEF4FF' : '#0A0A0A',
-            }}
-          />
-        </div>
-      </div>
-
       {/* Right side */}
-      <div className="ml-auto flex items-center gap-2 md:gap-3">
+      <div className="flex items-center gap-2 md:gap-3">
         {/* Dark mode toggle */}
         <button
           onClick={onToggleDarkMode}

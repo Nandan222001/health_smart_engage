@@ -6,9 +6,13 @@ import { ViolationsPage } from "@/features/violations/pages/ViolationsPage";
 import { ViolationDetailPage } from "@/features/violations/pages/ViolationDetailPage";
 import { PoliciesPage } from "@/features/policies/pages/PoliciesPage";
 import { SitesZonesPage } from "@/features/sites/pages/SitesZonesPage";
+import { SiteOperationsPage } from "@/features/sites/pages/SiteOperationsPage";
 import { CamerasDevicesPage } from "@/features/cameras/pages/CamerasDevicesPage";
 import { UsersPage } from "@/features/users/pages/UsersPage";
 import { VendorsPage } from "@/features/vendors/pages/VendorsPage";
+import { VendorCompliancePage } from "@/features/vendors/pages/VendorCompliancePage";
+import { VendorCertificationsPage } from "@/features/vendors/pages/VendorCertificationsPage";
+import { VendorRiskScorePage } from "@/features/vendors/pages/VendorRiskScorePage";
 import { ActionsPage } from "@/features/actions/pages/ActionsPage";
 import { AnalyticsPage } from "@/features/analytics/pages/AnalyticsPage";
 import { AIAgentPage } from "@/features/ai-agent/pages/AIAgentPage";
@@ -21,7 +25,20 @@ import { ProtectedRoute } from "@/features/auth/components/ProtectedRoute";
 import { SubscriptionPage } from "@/features/subscription/pages/SubscriptionPage";
 import { NearMissPage } from "@/features/near-miss/pages/NearMissPage";
 import { RiskPage } from "@/features/risk/pages/RiskPage";
+import { RiskAssessmentsPage } from "@/features/risk/pages/RiskAssessmentsPage";
 import { AssetsPage } from "@/features/assets/pages/AssetsPage";
+import { AssetRegisterPage } from "@/features/assets/pages/AssetRegisterPage";
+import { AssetCategoriesPage } from "@/features/assets/pages/AssetCategoriesPage";
+import { MaintenanceLogsPage } from "@/features/assets/pages/MaintenanceLogsPage";
+import { EquipmentInspectionsPage } from "@/features/assets/pages/EquipmentInspectionsPage";
+import { AssetRiskMappingPage } from "@/features/assets/pages/AssetRiskMappingPage";
+import { ComplianceDashboardPage } from "@/features/compliance/pages/ComplianceDashboardPage";
+import { StandardsPoliciesPage } from "@/features/compliance/pages/StandardsPoliciesPage";
+import { AuditManagementPage } from "@/features/compliance/pages/AuditManagementPage";
+import { InspectionsPage } from "@/features/compliance/pages/InspectionsPage";
+import { CAPAPage } from "@/features/compliance/pages/CAPAPage";
+import { RegulatoryTrackingPage } from "@/features/compliance/pages/RegulatoryTrackingPage";
+import { DocumentationPage } from "@/features/compliance/pages/DocumentationPage";
 import { OnboardingPage } from "@/features/auth/pages/OnboardingPage";
 // Org Admin pages
 import { OrgInvitationsPage } from "@/features/admin/pages/OrgInvitationsPage";
@@ -46,6 +63,7 @@ import { SuperAdminUsersPage } from "@/features/superadmin/pages/SuperAdminUsers
 import { AIIntelligencePage } from "@/features/ai-intelligence/pages/AIIntelligencePage";
 // Decision & Workflow Engine (Layer 5)
 import { WorkflowEnginePage } from "@/features/workflow/pages/WorkflowEnginePage";
+import { WorkflowManagementPage } from "@/features/workflow/pages/WorkflowManagementPage";
 // Outputs – Visibility & Intelligence (Layer 6)
 import { OutputsPage } from "@/features/outputs/pages/OutputsPage";
 // Continuous Learning Loop (Layer 7)
@@ -53,10 +71,20 @@ import { ContinuousLearningPage } from "@/features/learning/pages/ContinuousLear
 // New feature pages
 import { PermitsPage } from "@/features/permits/pages/PermitsPage";
 import { IncidentsPage } from "@/features/incidents/pages/IncidentsPage";
+import { IncidentSeverityPage } from "@/features/incidents/pages/IncidentSeverityPage";
+import { InvestigationStatusPage } from "@/features/incidents/pages/InvestigationStatusPage";
+import { RootCausesPage } from "@/features/incidents/pages/RootCausesPage";
 import { EmployeesPage } from "@/features/employees/pages/EmployeesPage";
 import { TrainingCompetencyPage } from "@/features/training/pages/TrainingCompetencyPage";
 import { AuditsPage } from "@/features/audits/pages/AuditsPage";
 import { HazardsPage } from "@/features/hazards/pages/HazardsPage";
+import { HazardListPage } from "@/features/hazards/pages/HazardListPage";
+import { RiskMatrixPage } from "@/features/risk/pages/RiskMatrixPage";
+import { HighRiskAreasPage } from "@/features/risk/pages/HighRiskAreasPage";
+import { PredictiveRiskAIPage } from "@/features/risk/pages/PredictiveRiskAIPage";
+import { ApprovalQueuePage } from "@/features/permits/pages/ApprovalQueuePage";
+import { PermitRequestsPage } from "@/features/permits/pages/PermitRequestsPage";
+import { ActiveWorkPermitsPage } from "@/features/permits/pages/ActiveWorkPermitsPage";
 import { OrgSetupWizardPage } from "@/features/org-setup/pages/OrgSetupWizardPage";
 import { OverviewPage } from "@/features/overview/pages/OverviewPage";
 import { KPIsPage } from "@/features/kpis/pages/KPIsPage";
@@ -218,11 +246,14 @@ export const router = createBrowserRouter([
       { path: "actions", Component: ActionsRoute },
       { path: "checklists", Component: ChecklistsRoute },
       { path: "compliance", Component: ComplianceRoute },
-      { path: "sites-zones", Component: SitesZonesRoute },
+      { path: "sites-zones", Component: SiteOperationsPage },
       { path: "cameras-devices", Component: CamerasDevicesRoute },
       { path: "policies", Component: PoliciesRoute },
       { path: "users", Component: UsersRoute },
       { path: "vendors", Component: VendorsRoute },
+      { path: "vendor-compliance",    Component: VendorCompliancePage },
+      { path: "vendor-certifications", Component: VendorCertificationsPage },
+      { path: "vendor-risk-score",     Component: VendorRiskScorePage },
       { path: "analytics", Component: AnalyticsRoute },
       { path: "ai-agent", Component: AIAgentRoute },
       { path: "billing", Component: BillingRoute },
@@ -232,14 +263,37 @@ export const router = createBrowserRouter([
       { path: "subscription", Component: SubscriptionRoute },
       { path: "near-miss", Component: NearMissRoute },
       { path: "root-cause-analysis", Component: RootCauseAnalysisRoute },
+      { path: "risk-assessments",     Component: RiskAssessmentsPage },
       { path: "equipment-certification", Component: EquipmentCertificationRoute },
+      { path: "asset-register",          Component: AssetRegisterPage },
+      { path: "asset-categories",        Component: AssetCategoriesPage },
+      { path: "maintenance-logs",        Component: MaintenanceLogsPage },
+      { path: "equipment-inspections",   Component: EquipmentInspectionsPage },
+      { path: "asset-risk-mapping",      Component: AssetRiskMappingPage },
+      { path: "compliance-dashboard",    Component: ComplianceDashboardPage },
+      { path: "standards-policies",      Component: StandardsPoliciesPage },
+      { path: "audit-management",        Component: AuditManagementPage },
+      { path: "inspections",             Component: InspectionsPage },
+      { path: "capa",                    Component: CAPAPage },
+      { path: "regulatory-tracking",    Component: RegulatoryTrackingPage },
+      { path: "documentation",          Component: DocumentationPage },
       // New operational pages
       { path: "permits", Component: PermitsPage },
       { path: "incidents", Component: IncidentsPage },
+      { path: "incident-severity",    Component: IncidentSeverityPage },
+      { path: "investigation-status", Component: InvestigationStatusPage },
+      { path: "root-causes",          Component: RootCausesPage },
       { path: "employees", Component: EmployeesPage },
       { path: "training", Component: TrainingCompetencyPage },
       { path: "audits", Component: AuditsPage },
-      { path: "hazards", Component: HazardsPage },
+      { path: "hazards",         Component: HazardsPage },
+      { path: "hazard-list",    Component: HazardListPage },
+      { path: "risk-matrix",    Component: RiskMatrixPage },
+      { path: "high-risk-areas",    Component: HighRiskAreasPage },
+      { path: "predictive-risk-ai", Component: PredictiveRiskAIPage },
+      { path: "approval-queue",    Component: ApprovalQueuePage },
+      { path: "permit-requests",   Component: PermitRequestsPage },
+      { path: "active-work-permits", Component: ActiveWorkPermitsPage },
       // Org Admin pages
       { path: "roles-permissions", Component: RolesPermissionsPage },
       { path: "admin/invitations", Component: OrgInvitationsPage },
@@ -275,6 +329,7 @@ export const router = createBrowserRouter([
       { path: "ai-intelligence", Component: AIIntelligencePage },
       // Decision & Workflow Engine Layer 5
       { path: "workflow", Component: WorkflowEnginePage },
+      { path: "workflow-management", Component: WorkflowManagementPage },
       // Outputs – Visibility & Intelligence Layer 6
       { path: "outputs", Component: OutputsPage },
       // Continuous Learning Loop Layer 7

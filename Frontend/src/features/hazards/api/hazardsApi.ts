@@ -29,9 +29,11 @@ export interface RiskAssessment {
 export interface HazardCreatePayload {
   title: string;
   type: string;
-  severity: "low" | "medium" | "high" | "critical";
-  description: string;
+  severity: string;
+  description?: string;
   location_id?: string;
+  site_id?: string;
+  zone_id?: string;
   mitigation?: string;
 }
 
@@ -49,9 +51,10 @@ export interface NearMiss {
   ref: string;
   title: string;
   description?: string;
-  severity: "low" | "medium" | "high" | "critical";
-  status: "open" | "investigating" | "closed";
-  incident_type: string;
+  severity: string;
+  status: string;
+  incident_type?: string;
+  created_at?: string;
 }
 
 export interface RiskMatrixData {
@@ -80,20 +83,20 @@ export const hazardsApi = baseApi.injectEndpoints({
       },
       providesTags: ["Risk"],
     }),
-    listRiskAssessments: builder.query<RiskAssessment[], void>({
-      query: () => "/risks/assessments",
-      providesTags: ["Risk"],
-    }),
-    createRiskAssessment: builder.mutation<RiskAssessment, Partial<RiskAssessment>>({
-      query: (body) => ({ url: "/risks/assessments", method: "POST", body }),
-      invalidatesTags: ["Risk"],
-    }),
     createHazard: builder.mutation<Hazard, HazardCreatePayload>({
       query: (body) => ({ url: "/hazards", method: "POST", body }),
       invalidatesTags: ["Risk"],
     }),
     updateHazard: builder.mutation<Hazard, { id: string; data: Partial<Hazard> }>({
       query: ({ id, data }) => ({ url: `/hazards/${id}`, method: "PATCH", body: data }),
+      invalidatesTags: ["Risk"],
+    }),
+    listRiskAssessments: builder.query<RiskAssessment[], void>({
+      query: () => "/risks/assessments",
+      providesTags: ["Risk"],
+    }),
+    createRiskAssessment: builder.mutation<RiskAssessment, Partial<RiskAssessment>>({
+      query: (body) => ({ url: "/risks/assessments", method: "POST", body }),
       invalidatesTags: ["Risk"],
     }),
     listNearMiss: builder.query<{ items: NearMiss[]; total: number }, void>({
@@ -121,10 +124,10 @@ export const hazardsApi = baseApi.injectEndpoints({
 
 export const {
   useListHazardsQuery,
-  useListRiskAssessmentsQuery,
-  useCreateRiskAssessmentMutation,
   useCreateHazardMutation,
   useUpdateHazardMutation,
+  useListRiskAssessmentsQuery,
+  useCreateRiskAssessmentMutation,
   useListNearMissQuery,
   useCreateNearMissMutation,
   useGetRiskMatrixQuery,

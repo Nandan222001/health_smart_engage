@@ -1,507 +1,791 @@
-import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { useState, useMemo } from "react";
+import { useLocation, useNavigate } from "react-router";
 import {
   FileText, Plus, Search, CheckCircle2, Clock, XCircle,
-  AlertCircle, Loader2, ArrowUpRight, X,
+  AlertCircle, RefreshCw, Flame, Zap, ArrowUpFromLine,
+  Disc, Layers, Lock, Shield, MapPin, X, ChevronDown,
+  AlertTriangle, Ban,
 } from "lucide-react";
 import {
   useListPermitsQuery,
-  useCreatePermitMutation,
-  useSubmitPermitMutation,
   useApprovePermitMutation,
   useRejectPermitMutation,
   useClosePermitMutation,
-  useExtendPermitMutation,
+  useCreatePermitMutation,
+  useUpdatePermitMutation,
 } from "@/features/permits/api/permitsApi";
 import type { Permit } from "@/features/permits/api/permitsApi";
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Constants & helpers
+// ---------------------------------------------------------------------------
 
-const STATUS_CFG: Record<string, { color: string; icon: typeof CheckCircle2; bg: string }> = {
-  draft:     { color: "#9CA3AF", icon: Clock,        bg: "#F3F4F6" },
-  submitted: { color: "#F59E0B", icon: Clock,        bg: "#FEF3C7" },
-  approved:  { color: "#10B981", icon: CheckCircle2, bg: "#D1FAE5" },
-  rejected:  { color: "#EF4444", icon: XCircle,      bg: "#FEE2E2" },
-  active:    { color: "#4A57B9", icon: CheckCircle2, bg: "#EEF2FB" },
-  closed:    { color: "#6B7280", icon: AlertCircle,  bg: "#F3F4F6" },
+type TabKey = "dashboard" | "active" | "queue" | "all";
+
+const HIGH_RISK_TYPES = ["Hot Work", "Work at Height", "Confined Space", "hot work", "work at height", "confined space"];
+
+interface TypeCfg {
+  icon: typeof Flame;
+  color: string;
+  bg: string;
+  border: string;
+  riskLabel: string;
+}
+
+const TYPE_CFG: Record<string, TypeCfg> = {
+  "Hot Work":        { icon: Flame,            color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", riskLabel: "High Risk" },
+  "Electrical Work": { icon: Zap,              color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", riskLabel: "High Risk" },
+  "Work at Height":  { icon: ArrowUpFromLine,  color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", riskLabel: "High Risk" },
+  "Confined Space":  { icon: Disc,             color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", riskLabel: "Critical" },
+  "Excavation":      { icon: Layers,           color: "#EA580C", bg: "#FFF7ED", border: "#FED7AA", riskLabel: "High Risk" },
+  "Isolation/LOTO":  { icon: Lock,             color: "#374151", bg: "#F3F4F6", border: "#E5E7EB", riskLabel: "Controlled" },
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CFG[status] ?? STATUS_CFG.draft;
-  const Icon = cfg.icon;
+const PERMIT_TYPES_LIST = Object.keys(TYPE_CFG);
+
+function getTypeCfg(type: string): TypeCfg {
+  const key = Object.keys(TYPE_CFG).find(
+    (k) => type?.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(type?.toLowerCase() ?? ""),
+  );
+  return key ? TYPE_CFG[key] : { icon: FileText, color: "#6B7280", bg: "#F9FAFB", border: "#E5E7EB", riskLabel: "Standard" };
+}
+
+const STATUS_CFG: Record<string, { color: string; bg: string; border: string; label: string }> = {
+  draft:     { color: "#6B7280", bg: "#F3F4F6",  border: "#E5E7EB", label: "Draft" },
+  submitted: { color: "#D97706", bg: "#FFFBEB",  border: "#FDE68A", label: "Pending" },
+  approved:  { color: "#16A34A", bg: "#F0FDF4",  border: "#BBF7D0", label: "Approved" },
+  rejected:  { color: "#DC2626", bg: "#FEF2F2",  border: "#FECACA", label: "Rejected" },
+  active:    { color: "#2563EB", bg: "#EFF6FF",  border: "#BFDBFE", label: "Active" },
+  closed:    { color: "#6B7280", bg: "#F3F4F6",  border: "#E5E7EB", label: "Closed" },
+  expired:   { color: "#DC2626", bg: "#FEF2F2",  border: "#FECACA", label: "Expired" },
+};
+
+function getStatusCfg(permit: Permit) {
+  const now = new Date();
+  if (permit.end_date && new Date(permit.end_date) < now && permit.status !== "closed" && permit.status !== "rejected") {
+    return STATUS_CFG.expired;
+  }
+  return STATUS_CFG[permit.status] ?? STATUS_CFG.draft;
+}
+
+function isExpired(p: Permit) {
+  return !!p.end_date && new Date(p.end_date) < new Date() && p.status !== "closed" && p.status !== "rejected";
+}
+
+function isHighRisk(p: Permit) {
+  return HIGH_RISK_TYPES.some((t) => p.type?.toLowerCase().includes(t.toLowerCase()));
+}
+
+function fmt(d?: string) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ---------------------------------------------------------------------------
+// Status badge
+// ---------------------------------------------------------------------------
+
+function StatusBadge({ permit }: { permit: Permit }) {
+  const cfg = getStatusCfg(permit);
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize" style={{ background: cfg.bg, color: cfg.color }}>
-      <Icon className="w-3 h-3" />{status}
+    <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color }}>
+      {cfg.label}
     </span>
   );
 }
 
-const PERMIT_TYPES = ["Hot Work", "Confined Space", "Working at Height", "Electrical Isolation", "Excavation", "General Work", "Chemical Handling"];
+// ---------------------------------------------------------------------------
+// Create Permit Modal
+// ---------------------------------------------------------------------------
 
-// ─── Create Permit Form ───────────────────────────────────────────────────────
+interface CreateModalProps { onClose: () => void; onCreated: () => void; }
 
-interface CreateFormState {
-  title: string;
-  type: string;
-  description: string;
-  start_date: string;
-  end_date: string;
-}
-
-const EMPTY_FORM: CreateFormState = { title: "", type: "Hot Work", description: "", start_date: "", end_date: "" };
-
-function CreatePermitPanel({ onClose }: { onClose: () => void }) {
-  const [form, setForm] = useState<CreateFormState>(EMPTY_FORM);
-  const [createPermit, { isLoading: creating }] = useCreatePermitMutation();
-  const [submitPermit] = useSubmitPermitMutation();
-
-  async function handleSave(andSubmit = false) {
-    if (!form.title.trim()) return;
-    const res = await createPermit(form).unwrap();
-    if (andSubmit && res?.id) await submitPermit(res.id);
-    onClose();
-  }
-
-  return (
-    <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-[15px] font-bold" style={{ color: "#111827" }}>New Permit Request</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1 sm:col-span-2">
-          <label className="text-xs font-semibold" style={{ color: "#374151" }}>Title *</label>
-          <input className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} placeholder="e.g. Hot Work — Boiler Room" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-semibold" style={{ color: "#374151" }}>Permit Type</label>
-          <select className="w-full px-3 py-2.5 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E3E9F6" }} value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-            {PERMIT_TYPES.map((t) => <option key={t}>{t}</option>)}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-semibold" style={{ color: "#374151" }}>Description</label>
-          <input className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} placeholder="Brief description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-semibold" style={{ color: "#374151" }}>Start Date</label>
-          <input type="date" className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-semibold" style={{ color: "#374151" }}>End Date</label>
-          <input type="date" className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} />
-        </div>
-      </div>
-      <div className="flex items-center gap-3 mt-5">
-        <button onClick={() => handleSave(false)} disabled={creating || !form.title.trim()} className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold disabled:opacity-60" style={{ borderColor: "#E3E9F6", color: "#374151" }}>
-          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Save Draft
-        </button>
-        <button onClick={() => handleSave(true)} disabled={creating || !form.title.trim()} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-60" style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}>
-          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Submit for Approval
-        </button>
-        <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm" style={{ color: "#6B7280" }}>Cancel</button>
-      </div>
-    </div>
-  );
-}
-
-// ─── PTW (all permits) ────────────────────────────────────────────────────────
-
-function PTWTab({ permits, isLoading, search, setSearch }: { permits: Permit[]; isLoading: boolean; search: string; setSearch: (s: string) => void }) {
-  const [statusFilter, setStatusFilter] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-
-  const filtered = permits.filter((p) => {
-    const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.type.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = !statusFilter || p.status === statusFilter;
-    return matchSearch && matchStatus;
+function CreatePermitModal({ onClose, onCreated }: CreateModalProps) {
+  const [createPermit, { isLoading }] = useCreatePermitMutation();
+  const [form, setForm] = useState({
+    title: "", type: "Hot Work", description: "",
+    site_id: "", zone_id: "", start_date: "", end_date: "", requested_by: "",
   });
+  const [error, setError] = useState("");
+
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    if (!form.title.trim() || !form.requested_by.trim()) { setError("Title and Requested By are required."); return; }
+    try {
+      await createPermit({ ...form, status: "draft" }).unwrap();
+      onCreated();
+      onClose();
+    } catch {
+      setError("Failed to create permit. Please try again.");
+    }
+  };
 
   return (
-    <>
-      {showCreate && <CreatePermitPanel onClose={() => setShowCreate(false)} />}
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#9CA3AF" }} />
-          <input className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6", background: "#F9FAFB" }} placeholder="Search permits…" value={search} onChange={(e) => setSearch(e.target.value)} />
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 540, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid #E5E7EB" }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>Create New Permit</div>
+            <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>Fill in the details for the new work permit</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF" }}><X size={20} /></button>
         </div>
-        <select className="px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">All statuses</option>
-          {Object.keys(STATUS_CFG).map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold" style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}>
-          <Plus className="w-4 h-4" /> New
-        </button>
-      </div>
-      <PermitTable permits={filtered} isLoading={isLoading} />
-    </>
-  );
-}
 
-// ─── Permit Requests (draft + submitted) ─────────────────────────────────────
+        {/* Form */}
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+          {error && <div style={{ padding: "10px 14px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, fontSize: 13, color: "#DC2626" }}>{error}</div>}
 
-function RequestsTab({ permits, isLoading }: { permits: Permit[]; isLoading: boolean }) {
-  const [showCreate, setShowCreate] = useState(false);
-  const [submitPermit, { isLoading: submitting }] = useSubmitPermitMutation();
-  const [submittingId, setSubmittingId] = useState<string | null>(null);
+          {[
+            { label: "Permit Title *", key: "title", placeholder: "e.g. Hot Work – Roof Section A" },
+            { label: "Requested By *", key: "requested_by", placeholder: "Name of requester" },
+            { label: "Site ID", key: "site_id", placeholder: "SITE-001" },
+            { label: "Zone ID", key: "zone_id", placeholder: "ZONE-A" },
+          ].map(({ label, key, placeholder }) => (
+            <div key={key}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>{label}</label>
+              <input
+                value={form[key as keyof typeof form]}
+                onChange={(e) => set(key, e.target.value)}
+                placeholder={placeholder}
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+          ))}
 
-  const requests = permits.filter((p) => p.status === "draft" || p.status === "submitted");
+          {/* Type */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Permit Type</label>
+            <div style={{ position: "relative" }}>
+              <select
+                value={form.type}
+                onChange={(e) => set("type", e.target.value)}
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13, outline: "none", appearance: "none", background: "#fff" }}
+              >
+                {PERMIT_TYPES_LIST.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <ChevronDown size={14} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF", pointerEvents: "none" }} />
+            </div>
+          </div>
 
-  async function handleSubmit(id: string) {
-    setSubmittingId(id);
-    await submitPermit(id);
-    setSubmittingId(null);
-  }
-
-  return (
-    <>
-      {showCreate && <CreatePermitPanel onClose={() => setShowCreate(false)} />}
-      {!showCreate && (
-        <div className="flex justify-end">
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold" style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}>
-            <Plus className="w-4 h-4" /> New Request
-          </button>
-        </div>
-      )}
-      <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ background: "#F8FAFF", borderBottom: "1px solid #E9EEF8" }}>
-              {["Permit", "Type", "Status", "Start Date", "End Date", "Action"].map((h) => (
-                <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr><td colSpan={6} className="py-10 text-center text-sm" style={{ color: "#9CA3AF" }}>Loading…</td></tr>
-            ) : requests.length === 0 ? (
-              <tr><td colSpan={6} className="py-12 text-center"><p className="text-sm" style={{ color: "#6B7280" }}>No draft or submitted permits</p></td></tr>
-            ) : requests.map((p) => (
-              <tr key={p.id} className="border-t hover:bg-gray-50" style={{ borderColor: "#F3F4F6" }}>
-                <td className="px-5 py-3.5 font-semibold" style={{ color: "#111827" }}>{p.title}</td>
-                <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{p.type}</td>
-                <td className="px-5 py-3.5"><StatusBadge status={p.status} /></td>
-                <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{p.start_date ? new Date(p.start_date).toLocaleDateString() : "—"}</td>
-                <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{p.end_date ? new Date(p.end_date).toLocaleDateString() : "—"}</td>
-                <td className="px-5 py-3.5">
-                  {p.status === "draft" && (
-                    <button
-                      onClick={() => handleSubmit(p.id)}
-                      disabled={submittingId === p.id}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-60"
-                      style={{ background: "#4A57B9" }}
-                    >
-                      {submittingId === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowUpRight className="w-3 h-3" />}
-                      Submit
-                    </button>
-                  )}
-                  {p.status === "submitted" && (
-                    <span className="text-xs px-2 py-1 rounded-lg" style={{ background: "#FEF3C7", color: "#D97706" }}>Awaiting approval</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
-
-// ─── Approval Queue ───────────────────────────────────────────────────────────
-
-function ApprovalTab({ permits, isLoading }: { permits: Permit[]; isLoading: boolean }) {
-  const [approvePermit] = useApprovePermitMutation();
-  const [rejectPermit] = useRejectPermitMutation();
-  const [actionId, setActionId] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
-
-  const queue = permits.filter((p) => p.status === "submitted");
-
-  async function handleApprove(id: string) {
-    setActionId(id);
-    await approvePermit({ permitId: id });
-    setActionId(null);
-  }
-
-  async function handleReject(id: string) {
-    const reason = rejectReason[id] || "Rejected";
-    setActionId(id);
-    await rejectPermit({ permitId: id, reason });
-    setActionId(null);
-  }
-
-  return (
-    <div className="space-y-4">
-      {isLoading ? (
-        <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" style={{ color: "#4A57B9" }} /></div>
-      ) : queue.length === 0 ? (
-        <div className="bg-white rounded-2xl border py-16 text-center" style={{ borderColor: "#E3E9F6" }}>
-          <CheckCircle2 className="w-10 h-10 mx-auto mb-3" style={{ color: "#D1FAE5" }} />
-          <p className="text-sm font-semibold" style={{ color: "#111827" }}>Approval queue is empty</p>
-          <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>All submitted permits have been processed</p>
-        </div>
-      ) : queue.map((p) => (
-        <div key={p.id} className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#EEF2FF", color: "#4A57B9" }}>{p.type}</span>
-                <StatusBadge status={p.status} />
-              </div>
-              <h3 className="text-[15px] font-bold" style={{ color: "#111827" }}>{p.title}</h3>
-              <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>
-                Requested by {p.requested_by || "—"} · {p.start_date ? new Date(p.start_date).toLocaleDateString() : "No date"} → {p.end_date ? new Date(p.end_date).toLocaleDateString() : "—"}
-              </p>
-              <div className="mt-3">
+          {/* Dates */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[{ label: "Start Date", key: "start_date" }, { label: "End Date", key: "end_date" }].map(({ label, key }) => (
+              <div key={key}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>{label}</label>
                 <input
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                  style={{ borderColor: "#E3E9F6" }}
-                  placeholder="Rejection reason (required if rejecting)…"
-                  value={rejectReason[p.id] || ""}
-                  onChange={(e) => setRejectReason((r) => ({ ...r, [p.id]: e.target.value }))}
+                  type="date" value={form[key as keyof typeof form]}
+                  onChange={(e) => set(key, e.target.value)}
+                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
                 />
               </div>
-            </div>
-            <div className="flex flex-col gap-2 flex-shrink-0">
-              <button onClick={() => handleApprove(p.id)} disabled={actionId === p.id} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#10B981" }}>
-                {actionId === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} Approve
-              </button>
-              <button onClick={() => handleReject(p.id)} disabled={actionId === p.id} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#EF4444" }}>
-                {actionId === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />} Reject
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Active Work Permits ──────────────────────────────────────────────────────
-
-function ActivePermitsTab({ permits, isLoading }: { permits: Permit[]; isLoading: boolean }) {
-  const [closePermit] = useClosePermitMutation();
-  const [extendPermit] = useExtendPermitMutation();
-  const [actionId, setActionId] = useState<string | null>(null);
-  const [extendDate, setExtendDate] = useState<Record<string, string>>({});
-
-  const active = permits.filter((p) => p.status === "active");
-
-  async function handleClose(id: string) {
-    if (!window.confirm("Close this permit?")) return;
-    setActionId(id);
-    await closePermit(id);
-    setActionId(null);
-  }
-
-  async function handleExtend(id: string) {
-    const newDate = extendDate[id];
-    if (!newDate) return;
-    setActionId(id);
-    await extendPermit({ permitId: id, new_end_date: newDate });
-    setExtendDate((d) => ({ ...d, [id]: "" }));
-    setActionId(null);
-  }
-
-  return (
-    <div className="space-y-4">
-      {isLoading ? (
-        <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin" style={{ color: "#4A57B9" }} /></div>
-      ) : active.length === 0 ? (
-        <div className="bg-white rounded-2xl border py-16 text-center" style={{ borderColor: "#E3E9F6" }}>
-          <AlertCircle className="w-10 h-10 mx-auto mb-3" style={{ color: "#D1D5DB" }} />
-          <p className="text-sm font-semibold" style={{ color: "#111827" }}>No active permits</p>
-          <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>Approved permits become active here</p>
-        </div>
-      ) : active.map((p) => {
-        const endDate = p.end_date ? new Date(p.end_date) : null;
-        const daysLeft = endDate ? Math.ceil((endDate.getTime() - Date.now()) / 86_400_000) : null;
-        return (
-          <div key={p.id} className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#EEF2FF", color: "#4A57B9" }}>{p.type}</span>
-                  <StatusBadge status="active" />
-                  {daysLeft !== null && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: daysLeft <= 1 ? "#FEE2E2" : "#FEF3C7", color: daysLeft <= 1 ? "#EF4444" : "#D97706" }}>
-                      {daysLeft <= 0 ? "Expired" : `${daysLeft}d left`}
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-[15px] font-bold" style={{ color: "#111827" }}>{p.title}</h3>
-                <p className="text-xs mt-1" style={{ color: "#9CA3AF" }}>
-                  Approved by {p.approved_by || "—"} · {p.start_date ? new Date(p.start_date).toLocaleDateString() : "—"} → {p.end_date ? new Date(p.end_date).toLocaleDateString() : "—"}
-                </p>
-                <div className="flex items-center gap-2 mt-3">
-                  <input
-                    type="date"
-                    className="px-3 py-1.5 rounded-lg border text-xs outline-none"
-                    style={{ borderColor: "#E3E9F6" }}
-                    value={extendDate[p.id] || ""}
-                    onChange={(e) => setExtendDate((d) => ({ ...d, [p.id]: e.target.value }))}
-                  />
-                  <button
-                    onClick={() => handleExtend(p.id)}
-                    disabled={actionId === p.id || !extendDate[p.id]}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:opacity-50"
-                    style={{ borderColor: "#4A57B9", color: "#4A57B9" }}
-                  >
-                    <ArrowUpRight className="w-3 h-3" /> Extend
-                  </button>
-                </div>
-              </div>
-              <button
-                onClick={() => handleClose(p.id)}
-                disabled={actionId === p.id}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border disabled:opacity-60 flex-shrink-0"
-                style={{ borderColor: "#E3E9F6", color: "#6B7280" }}
-              >
-                {actionId === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3.5 h-3.5" />} Close
-              </button>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Generic permit table ─────────────────────────────────────────────────────
-
-function PermitTable({ permits, isLoading }: { permits: Permit[]; isLoading: boolean }) {
-  return (
-    <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
-      <table className="w-full text-sm">
-        <thead>
-          <tr style={{ background: "#F8FAFF", borderBottom: "1px solid #E9EEF8" }}>
-            {["Permit", "Status", "Requested By", "Start Date", "End Date"].map((h) => (
-              <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{h}</th>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {isLoading ? (
-            <tr><td colSpan={5} className="py-10 text-center text-sm" style={{ color: "#9CA3AF" }}>Loading permits…</td></tr>
-          ) : permits.length === 0 ? (
-            <tr>
-              <td colSpan={5} className="py-12 text-center">
-                <FileText className="w-8 h-8 mx-auto mb-2" style={{ color: "#D1D5DB" }} />
-                <p className="text-sm" style={{ color: "#6B7280" }}>No permits found</p>
-              </td>
-            </tr>
-          ) : permits.map((p) => (
-            <tr key={p.id} className="border-t hover:bg-gray-50 cursor-pointer" style={{ borderColor: "#F3F4F6" }}>
-              <td className="px-5 py-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#EEF2FB" }}>
-                    <FileText className="w-4 h-4" style={{ color: "#4A57B9" }} />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold" style={{ color: "#111827" }}>{p.title}</div>
-                    <div className="text-xs" style={{ color: "#9CA3AF" }}>{p.type}</div>
-                  </div>
-                </div>
-              </td>
-              <td className="px-5 py-3.5"><StatusBadge status={p.status} /></td>
-              <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{p.requested_by}</td>
-              <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{p.start_date ? new Date(p.start_date).toLocaleDateString() : "—"}</td>
-              <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{p.end_date ? new Date(p.end_date).toLocaleDateString() : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Description</label>
+            <textarea
+              rows={3} value={form.description}
+              onChange={(e) => set("description", e.target.value)}
+              placeholder="Describe the scope of work…"
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13, outline: "none", resize: "vertical", boxSizing: "border-box" }}
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "16px 24px", borderTop: "1px solid #E5E7EB", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>Cancel</button>
+          <button onClick={submit} disabled={isLoading} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #0F2746, #1E3A5F)", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer", opacity: isLoading ? 0.7 : 1 }}>
+            {isLoading ? "Creating…" : "Create Permit"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Approve Modal
+// ---------------------------------------------------------------------------
 
-type TabId = "ptw" | "requests" | "approval" | "active";
+function ApproveModal({ permitId, onClose }: { permitId: string; onClose: () => void }) {
+  const [approve, { isLoading }] = useApprovePermitMutation();
+  const [notes, setNotes] = useState("");
+  const submit = async () => { try { await approve({ permitId, notes }).unwrap(); onClose(); } catch { /**/ } };
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 420, padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+        <div style={{ display: "flex", gap: 12, marginBottom: 18, alignItems: "center" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <CheckCircle2 size={20} color="#16A34A" />
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>Approve Permit</div>
+            <div style={{ fontSize: 12, color: "#6B7280" }}>This permit will be approved and activated</div>
+          </div>
+        </div>
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Approval Notes (optional)</label>
+        <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any conditions or remarks…"
+          style={{ width: "100%", padding: "9px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13, outline: "none", resize: "vertical", boxSizing: "border-box", marginBottom: 16 }} />
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>Cancel</button>
+          <button onClick={submit} disabled={isLoading} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#16A34A", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>
+            {isLoading ? "Approving…" : "Approve"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "ptw",      label: "Permit to Work" },
-  { id: "requests", label: "Permit Requests" },
-  { id: "approval", label: "Approval Queue" },
-  { id: "active",   label: "Active Work Permits" },
-];
+// ---------------------------------------------------------------------------
+// Reject Modal
+// ---------------------------------------------------------------------------
 
-export function PermitsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = (searchParams.get("tab") as TabId) ?? "ptw";
-  const [search, setSearch] = useState("");
-
-  const { data: rawPermits, isLoading } = useListPermitsQuery();
-  const permits: Permit[] = Array.isArray(rawPermits) ? rawPermits : ((rawPermits as { items?: Permit[] })?.items ?? []);
-
-  const counts = {
-    active:    permits.filter((p) => p.status === "active").length,
-    submitted: permits.filter((p) => p.status === "submitted").length,
-    approved:  permits.filter((p) => p.status === "approved").length,
+function RejectModal({ permitId, onClose }: { permitId: string; onClose: () => void }) {
+  const [reject, { isLoading }] = useRejectPermitMutation();
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState("");
+  const submit = async () => {
+    if (!reason.trim()) { setErr("Rejection reason is required."); return; }
+    try { await reject({ permitId, reason }).unwrap(); onClose(); } catch { /**/ }
   };
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 420, padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+        <div style={{ display: "flex", gap: 12, marginBottom: 18, alignItems: "center" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#FEF2F2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <XCircle size={20} color="#DC2626" />
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>Reject Permit</div>
+            <div style={{ fontSize: 12, color: "#6B7280" }}>Provide a reason for rejection</div>
+          </div>
+        </div>
+        {err && <div style={{ padding: "8px 12px", background: "#FEF2F2", borderRadius: 8, fontSize: 12, color: "#DC2626", marginBottom: 10 }}>{err}</div>}
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Rejection Reason *</label>
+        <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Explain why the permit is rejected…"
+          style={{ width: "100%", padding: "9px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13, outline: "none", resize: "vertical", boxSizing: "border-box", marginBottom: 16 }} />
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>Cancel</button>
+          <button onClick={submit} disabled={isLoading} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#DC2626", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>
+            {isLoading ? "Rejecting…" : "Reject"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  function setTab(id: TabId) {
-    setSearchParams({ tab: id });
-  }
+// ---------------------------------------------------------------------------
+// Permit Card (used in active and queue tabs)
+// ---------------------------------------------------------------------------
 
-  const tabBadges: Partial<Record<TabId, number>> = {
-    approval: counts.submitted,
-    active:   counts.active,
-  };
+interface PermitCardProps {
+  permit: Permit;
+  onApprove?: (id: string) => void;
+  onReject?: (id: string) => void;
+  onClose?: (id: string) => void;
+  onSuspend?: (id: string) => void;
+}
+
+function PermitCard({ permit, onApprove, onReject, onClose, onSuspend }: PermitCardProps) {
+  const typeCfg = getTypeCfg(permit.type);
+  const TypeIcon = typeCfg.icon;
+  const expired = isExpired(permit);
+  const highRisk = isHighRisk(permit);
 
   return (
-    <div className="p-6 space-y-5">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#111827" }}>Work Permits</h1>
-        <p className="text-sm mt-1" style={{ color: "#6B7280" }}>Permit-to-work management and approval workflow</p>
-      </div>
+    <div style={{ background: "#fff", border: `1px solid ${expired ? "#FECACA" : typeCfg.border}`, borderRadius: 14, padding: "18px 20px" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+        {/* Type icon */}
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: typeCfg.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <TypeIcon size={20} color={typeCfg.color} />
+        </div>
 
-      {/* KPI row */}
-      <div className="grid grid-cols-3 gap-4">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Title + badges */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 4 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{permit.title}</span>
+            <StatusBadge permit={permit} />
+            {highRisk && (
+              <span style={{ padding: "2px 8px", borderRadius: 10, background: "#FEF2F2", border: "1px solid #FECACA", fontSize: 10, fontWeight: 700, color: "#DC2626" }}>HIGH RISK</span>
+            )}
+            {expired && (
+              <span style={{ padding: "2px 8px", borderRadius: 10, background: "#FEF2F2", border: "1px solid #FECACA", fontSize: 10, fontWeight: 700, color: "#DC2626" }}>EXPIRED</span>
+            )}
+          </div>
+
+          {/* Type + site */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: typeCfg.color, fontWeight: 600 }}>{permit.type}</span>
+            {permit.site_id && <span style={{ fontSize: 12, color: "#9CA3AF" }}>Site: {permit.site_id}</span>}
+            {permit.zone_id && <span style={{ fontSize: 12, color: "#9CA3AF" }}>Zone: {permit.zone_id}</span>}
+          </div>
+
+          {/* Meta */}
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: "#6B7280" }}>By: <strong style={{ color: "#374151" }}>{permit.requested_by}</strong></div>
+            {permit.start_date && <div style={{ fontSize: 12, color: "#6B7280" }}>Start: <strong style={{ color: "#374151" }}>{fmt(permit.start_date)}</strong></div>}
+            {permit.end_date && <div style={{ fontSize: 12, color: expired ? "#DC2626" : "#6B7280" }}>End: <strong style={{ color: expired ? "#DC2626" : "#374151" }}>{fmt(permit.end_date)}</strong></div>}
+          </div>
+
+          {permit.description && <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{permit.description}</div>}
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {onApprove && permit.status === "submitted" && (
+              <button onClick={() => onApprove(permit.id)} style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: "#16A34A", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <CheckCircle2 size={13} /> Approve
+              </button>
+            )}
+            {onReject && (permit.status === "submitted" || permit.status === "approved") && (
+              <button onClick={() => onReject(permit.id)} style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: "#DC2626", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <XCircle size={13} /> Reject
+              </button>
+            )}
+            {onSuspend && permit.status === "active" && (
+              <button onClick={() => onSuspend(permit.id)} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #FDE68A", background: "#FFFBEB", color: "#D97706", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <Ban size={13} /> Suspend
+              </button>
+            )}
+            {onClose && (permit.status === "active" || permit.status === "approved") && (
+              <button onClick={() => onClose(permit.id)} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#F9FAFB", color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <AlertCircle size={13} /> Close
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tab 1 — Dashboard
+// ---------------------------------------------------------------------------
+
+function DashboardTab({ permits }: { permits: Permit[] }) {
+  const active   = permits.filter((p) => p.status === "active");
+  const expired  = permits.filter(isExpired);
+  const pending  = permits.filter((p) => p.status === "submitted");
+  const highRisk = permits.filter((p) => p.status === "active" && isHighRisk(p));
+
+  // Site-wise breakdown
+  const siteMap = useMemo(() => {
+    const m = new Map<string, { active: number; pending: number; expired: number; total: number }>();
+    for (const p of permits) {
+      const site = p.site_id || "Unassigned";
+      if (!m.has(site)) m.set(site, { active: 0, pending: 0, expired: 0, total: 0 });
+      const s = m.get(site)!;
+      s.total++;
+      if (p.status === "active") s.active++;
+      if (p.status === "submitted") s.pending++;
+      if (isExpired(p)) s.expired++;
+    }
+    return Array.from(m.entries()).sort((a, b) => b[1].total - a[1].total);
+  }, [permits]);
+
+  // Type breakdown
+  const typeMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of permits) {
+      const key = Object.keys(TYPE_CFG).find((k) => p.type?.toLowerCase().includes(k.toLowerCase())) ?? "Other";
+      m.set(key, (m.get(key) ?? 0) + 1);
+    }
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+  }, [permits]);
+
+  return (
+    <div style={{ padding: "24px 28px" }}>
+      {/* Stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 14, marginBottom: 28 }}>
         {[
-          { label: "Active Permits",   value: counts.active,    color: "#4A57B9" },
-          { label: "Pending Approval", value: counts.submitted, color: "#F59E0B" },
-          { label: "Approved",         value: counts.approved,  color: "#10B981" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-white rounded-2xl border p-4" style={{ borderColor: "#E3E9F6" }}>
-            <div className="text-2xl font-bold" style={{ color }}>{isLoading ? "…" : value}</div>
-            <div className="text-xs font-medium mt-0.5" style={{ color: "#6B7280" }}>{label}</div>
+          { label: "Total Active Permits",     value: active.length,   color: "#2563EB", bg: "#EFF6FF",  border: "#BFDBFE", Icon: CheckCircle2 },
+          { label: "Expired Permits",           value: expired.length,  color: "#DC2626", bg: "#FEF2F2",  border: "#FECACA", Icon: AlertTriangle },
+          { label: "Pending Approvals",         value: pending.length,  color: "#D97706", bg: "#FFFBEB",  border: "#FDE68A", Icon: Clock },
+          { label: "High-Risk Active",          value: highRisk.length, color: "#7C3AED", bg: "#F5F3FF",  border: "#DDD6FE", Icon: Shield },
+          { label: "Total Permits",             value: permits.length,  color: "#374151", bg: "#F9FAFB",  border: "#E5E7EB", Icon: FileText },
+        ].map((s) => (
+          <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <div style={{ fontSize: 26, fontWeight: 700, color: s.color }}>{s.value}</div>
+              <div style={{ width: 34, height: 34, borderRadius: 8, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <s.Icon size={16} color={s.color} />
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "#6B7280" }}>{s.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {TABS.map(({ id, label }) => {
-          const badge = tabBadges[id];
+      {/* Permit Type Categories */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 14 }}>Permit Categories</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
+          {PERMIT_TYPES_LIST.map((type) => {
+            const cfg = TYPE_CFG[type];
+            const Icon = cfg.icon;
+            const count = typeMap.find(([k]) => k === type)?.[1] ?? 0;
+            const activeCount = active.filter((p) => p.type?.toLowerCase().includes(type.toLowerCase())).length;
+            return (
+              <div key={type} style={{ background: "#fff", border: `1px solid ${cfg.border}`, borderRadius: 12, padding: "16px 18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: cfg.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Icon size={17} color={cfg.color} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", lineHeight: 1.3 }}>{type}</div>
+                    <div style={{ fontSize: 10, color: cfg.color, fontWeight: 600 }}>{cfg.riskLabel}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: cfg.color }}>{count}</div>
+                    <div style={{ fontSize: 10, color: "#9CA3AF" }}>Total</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "#2563EB" }}>{activeCount}</div>
+                    <div style={{ fontSize: 10, color: "#9CA3AF" }}>Active</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Site-wise Permit Status */}
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 14 }}>Site-wise Permit Status</div>
+        {siteMap.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 30, color: "#9CA3AF", fontSize: 13 }}>No site data available.</div>
+        ) : (
+          <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 80px 80px", background: "#F9FAFB", borderBottom: "1px solid #E5E7EB", padding: "10px 18px", gap: 8 }}>
+              {["Site", "Active", "Pending", "Expired", "Total"].map((h) => (
+                <div key={h} style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "uppercase" }}>{h}</div>
+              ))}
+            </div>
+            {siteMap.map(([site, d], i) => (
+              <div key={site} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 80px 80px", padding: "12px 18px", gap: 8, background: i % 2 === 0 ? "#fff" : "#FAFAFA", borderBottom: "1px solid #F3F4F6", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <MapPin size={13} color="#9CA3AF" />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>{site}</span>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#2563EB" }}>{d.active}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#D97706" }}>{d.pending}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: d.expired > 0 ? "#DC2626" : "#9CA3AF" }}>{d.expired}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{d.total}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tab 2 — Active Permits
+// ---------------------------------------------------------------------------
+
+function ActiveTab({ permits, onApprove, onReject, onClose, onSuspend }: {
+  permits: Permit[];
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onClose: (id: string) => void;
+  onSuspend: (id: string) => void;
+}) {
+  const [typeFilter, setTypeFilter] = useState("All");
+  const active = permits.filter((p) => p.status === "active" || p.status === "approved");
+  const filtered = typeFilter === "All" ? active : active.filter((p) => p.type?.toLowerCase().includes(typeFilter.toLowerCase()));
+
+  return (
+    <div style={{ padding: "24px 28px" }}>
+      {/* Type filter */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {["All", ...PERMIT_TYPES_LIST].map((t) => (
+          <button key={t} onClick={() => setTypeFilter(t)} style={{
+            padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+            border: `1px solid ${typeFilter === t ? "#1E3A5F" : "#E5E7EB"}`,
+            background: typeFilter === t ? "#1E3A5F" : "#fff",
+            color: typeFilter === t ? "#fff" : "#374151",
+          }}>{t}</button>
+        ))}
+      </div>
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}><CheckCircle2 size={32} style={{ opacity: 0.2, display: "block", margin: "0 auto 10px" }} />No active permits found.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {filtered.map((p) => <PermitCard key={p.id} permit={p} onApprove={onApprove} onReject={onReject} onClose={onClose} onSuspend={onSuspend} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tab 3 — Approval Queue
+// ---------------------------------------------------------------------------
+
+function QueueTab({ permits, onApprove, onReject }: { permits: Permit[]; onApprove: (id: string) => void; onReject: (id: string) => void }) {
+  const queue = permits.filter((p) => p.status === "submitted");
+
+  if (queue.length === 0) {
+    return (
+      <div style={{ padding: 48, textAlign: "center" }}>
+        <CheckCircle2 size={40} color="#16A34A" style={{ opacity: 0.3, display: "block", margin: "0 auto 12px" }} />
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#374151" }}>Approval Queue Clear</div>
+        <div style={{ fontSize: 13, color: "#9CA3AF", marginTop: 4 }}>All permit requests have been processed.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: "24px 28px" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 20 }}>
+        <Clock size={16} color="#D97706" />
+        <span style={{ fontSize: 14, fontWeight: 600, color: "#D97706" }}>{queue.length} permit{queue.length !== 1 ? "s" : ""} awaiting approval</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {queue.map((p) => <PermitCard key={p.id} permit={p} onApprove={onApprove} onReject={onReject} />)}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tab 4 — All Permits
+// ---------------------------------------------------------------------------
+
+function AllPermitsTab({ permits, onApprove, onReject, onClose, onSuspend, onCreateClick }: {
+  permits: Permit[];
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onClose: (id: string) => void;
+  onSuspend: (id: string) => void;
+  onCreateClick: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [typeFilter, setTypeFilter] = useState("All");
+
+  const filtered = permits.filter((p) => {
+    const matchSearch = !search || p.title?.toLowerCase().includes(search.toLowerCase()) || p.type?.toLowerCase().includes(search.toLowerCase()) || p.requested_by?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === "All" || p.status === statusFilter;
+    const matchType   = typeFilter === "All" || p.type?.toLowerCase().includes(typeFilter.toLowerCase());
+    return matchSearch && matchStatus && matchType;
+  });
+
+  return (
+    <div style={{ padding: "24px 28px" }}>
+      {/* Toolbar */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF" }} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search permits…"
+            style={{ width: "100%", paddingLeft: 36, paddingRight: 12, paddingTop: 9, paddingBottom: 9, border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ position: "relative" }}>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: "9px 32px 9px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13, outline: "none", appearance: "none", background: "#fff", cursor: "pointer" }}>
+            <option value="All">All Statuses</option>
+            {Object.entries(STATUS_CFG).filter(([k]) => k !== "expired").map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <ChevronDown size={13} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF", pointerEvents: "none" }} />
+        </div>
+        <div style={{ position: "relative" }}>
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+            style={{ padding: "9px 32px 9px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13, outline: "none", appearance: "none", background: "#fff", cursor: "pointer" }}>
+            <option value="All">All Types</option>
+            {PERMIT_TYPES_LIST.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <ChevronDown size={13} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF", pointerEvents: "none" }} />
+        </div>
+        <button onClick={onCreateClick} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #0F2746, #1E3A5F)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <Plus size={14} /> New Permit
+        </button>
+      </div>
+
+      {/* Table */}
+      <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 140px 1fr 100px 100px 160px", background: "#F9FAFB", borderBottom: "1px solid #E5E7EB", padding: "10px 16px", gap: 8 }}>
+          {["Permit", "Type", "Requested By", "Start", "End", "Actions"].map((h) => (
+            <div key={h} style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "uppercase" }}>{h}</div>
+          ))}
+        </div>
+        {filtered.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF" }}>No permits match your filters.</div>
+        ) : filtered.map((p, i) => {
+          const tc = getTypeCfg(p.type);
+          const TIcon = tc.icon;
           return (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
-              style={tab === id
-                ? { background: "#4A57B9", color: "#fff", boxShadow: "0 4px 10px rgba(74,87,185,0.25)" }
-                : { background: "#F3F4F6", color: "#6B7280" }}
-            >
-              {label}
-              {badge != null && badge > 0 && (
-                <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: tab === id ? "rgba(255,255,255,0.25)" : "#EF444430", color: tab === id ? "#fff" : "#EF4444" }}>
-                  {badge}
-                </span>
-              )}
-            </button>
+            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "2fr 140px 1fr 100px 100px 160px", padding: "12px 16px", gap: 8, background: i % 2 === 0 ? "#fff" : "#FAFAFA", borderBottom: "1px solid #F3F4F6", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", marginBottom: 2 }}>{p.title}</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <StatusBadge permit={p} />
+                  {isHighRisk(p) && p.status === "active" && <span style={{ padding: "2px 6px", borderRadius: 8, background: "#FEF2F2", fontSize: 10, fontWeight: 700, color: "#DC2626" }}>HIGH RISK</span>}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <TIcon size={13} color={tc.color} />
+                <span style={{ fontSize: 12, color: tc.color, fontWeight: 600 }}>{p.type}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "#6B7280" }}>{p.requested_by}</div>
+              <div style={{ fontSize: 12, color: "#6B7280" }}>{fmt(p.start_date)}</div>
+              <div style={{ fontSize: 12, color: isExpired(p) ? "#DC2626" : "#6B7280" }}>{fmt(p.end_date)}</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {p.status === "submitted" && <button onClick={() => onApprove(p.id)} style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "#16A34A", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Approve</button>}
+                {(p.status === "submitted" || p.status === "approved") && <button onClick={() => onReject(p.id)} style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "#DC2626", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Reject</button>}
+                {p.status === "active" && <button onClick={() => onSuspend(p.id)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #FDE68A", background: "#FFFBEB", color: "#D97706", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Suspend</button>}
+                {(p.status === "active" || p.status === "approved") && <button onClick={() => onClose(p.id)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #E5E7EB", background: "#F9FAFB", color: "#374151", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Close</button>}
+              </div>
+            </div>
           );
         })}
       </div>
+      <div style={{ marginTop: 10, fontSize: 12, color: "#9CA3AF" }}>Showing {filtered.length} of {permits.length} permits</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page shell
+// ---------------------------------------------------------------------------
+
+const TABS: { key: TabKey; label: string; urlParam?: string }[] = [
+  { key: "dashboard", label: "Dashboard" },
+  { key: "active",    label: "Active Permits",  urlParam: "active" },
+  { key: "queue",     label: "Approval Queue",  urlParam: "approval" },
+  { key: "all",       label: "All Permits",     urlParam: "requests" },
+];
+
+export function PermitsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const urlParam  = new URLSearchParams(location.search).get("tab");
+
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    if (urlParam === "approval") return "queue";
+    if (urlParam === "active")   return "active";
+    if (urlParam === "requests") return "all";
+    return "dashboard";
+  });
+
+  const { data: rawPermits, isLoading, refetch } = useListPermitsQuery();
+  const permits: Permit[] = Array.isArray(rawPermits) ? rawPermits : ((rawPermits as { items?: Permit[] })?.items ?? []);
+
+  const [closePermit]  = useClosePermitMutation();
+  const [updatePermit] = useUpdatePermitMutation();
+
+  // Modals
+  const [showCreate,   setShowCreate]   = useState(false);
+  const [approveId,    setApproveId]    = useState<string | null>(null);
+  const [rejectId,     setRejectId]     = useState<string | null>(null);
+
+  const handleTab = (k: TabKey) => {
+    setActiveTab(k);
+    const t = TABS.find((t) => t.key === k);
+    navigate(t?.urlParam ? `/permits?tab=${t.urlParam}` : "/permits", { replace: true });
+  };
+
+  const handleClose   = async (id: string) => { try { await closePermit(id).unwrap(); } catch { /**/ } };
+  const handleSuspend = async (id: string) => { try { await updatePermit({ permitId: id, body: { status: "closed" } }).unwrap(); } catch { /**/ } };
+
+  const activeCount  = permits.filter((p) => p.status === "active").length;
+  const pendingCount = permits.filter((p) => p.status === "submitted").length;
+  const expiredCount = permits.filter(isExpired).length;
+  const highRiskCount= permits.filter((p) => p.status === "active" && isHighRisk(p)).length;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#F3F7FF" }}>
+      {/* Modals */}
+      {showCreate && <CreatePermitModal onClose={() => setShowCreate(false)} onCreated={refetch} />}
+      {approveId  && <ApproveModal permitId={approveId} onClose={() => setApproveId(null)} />}
+      {rejectId   && <RejectModal  permitId={rejectId}  onClose={() => setRejectId(null)} />}
+
+      {/* Banner */}
+      <div style={{ background: "linear-gradient(135deg, #0F2746 0%, #1E3A5F 50%, #0C4A6E 100%)", padding: "28px 32px 0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <FileText size={22} color="#93C5FD" />
+              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#fff" }}>Permit To Work (PTW)</h1>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: "#BAE6FD", opacity: 0.85 }}>
+              Manage all permit operations for hazardous and controlled work activities
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => refetch()} disabled={isLoading} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: "#fff", fontSize: 13, cursor: "pointer" }}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+            <button onClick={() => setShowCreate(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "#2563EB", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <Plus size={14} /> Create Permit
+            </button>
+          </div>
+        </div>
+
+        {/* Stats strip */}
+        <div style={{ display: "flex", gap: 0 }}>
+          {[
+            { label: "Total Active",     value: activeCount,   color: "#93C5FD" },
+            { label: "Expired",          value: expiredCount,  color: "#FCA5A5" },
+            { label: "Pending Approvals",value: pendingCount,  color: "#FDE68A" },
+            { label: "High-Risk Active", value: highRiskCount, color: "#FCA5A5" },
+            { label: "Total Permits",    value: permits.length, color: "#BAE6FD" },
+          ].map((s, i) => (
+            <div key={s.label} style={{ flex: 1, padding: "12px 20px", borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tab bar */}
+        <div style={{ display: "flex", gap: 4, marginTop: 16 }}>
+          {TABS.map((t) => {
+            const active = activeTab === t.key;
+            const badge  = t.key === "queue" && pendingCount > 0 ? pendingCount : undefined;
+            return (
+              <button key={t.key} onClick={() => handleTab(t.key)} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "10px 20px", border: "none", cursor: "pointer",
+                borderRadius: "8px 8px 0 0", fontSize: 13, fontWeight: active ? 600 : 500,
+                ...(active ? { background: "#F5F7FF", color: "#111827" } : { background: "transparent", color: "rgba(255,255,255,0.65)" }),
+              }}>
+                {t.label}
+                {badge && (
+                  <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: "50%", background: "#D97706", color: "#fff", fontSize: 10, fontWeight: 700 }}>{badge}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Loading */}
+      {isLoading && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 60 }}>
+          <FileText size={28} color="#2563EB" style={{ opacity: 0.3 }} />
+          <span style={{ marginLeft: 12, color: "#9CA3AF", fontSize: 14 }}>Loading permits…</span>
+        </div>
+      )}
 
       {/* Tab content */}
-      {tab === "ptw"      && <PTWTab permits={permits} isLoading={isLoading} search={search} setSearch={setSearch} />}
-      {tab === "requests" && <RequestsTab permits={permits} isLoading={isLoading} />}
-      {tab === "approval" && <ApprovalTab permits={permits} isLoading={isLoading} />}
-      {tab === "active"   && <ActivePermitsTab permits={permits} isLoading={isLoading} />}
+      {!isLoading && (
+        <div style={{ background: "#fff", borderRadius: "0 0 12px 12px", boxShadow: "0 4px 20px rgba(0,0,0,0.06)" }}>
+          {activeTab === "dashboard" && <DashboardTab permits={permits} />}
+          {activeTab === "active"    && <ActiveTab permits={permits} onApprove={setApproveId} onReject={setRejectId} onClose={handleClose} onSuspend={handleSuspend} />}
+          {activeTab === "queue"     && <QueueTab  permits={permits} onApprove={setApproveId} onReject={setRejectId} />}
+          {activeTab === "all"       && <AllPermitsTab permits={permits} onApprove={setApproveId} onReject={setRejectId} onClose={handleClose} onSuspend={handleSuspend} onCreateClick={() => setShowCreate(true)} />}
+        </div>
+      )}
     </div>
   );
 }

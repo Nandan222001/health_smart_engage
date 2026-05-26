@@ -216,6 +216,7 @@ class WorkflowEngineService:
                 escalated=data.get("severity") == "critical",
             )
             self.db.add(case)
+            self.db.flush()  # Ensure case is persisted before adding children
 
             # Add initial stage event
             self.db.add(WorkflowStageEvent(
