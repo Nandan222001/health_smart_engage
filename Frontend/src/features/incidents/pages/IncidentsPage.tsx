@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { AlertTriangle, Search } from "lucide-react";
-import { useListIncidentsQuery } from "@/features/incidents/api/incidentsApi";
+import { AlertTriangle, Search, Loader2, ChevronDown } from "lucide-react";
+import { useListIncidentsQuery, useClassifyIncidentMutation } from "@/features/incidents/api/incidentsApi";
 import type { Incident } from "@/features/incidents/api/incidentsApi";
 
 const SEV_COLOR: Record<string, string> = {
   low: "#10B981", medium: "#F59E0B", high: "#F97316", critical: "#EF4444",
 };
+
+const SEVERITIES = ["low", "medium", "high", "critical"] as const;
 
 function SeverityBadge({ severity }: { severity: string }) {
   return (
@@ -21,6 +23,66 @@ function StatusBadge({ status }: { status: string }) {
     <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize" style={{ background: color + "1A", color }}>
       {status}
     </span>
+  );
+}
+
+function ClassifyCell({ incident }: { incident: Incident }) {
+  const [classifyIncident, { isLoading }] = useClassifyIncidentMutation();
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  async function handleClassify(severity: string) {
+    setSelected(severity);
+    setOpen(false);
+    await classifyIncident({
+      incidentId: incident.id,
+      classification: incident.type,
+      severity,
+    });
+    setSelected(null);
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={isLoading}
+        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:opacity-50 hover:bg-gray-50 transition-colors"
+        style={{ borderColor: "#E3E9F6", color: "#6B7280" }}
+      >
+        {isLoading ? (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        ) : (
+          <ChevronDown className="w-3 h-3" />
+        )}
+        {selected ? <span className="capitalize">{selected}</span> : "Classify"}
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1 bg-white rounded-xl border shadow-lg z-10 overflow-hidden"
+          style={{ borderColor: "#E3E9F6", minWidth: 120 }}
+        >
+          {SEVERITIES.map((sev) => {
+            const color = SEV_COLOR[sev];
+            return (
+              <button
+                key={sev}
+                onClick={() => handleClassify(sev)}
+                className="w-full text-left px-3 py-2 text-xs font-semibold capitalize hover:bg-gray-50 transition-colors flex items-center gap-2"
+                style={{ color }}
+              >
+                <span
+                  className="w-2 h-2 rounded-full inline-block flex-shrink-0"
+                  style={{ background: color }}
+                />
+                {sev}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -40,14 +102,22 @@ function IncidentRow({ incident }: { incident: Incident }) {
       <td className="px-5 py-3.5"><StatusBadge status={incident.status} /></td>
       <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{incident.reported_by}</td>
       <td className="px-5 py-3.5 text-sm" style={{ color: "#6B7280" }}>{new Date(incident.occurred_at).toLocaleDateString()}</td>
+      <td className="px-5 py-3.5">
+        <ClassifyCell incident={incident} />
+      </td>
     </tr>
   );
 }
 
 export function IncidentsPage() {
-  const { data: incidents = [], isLoading } = useListIncidentsQuery();
+  const { data: rawData, isLoading } = useListIncidentsQuery();
   const [search, setSearch] = useState("");
   const [sevFilter, setSevFilter] = useState("");
+
+  // baseApi unwraps { data: { items: [...] } } to a plain array.
+  const incidents: Incident[] = Array.isArray(rawData)
+    ? rawData
+    : ((rawData as unknown as { items?: Incident[] })?.items ?? []);
 
   const filtered = incidents.filter((i) => {
     const matchSearch = i.title.toLowerCase().includes(search.toLowerCase());
@@ -90,9 +160,14 @@ export function IncidentsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <select className="px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} value={sevFilter} onChange={(e) => setSevFilter(e.target.value)}>
+        <select
+          className="px-3 py-2.5 rounded-xl border text-sm outline-none"
+          style={{ borderColor: "#E3E9F6" }}
+          value={sevFilter}
+          onChange={(e) => setSevFilter(e.target.value)}
+        >
           <option value="">All severities</option>
-          {["low", "medium", "high", "critical"].map((s) => <option key={s} value={s}>{s}</option>)}
+          {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
@@ -100,17 +175,22 @@ export function IncidentsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr style={{ background: "#F8FAFF", borderBottom: "1px solid #E9EEF8" }}>
-              {["Incident", "Severity", "Status", "Reported By", "Date"].map((h) => (
+              {["Incident", "Severity", "Status", "Reported By", "Date", "Actions"].map((h) => (
                 <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={5} className="text-center py-10 text-sm" style={{ color: "#9CA3AF" }}>Loading incidents…</td></tr>
+              <tr>
+                <td colSpan={6} className="text-center py-10">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" style={{ color: "#4A57B9" }} />
+                  <p className="text-sm" style={{ color: "#9CA3AF" }}>Loading incidents…</p>
+                </td>
+              </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-12">
+                <td colSpan={6} className="text-center py-12">
                   <AlertTriangle className="w-8 h-8 mx-auto mb-2" style={{ color: "#D1D5DB" }} />
                   <p className="text-sm" style={{ color: "#6B7280" }}>No incidents found</p>
                 </td>

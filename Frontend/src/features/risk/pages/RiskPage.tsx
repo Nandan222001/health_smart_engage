@@ -8,7 +8,11 @@ import {
   useGetHighRiskAreasQuery,
   useCloseRiskAssessmentMutation,
 } from "@/features/hazards/api/hazardsApi";
-import type { RiskAssessmentCreatePayload } from "@/features/hazards/api/hazardsApi";
+import type {
+  RiskAssessmentCreatePayload,
+  HighRiskArea,
+  RiskMatrixData,
+} from "@/features/hazards/api/hazardsApi";
 
 // Extended interface that matches backend response (score-based, not level-based)
 interface RiskAssessmentExtended {
@@ -86,8 +90,8 @@ function RiskAssessmentsView() {
     department: "",
   });
 
-  // The baseApi unwraps { data: { items: [...] } } to just the array,
-  // but our new endpoints return shaped objects. Handle both shapes.
+  // The baseApi unwraps { data: { items: [...] } } to just the array.
+  // Handle both array and object shapes defensively.
   const items: RiskAssessmentExtended[] = Array.isArray(rawData)
     ? (rawData as unknown as RiskAssessmentExtended[])
     : ((rawData as unknown as { items?: RiskAssessmentExtended[] })?.items ?? []);
@@ -329,7 +333,7 @@ function RiskAssessmentsView() {
 // Risk Matrix View
 // ─────────────────────────────────────────────────
 function RiskMatrixView() {
-  const { data, isLoading, isError } = useGetRiskMatrixQuery();
+  const { data: rawMatrixData, isLoading, isError } = useGetRiskMatrixQuery();
   const [selectedCell, setSelectedCell] = useState<{ l: number; c: number } | null>(null);
 
   if (isLoading) {
@@ -340,7 +344,7 @@ function RiskMatrixView() {
     );
   }
 
-  if (isError || !data) {
+  if (isError || !rawMatrixData) {
     return (
       <div className="bg-white rounded-2xl border p-8 text-center" style={{ borderColor: "#E3E9F6" }}>
         <p className="text-sm" style={{ color: "#EF4444" }}>Failed to load risk matrix data.</p>
@@ -348,11 +352,17 @@ function RiskMatrixView() {
     );
   }
 
+  // The baseApi may unwrap { data: { items: [...] } } to an array,
+  // but risk matrix returns an object — handle both shapes defensively.
+  const data: RiskMatrixData = Array.isArray(rawMatrixData)
+    ? { matrix_counts: {}, total_assessments: 0, by_level: { critical: 0, high: 0, medium: 0, low: 0 }, assessments: [] }
+    : (rawMatrixData as unknown as RiskMatrixData);
+
   const { matrix_counts, total_assessments, by_level, assessments } = data;
-  const medLow = (by_level.medium ?? 0) + (by_level.low ?? 0);
+  const medLow = (by_level?.medium ?? 0) + (by_level?.low ?? 0);
 
   const filteredAssessments = selectedCell
-    ? assessments.filter(
+    ? (assessments ?? []).filter(
         (a) => a.likelihood === selectedCell.l && a.consequence === selectedCell.c
       )
     : [];
@@ -368,9 +378,9 @@ function RiskMatrixView() {
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Total Assessments", value: total_assessments, color: "#4A57B9" },
-          { label: "Critical", value: by_level.critical ?? 0, color: "#EF4444" },
-          { label: "High", value: by_level.high ?? 0, color: "#F59E0B" },
+          { label: "Total Assessments", value: total_assessments ?? 0, color: "#4A57B9" },
+          { label: "Critical", value: by_level?.critical ?? 0, color: "#EF4444" },
+          { label: "High", value: by_level?.high ?? 0, color: "#F59E0B" },
           { label: "Medium / Low", value: medLow, color: "#3B82F6" },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
@@ -403,7 +413,7 @@ function RiskMatrixView() {
                   <td className="px-3 py-2 text-xs font-semibold" style={{ color: "#6B7280" }}>C={consequence}</td>
                   {[1, 2, 3, 4, 5].map((likelihood) => {
                     const key = `${likelihood}_${consequence}`;
-                    const count = matrix_counts[key] ?? 0;
+                    const count = (matrix_counts ?? {})[key] ?? 0;
                     const bgColor = matrixCellColor(likelihood, consequence);
                     const textColor = matrixCellTextColor(likelihood, consequence);
                     const isSelected =
@@ -504,7 +514,7 @@ function RiskMatrixView() {
 // High-Risk Areas View
 // ─────────────────────────────────────────────────
 function HighRiskAreasView() {
-  const { data, isLoading, isError } = useGetHighRiskAreasQuery();
+  const { data: rawData, isLoading, isError } = useGetHighRiskAreasQuery();
 
   if (isLoading) {
     return (
@@ -514,7 +524,7 @@ function HighRiskAreasView() {
     );
   }
 
-  if (isError || !data) {
+  if (isError) {
     return (
       <div className="bg-white rounded-2xl border p-8 text-center" style={{ borderColor: "#E3E9F6" }}>
         <p className="text-sm" style={{ color: "#EF4444" }}>Failed to load high-risk areas.</p>
@@ -522,7 +532,12 @@ function HighRiskAreasView() {
     );
   }
 
-  const { items, total } = data;
+  // baseApi unwraps { data: { items: [...] } } → just the items array.
+  // Handle both shapes defensively.
+  const items: HighRiskArea[] = Array.isArray(rawData)
+    ? (rawData as unknown as HighRiskArea[])
+    : ((rawData as unknown as { items?: HighRiskArea[] })?.items ?? []);
+  const total = items.length;
 
   return (
     <div className="space-y-5">
