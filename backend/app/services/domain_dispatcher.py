@@ -186,10 +186,16 @@ class DomainDispatcher:
         # Asset Commands
         if operation == "assets_create":
             res = svc["assets"].create_asset(user, data)
-            return {"id": res.id}
+            return {"id": res.id, "status": res.status}
+        if operation == "assets_update":
+            res = svc["assets"].update_asset(user, path_params.get("assetId"), data)
+            return {"id": res.id, "status": res.status}
         if operation in ["asset_inspections_create", "mobile_asset_inspections_create"]:
             res = svc["assets"].record_inspection(user, path_params.get("assetId"), data)
             return {"id": res.id}
+        if operation == "asset_maintenance_log_create":
+            res = svc["assets"].create_maintenance_log(user, path_params.get("assetId"), data)
+            return {"id": res.id, "status": res.status}
 
         # Compliance Commands
         if operation == "audits_create":
@@ -559,6 +565,17 @@ class DomainDispatcher:
         if operation == "assets_list":
             items = svc["assets"].list_assets(user, {})
             return {"items": [_to_dict(i) for i in items]}
+        if operation == "assets_get":
+            res = svc["assets"].get_asset(user, path_params.get("assetId"))
+            return _to_dict(res)
+        if operation == "asset_categories_list":
+            return svc["assets"].list_asset_categories(user)
+        if operation == "asset_maintenance_logs_list":
+            return svc["assets"].list_all_maintenance_logs_enriched(user)
+        if operation == "asset_inspections_all_list":
+            return svc["assets"].list_all_inspections_enriched(user)
+        if operation == "asset_risk_mapping_list":
+            return svc["assets"].list_asset_risk_mapping(user)
 
         if operation == "health_dependencies":
             return {"database": "configured", "storage": "configured", "ai": "configured"}

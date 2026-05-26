@@ -4,7 +4,7 @@ from app.models.foundation import OrganisationNode
 from app.models.auth import User, Role
 from app.models.people import Employee, Certification, TrainingRequirement, TrainingCompletion
 from app.models.vendors import Vendor, VendorDocument, VendorCompliance
-from app.models.assets import Asset, AssetInspection
+from app.models.assets import Asset, AssetInspection, AssetMaintenanceLog
 from app.models.risks import RiskAssessment, HazardObservation
 from app.models.permits import Permit, PermitApproval
 from app.models.compliance import AuditChecklist, AuditExecution, Finding, Capa
