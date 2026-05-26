@@ -23,11 +23,15 @@ ENDPOINTS = [
     ("DELETE", "/shifts/{shiftId}",               "org_admin_shifts_delete",         "Delete shift"),
 
     # Data Management
-    ("GET",    "/data-management/imports",        "org_admin_imports_list",          "List import history"),
-    ("POST",   "/data-management/import",         "org_admin_import_create",         "Create data import"),
-    ("GET",    "/data-management/validation-logs","org_admin_validation_logs_list",  "List validation logs"),
-    ("GET",    "/data-management/sync-status",    "org_admin_sync_status_get",       "Get sync status"),
-    ("POST",   "/data-management/sync",           "org_admin_sync_trigger",          "Trigger sync"),
+    ("GET",    "/data-management/imports",                                  "org_admin_imports_list",               "List import history"),
+    ("POST",   "/data-management/import",                                   "org_admin_import_create",              "Create data import"),
+    ("GET",    "/data-management/validation-logs",                          "org_admin_validation_logs_list",       "List validation logs"),
+    ("GET",    "/data-management/sync-status",                              "org_admin_sync_status_get",            "Get sync status"),
+    ("POST",   "/data-management/sync",                                     "org_admin_sync_trigger",               "Trigger sync"),
+    ("GET",    "/data-management/api-integrations",                         "org_admin_api_integrations_list",      "List API integrations"),
+    ("POST",   "/data-management/api-integrations",                         "org_admin_api_integrations_create",    "Create API integration"),
+    ("PATCH",  "/data-management/api-integrations/{integrationId}",         "org_admin_api_integrations_update",    "Update API integration"),
+    ("DELETE", "/data-management/api-integrations/{integrationId}",         "org_admin_api_integrations_delete",    "Delete API integration"),
 
     # Help / Support
     ("GET",    "/help/tickets",                   "org_admin_tickets_list",          "List support tickets"),
