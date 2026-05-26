@@ -1,6 +1,7 @@
 from typing import Any
 from sqlalchemy.orm import Session
 from app.core.security import CurrentUser
+from app.core.config import settings
 
 
 def _to_dict(obj) -> dict:
@@ -347,6 +348,47 @@ class DomainDispatcher:
             return svc["workflow_engine"].verify_resolution(user, path_params.get("resolutionId"), data)
         if operation == "workflow_alerts_acknowledge":
             return svc["workflow_engine"].acknowledge_alert(user, path_params.get("alertId"))
+
+        # ── Azure AI Foundry — Chat ───────────────────────────────────────────
+        if operation == "ai_chat_complete":
+            messages = data.get("messages", [])
+            if not messages and data.get("message"):
+                messages = [{"role": "user", "content": data["message"]}]
+            # Optionally enrich with live platform data
+            extra_context = ""
+            try:
+                from sqlalchemy import select as _sel, func as _func
+                from app.models.incidents import Incident as _Inc
+                from app.models.domain import Permit, RiskAssessment, HazardObservation
+                inc_count = db.scalar(_sel(_func.count(_Inc.id)).where(_Inc.tenant_id == user.tenant_id)) or 0
+                open_inc = db.scalar(_sel(_func.count(_Inc.id)).where(_Inc.tenant_id == user.tenant_id, _Inc.status == "reported")) or 0
+                permit_count = db.scalar(_sel(_func.count(Permit.id)).where(Permit.tenant_id == user.tenant_id, Permit.status == "active")) or 0
+                risk_count = db.scalar(_sel(_func.count(RiskAssessment.id)).where(RiskAssessment.tenant_id == user.tenant_id)) or 0
+                extra_context = (
+                    f"Total incidents: {inc_count} ({open_inc} open). "
+                    f"Active permits: {permit_count}. "
+                    f"Risk assessments: {risk_count}."
+                )
+            except Exception:
+                pass
+            return self.ai.chat(messages, extra_context=extra_context)
+
+        if operation == "ai_knowledge_search":
+            query = data.get("query", data.get("q", ""))
+            # Try Azure AI Search if configured; fall back to keyword search over GenericRecord knowledge docs
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            docs_recs = repo.list_by_type(user.tenant_id, "knowledge", "document", limit=200)
+            docs = [{"id": r.id, "title": r.payload.get("title", ""), "content": r.payload.get("content", r.payload.get("text", "")), "source": r.payload.get("source", "")} for r in docs_recs]
+            results = self.ai.knowledge_search(query, docs)
+            # If Azure AI is configured, also ask it to synthesize an answer
+            answer = None
+            if self.ai.is_configured and query:
+                ctx = "\n".join(f"- {r.get('title','')}: {str(r.get('content',''))[:300]}" for r in results[:5])
+                answer = self.ai.analyze(
+                    f"Answer this HSE question using only the provided knowledge base excerpts: '{query}'\n\nRelevant passages:\n{ctx or 'No documents found.'}",
+                )
+            return {"query": query, "results": results, "answer": answer, "total": len(results)}
 
         # ── AI Intelligence Commands ──────────────────────────────────────────
         if operation == "ai_intelligence_models_retrain":
@@ -838,6 +880,149 @@ class DomainDispatcher:
             return svc["workflow_engine"].list_cases(user, path_params)
         if operation == "workflows_cases_get":
             return svc["workflow_engine"].get_case(user, path_params.get("caseId"))
+
+        # ── Azure AI Foundry — GET endpoints ─────────────────────────────────
+
+        if operation == "ai_status_get":
+            return {
+                "configured": self.ai.is_configured,
+                "model": self.ai.model,
+                "endpoint": bool(settings.azure_openai_endpoint),
+                "provider": "Azure AI Foundry",
+            }
+
+        if operation == "ai_dashboard_get":
+            from sqlalchemy import select as _sel, func as _func
+            from app.models.incidents import Incident as _Inc
+            from app.models.domain import Permit, RiskAssessment, HazardObservation, AIRecommendation, Capa
+            tid = user.tenant_id
+            total_inc = db.scalar(_sel(_func.count(_Inc.id)).where(_Inc.tenant_id == tid)) or 0
+            open_inc = db.scalar(_sel(_func.count(_Inc.id)).where(_Inc.tenant_id == tid, _Inc.status.in_(["reported","open"]))) or 0
+            critical_inc = db.scalar(_sel(_func.count(_Inc.id)).where(_Inc.tenant_id == tid, _Inc.severity == "critical")) or 0
+            active_permits = db.scalar(_sel(_func.count(Permit.id)).where(Permit.tenant_id == tid, Permit.status == "active")) or 0
+            total_risks = db.scalar(_sel(_func.count(RiskAssessment.id)).where(RiskAssessment.tenant_id == tid)) or 0
+            high_risks = db.scalars(_sel(RiskAssessment).where(RiskAssessment.tenant_id == tid, RiskAssessment.risk_score >= 15).limit(3)).all()
+            open_capas = db.scalar(_sel(_func.count(Capa.id)).where(Capa.tenant_id == tid, Capa.status == "open")) or 0
+            return {
+                "configured": self.ai.is_configured,
+                "model": self.ai.model,
+                "stats": {
+                    "total_incidents": total_inc,
+                    "open_incidents": open_inc,
+                    "critical_incidents": critical_inc,
+                    "active_permits": active_permits,
+                    "total_risk_assessments": total_risks,
+                    "open_capas": open_capas,
+                },
+                "top_risks": [{"id": r.id, "title": r.task_name or r.hazard_description[:50], "score": r.risk_score} for r in high_risks],
+                "ai_summary": self.ai.analyze(
+                    "Summarize the HSE platform status in 2-3 sentences. Highlight the most critical risks and urgent actions.",
+                    {"total_incidents": total_inc, "open": open_inc, "critical": critical_inc, "active_permits": active_permits, "high_risk_count": len(high_risks), "open_capas": open_capas},
+                ) if self.ai.is_configured else None,
+            }
+
+        if operation == "ai_risk_predictions_get":
+            from sqlalchemy import select as _sel
+            from app.models.domain import RiskAssessment, HazardObservation
+            from app.models.incidents import Incident as _Inc
+            tid = user.tenant_id
+            risks = db.scalars(_sel(RiskAssessment).where(RiskAssessment.tenant_id == tid).order_by(RiskAssessment.risk_score.desc()).limit(10)).all()
+            hazards = db.scalars(_sel(HazardObservation).where(HazardObservation.tenant_id == tid, HazardObservation.status == "open").limit(10)).all()
+            open_inc = db.scalars(_sel(_Inc).where(_Inc.tenant_id == tid, _Inc.status.in_(["reported","open"])).limit(10)).all()
+            context = {
+                "high_risk_assessments": [{"id": r.id, "title": r.task_name or r.hazard_description[:50], "likelihood": r.likelihood, "consequence": r.consequence, "risk_score": r.risk_score} for r in risks],
+                "open_hazards": [{"id": h.id, "desc": h.description[:60] if h.description else "", "severity": h.severity} for h in hazards],
+                "open_incidents": [{"id": i.id, "title": i.description[:50] if i.description else "", "severity": i.severity} for i in open_inc],
+            }
+            analysis = self.ai.analyze(
+                "Based on this HSE data, predict the top 5 risks likely to escalate in the next 30 days. For each, provide: risk_name, likelihood (1-5), impact (1-5), predicted_score, rationale, and recommended_action. Return JSON: {predictions: [...]}",
+                context, as_json=True,
+            ) if self.ai.is_configured else {}
+            predictions = analysis.get("predictions", []) if isinstance(analysis, dict) else []
+            return {
+                "configured": self.ai.is_configured,
+                "predictions": predictions,
+                "raw_data": context,
+                "generated_at": __import__("datetime").datetime.utcnow().isoformat(),
+            }
+
+        if operation == "ai_compliance_intelligence_get":
+            benchmarking = svc["ai_intelligence"].get_compliance_benchmarking(user)
+            from sqlalchemy import select as _sel
+            from app.models.domain import Finding, Capa
+            tid = user.tenant_id
+            open_findings = db.scalars(_sel(Finding).where(Finding.tenant_id == tid, Finding.status == "open").limit(10)).all()
+            context = {
+                "benchmarks": benchmarking.get("benchmarks", []),
+                "overall_score": benchmarking.get("overall_score", 0),
+                "open_findings": [{"id": f.id, "desc": getattr(f, "description", "")[:60] if hasattr(f, "description") else ""} for f in open_findings],
+            }
+            gaps = self.ai.analyze(
+                "Analyze the compliance benchmarking data and open audit findings. Identify the top 5 compliance gaps and for each provide: standard, gap_description, severity (high/medium/low), recommended_action, and estimated_effort (days). Return JSON: {gaps: [...], overall_assessment: '...'}",
+                context, as_json=True,
+            ) if self.ai.is_configured else {}
+            return {
+                "configured": self.ai.is_configured,
+                "benchmarking": benchmarking,
+                "gaps": (gaps.get("gaps", []) if isinstance(gaps, dict) else []),
+                "overall_assessment": (gaps.get("overall_assessment", "") if isinstance(gaps, dict) else ""),
+                "generated_at": __import__("datetime").datetime.utcnow().isoformat(),
+            }
+
+        if operation == "ai_safety_recommendations_get":
+            recs = svc["ai_intelligence"].get_recommendations(user)
+            from sqlalchemy import select as _sel
+            from app.models.incidents import Incident as _Inc
+            from app.models.domain import HazardObservation, RiskAssessment
+            tid = user.tenant_id
+            recent_incidents = db.scalars(_sel(_Inc).where(_Inc.tenant_id == tid).order_by(_Inc.created_at.desc()).limit(10)).all()
+            open_hazards = db.scalars(_sel(HazardObservation).where(HazardObservation.tenant_id == tid, HazardObservation.status == "open").limit(10)).all()
+            high_risks = db.scalars(_sel(RiskAssessment).where(RiskAssessment.tenant_id == tid, RiskAssessment.risk_score >= 12).limit(5)).all()
+            context = {
+                "recent_incidents": [{"severity": i.severity, "type": i.incident_type, "desc": i.description[:80] if i.description else ""} for i in recent_incidents],
+                "open_hazards": [{"severity": h.severity, "desc": h.description[:60] if h.description else ""} for h in open_hazards],
+                "high_risks": [{"score": r.risk_score, "title": r.task_name or r.hazard_description[:50]} for r in high_risks],
+            }
+            ai_recs = self.ai.analyze(
+                "Based on the recent safety data, generate 6 prioritised safety recommendations. For each provide: title, description, priority (critical/high/medium/low), category (engineering/administrative/ppe/training/process), estimated_impact, and quick_win (true/false). Return JSON: {recommendations: [...]}",
+                context, as_json=True,
+            ) if self.ai.is_configured else {}
+            return {
+                "configured": self.ai.is_configured,
+                "ai_recommendations": (ai_recs.get("recommendations", []) if isinstance(ai_recs, dict) else []),
+                "platform_recommendations": recs,
+                "generated_at": __import__("datetime").datetime.utcnow().isoformat(),
+            }
+
+        if operation == "ai_trend_analysis_get":
+            from sqlalchemy import select as _sel, func as _func, extract
+            from app.models.incidents import Incident as _Inc
+            from app.models.domain import HazardObservation, Permit
+            tid = user.tenant_id
+            from datetime import datetime, timedelta
+            months = []
+            for i in range(5, -1, -1):
+                d = datetime.utcnow() - timedelta(days=30 * i)
+                label = d.strftime("%b")
+                inc_count = db.scalar(_sel(_func.count(_Inc.id)).where(
+                    _Inc.tenant_id == tid,
+                    _Inc.created_at >= d.replace(day=1),
+                    _Inc.created_at < (d.replace(day=1) + timedelta(days=32)).replace(day=1),
+                )) or 0
+                months.append({"month": label, "incidents": inc_count})
+            total_inc = db.scalar(_sel(_func.count(_Inc.id)).where(_Inc.tenant_id == tid)) or 0
+            critical = db.scalar(_sel(_func.count(_Inc.id)).where(_Inc.tenant_id == tid, _Inc.severity == "critical")) or 0
+            context = {"monthly_data": months, "total_incidents": total_inc, "critical_count": critical}
+            trend_analysis = self.ai.analyze(
+                "Analyse this incident trend data and provide: 1) trend_summary (2-3 sentences), 2) key_findings (list of 3), 3) forecast (next 30 days prediction), 4) leading_indicators (2-3 early warning signals to watch). Return JSON with these keys.",
+                context, as_json=True,
+            ) if self.ai.is_configured else {}
+            return {
+                "configured": self.ai.is_configured,
+                "monthly_data": months,
+                "analysis": trend_analysis if isinstance(trend_analysis, dict) else {},
+                "generated_at": __import__("datetime").datetime.utcnow().isoformat(),
+            }
 
         # ── AI Intelligence Queries ───────────────────────────────────────────
         if operation == "ai_compliance_benchmarking":

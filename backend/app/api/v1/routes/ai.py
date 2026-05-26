@@ -33,6 +33,14 @@ ENDPOINTS = [
     ("GET", "/ai/governance/unsupported-questions", "ai_governance_unsupported_questions", "Unsupported AI questions"),
     ("POST", "/ai/governance/review-items/{itemId}/resolve", "ai_governance_review_resolve", "Resolve AI review item"),
     ("GET", "/ai/governance/model-cards", "ai_governance_model_cards", "AI model cards"),
+    # AI Foundry — core endpoints
+    ("POST", "/ai/chat",                                 "ai_chat_complete",                  "Azure AI Foundry chat completion"),
+    ("GET",  "/ai/status",                               "ai_status_get",                     "Azure AI Foundry connection status"),
+    ("GET",  "/ai/dashboard",                            "ai_dashboard_get",                  "AI intelligence dashboard"),
+    ("GET",  "/ai/risk-predictions",                     "ai_risk_predictions_get",           "AI-powered risk predictions"),
+    ("GET",  "/ai/compliance-intelligence",              "ai_compliance_intelligence_get",    "AI compliance gap analysis"),
+    ("GET",  "/ai/safety-recommendations",               "ai_safety_recommendations_get",     "AI safety recommendations"),
+    ("GET",  "/ai/trend-analysis",                       "ai_trend_analysis_get",             "AI incident trend analysis"),
     # AI Intelligence Layer 4
     ("GET",  "/ai/compliance-benchmarking",              "ai_compliance_benchmarking",        "Compliance benchmarking vs industry"),
     ("GET",  "/ai/risk-scoring",                         "ai_risk_scoring",                   "Entity risk scores"),

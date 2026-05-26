@@ -4,6 +4,107 @@ import { baseApi } from "@/services/api/baseApi";
 
 export interface TrendPoint { label: string; value: number }
 
+// ─── Azure AI Foundry types ────────────────────────────────────────────────
+
+export interface ChatMessage { role: "user" | "assistant"; content: string }
+
+export interface AiChatResponse {
+  content: string;
+  model: string;
+  finish_reason: string;
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  configured: boolean;
+}
+
+export interface AiStatus {
+  configured: boolean;
+  model: string;
+  endpoint: string;
+  provider: string;
+}
+
+export interface AiDashboard {
+  configured: boolean;
+  model: string;
+  stats: Record<string, number>;
+  top_risks: string[];
+  ai_summary: string;
+}
+
+export interface AiRiskPrediction {
+  entity: string;
+  likelihood: number;
+  impact: number;
+  score: number;
+  recommendation: string;
+}
+
+export interface AiRiskPredictions {
+  configured: boolean;
+  predictions: AiRiskPrediction[];
+  raw_data: Record<string, unknown>;
+  generated_at: string;
+}
+
+export interface ComplianceGap {
+  area: string;
+  current: number;
+  required: number;
+  gap: number;
+  priority: string;
+}
+
+export interface AiComplianceIntelligence {
+  configured: boolean;
+  benchmarking: Record<string, unknown>;
+  gaps: ComplianceGap[];
+  overall_assessment: string;
+  generated_at: string;
+}
+
+export interface AiSafetyRec {
+  title: string;
+  description: string;
+  priority: string;
+  category: string;
+}
+
+export interface AiSafetyRecommendations {
+  configured: boolean;
+  ai_recommendations: AiSafetyRec[];
+  platform_recommendations: AiSafetyRec[];
+  generated_at: string;
+}
+
+export interface MonthlyTrendPoint {
+  month: string;
+  incidents: number;
+  near_misses: number;
+  resolved: number;
+}
+
+export interface AiTrendAnalysis {
+  configured: boolean;
+  monthly_data: MonthlyTrendPoint[];
+  analysis: string;
+  generated_at: string;
+}
+
+export interface KnowledgeResult {
+  id: string;
+  title?: string;
+  content: string;
+  score?: number;
+  source?: string;
+}
+
+export interface AiKnowledgeSearchResponse {
+  query: string;
+  results: KnowledgeResult[];
+  answer: string;
+  total: number;
+}
+
 // ─── Compliance Benchmarking ───────────────────────────────────────────────
 
 export interface ComplianceBenchmark {
@@ -217,6 +318,38 @@ export const aiIntelligenceApi = baseApi.injectEndpoints({
       query: ({ id, notes }) => ({ url: `/ai/recommendations/${id}/act`, method: "POST", body: { notes } }),
       invalidatesTags: ["Analytics"],
     }),
+
+    // ── Azure AI Foundry endpoints ──────────────────────────────────────────
+    aiChat: builder.mutation<AiChatResponse, { messages: ChatMessage[] }>({
+      query: (body) => ({ url: "/ai/chat", method: "POST", body }),
+    }),
+    getAiStatus: builder.query<AiStatus, void>({
+      query: () => "/ai/status",
+      providesTags: ["Analytics"],
+    }),
+    getAiDashboard: builder.query<AiDashboard, void>({
+      query: () => "/ai/dashboard",
+      providesTags: ["Analytics"],
+    }),
+    getRiskPredictions: builder.query<AiRiskPredictions, void>({
+      query: () => "/ai/risk-predictions",
+      providesTags: ["Analytics"],
+    }),
+    getComplianceIntelligence: builder.query<AiComplianceIntelligence, void>({
+      query: () => "/ai/compliance-intelligence",
+      providesTags: ["Analytics"],
+    }),
+    getSafetyRecommendations: builder.query<AiSafetyRecommendations, void>({
+      query: () => "/ai/safety-recommendations",
+      providesTags: ["Analytics"],
+    }),
+    getTrendAnalysis: builder.query<AiTrendAnalysis, void>({
+      query: () => "/ai/trend-analysis",
+      providesTags: ["Analytics"],
+    }),
+    aiKnowledgeSearch: builder.mutation<AiKnowledgeSearchResponse, { query: string }>({
+      query: (body) => ({ url: "/ai/knowledge/search", method: "POST", body }),
+    }),
   }),
 });
 
@@ -233,4 +366,12 @@ export const {
   useTriggerModelRetrainingMutation,
   useDismissRecommendationMutation,
   useActOnRecommendationMutation,
+  useAiChatMutation,
+  useGetAiStatusQuery,
+  useGetAiDashboardQuery,
+  useGetRiskPredictionsQuery,
+  useGetComplianceIntelligenceQuery,
+  useGetSafetyRecommendationsQuery,
+  useGetTrendAnalysisQuery,
+  useAiKnowledgeSearchMutation,
 } = aiIntelligenceApi;

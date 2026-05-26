@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     ai_endpoint: str = ""
     ai_api_key_secret_name: str = "ai-api-key"
 
+    # Azure AI Foundry (Azure OpenAI)
+    azure_openai_endpoint: str = Field(default="", validation_alias="AZURE_OPENAI_ENDPOINT")
+    azure_openai_api_key: str = Field(default="", validation_alias="AZURE_OPENAI_API_KEY")
+    azure_openai_deployment: str = Field(default="gpt-4o", validation_alias="AZURE_OPENAI_DEPLOYMENT")
+    azure_openai_api_version: str = Field(default="2025-01-01-preview", validation_alias="AZURE_OPENAI_API_VERSION")
+    azure_openai_embeddings_deployment: str = Field(default="text-embedding-3-small", validation_alias="AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT")
+    # Azure AI Search (for knowledge search)
+    azure_search_endpoint: str = Field(default="", validation_alias="AZURE_SEARCH_ENDPOINT")
+    azure_search_api_key: str = Field(default="", validation_alias="AZURE_SEARCH_API_KEY")
+    azure_search_index: str = Field(default="hse-knowledge", validation_alias="AZURE_SEARCH_INDEX")
+
     frontend_base_url: str = Field(default="http://localhost:5173", validation_alias="FRONTEND_BASE_URL")
 
     # SendGrid (preferred) — set SENDGRID_API_KEY to enable
