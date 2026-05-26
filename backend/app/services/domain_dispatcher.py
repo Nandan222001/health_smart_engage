@@ -107,11 +107,19 @@ class DomainDispatcher:
         if operation == "vendors_create":
             res = svc["vendors"].create_vendor(user, data)
             return {"id": res.id, "status": res.status}
+        if operation == "vendors_update":
+            res = svc["vendors"].update_vendor(user, path_params.get("vendorId"), data)
+            return {"id": res.id, "status": res.status}
         if operation == "vendor_documents_upload":
             res = svc["vendors"].upload_vendor_document(user, path_params.get("vendorId"), data)
             return {"id": res.id}
         if operation == "vendor_documents_review":
             res = svc["vendors"].review_vendor_document(user, path_params.get("documentId"), data)
+            return {"id": res.id, "status": res.status}
+        if operation == "vendor_compliance_save":
+            return svc["vendors"].save_vendor_compliance(user, path_params.get("vendorId"), data)
+        if operation == "vendor_certification_add":
+            res = svc["vendors"].add_vendor_certification(user, path_params.get("vendorId"), data)
             return {"id": res.id, "status": res.status}
 
         # Foundation Commands
@@ -417,6 +425,12 @@ class DomainDispatcher:
         if operation == "vendors_get":
             res = svc["vendors"].get_vendor(user, path_params.get("vendorId"))
             return _to_dict(res)
+        if operation == "vendor_compliance_list":
+            return svc["vendors"].list_vendor_compliance(user)
+        if operation == "vendor_certifications_list":
+            return svc["vendors"].list_vendor_certifications(user)
+        if operation == "vendor_risk_scores_list":
+            return svc["vendors"].list_vendor_risk_scores(user)
 
         # Foundation Queries
         if operation in ("admin_org_nodes_list", "admin_organisation_nodes_list"):
