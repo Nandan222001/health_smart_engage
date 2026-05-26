@@ -155,6 +155,73 @@ class DomainDispatcher:
             res = svc["foundation"].update_role(user, path_params.get("roleId"), data)
             return {"id": res.id}
 
+        # Sites & Zones Commands
+        if operation == "sites_create":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            rec = repo.create(user.tenant_id, "sites", "site", data, status="active")
+            return {"id": rec.id, **rec.payload}
+        if operation == "sites_update":
+            from app.models.generic_record import GenericRecord
+            from sqlalchemy import select as sa_select
+            site_id = path_params.get("siteId")
+            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == site_id, GenericRecord.tenant_id == user.tenant_id)).first()
+            if rec:
+                rec.payload = {**rec.payload, **data}
+            return {"id": site_id, **(rec.payload if rec else {})}
+        if operation == "sites_delete":
+            from app.models.generic_record import GenericRecord
+            from sqlalchemy import select as sa_select
+            site_id = path_params.get("siteId")
+            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == site_id, GenericRecord.tenant_id == user.tenant_id)).first()
+            if rec:
+                db.delete(rec)
+            return {"deleted": True, "id": site_id}
+        if operation == "zones_create":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            rec = repo.create(user.tenant_id, "sites", "zone", data, status="active")
+            return {"id": rec.id, **rec.payload}
+        if operation == "zones_update":
+            from app.models.generic_record import GenericRecord
+            from sqlalchemy import select as sa_select
+            zone_id = path_params.get("zoneId")
+            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == zone_id, GenericRecord.tenant_id == user.tenant_id)).first()
+            if rec:
+                rec.payload = {**rec.payload, **data}
+            return {"id": zone_id, **(rec.payload if rec else {})}
+        if operation == "zones_delete":
+            from app.models.generic_record import GenericRecord
+            from sqlalchemy import select as sa_select
+            zone_id = path_params.get("zoneId")
+            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == zone_id, GenericRecord.tenant_id == user.tenant_id)).first()
+            if rec:
+                db.delete(rec)
+            return {"deleted": True, "id": zone_id}
+
+        # Escalation Rules Commands
+        if operation == "escalation_rules_create":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            rec = repo.create(user.tenant_id, "workflow", "escalation_rule", data, status="active")
+            return {"id": rec.id, **rec.payload}
+        if operation == "escalation_rules_update":
+            from app.models.generic_record import GenericRecord
+            from sqlalchemy import select as sa_select
+            rule_id = path_params.get("ruleId")
+            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == rule_id, GenericRecord.tenant_id == user.tenant_id)).first()
+            if rec:
+                rec.payload = {**rec.payload, **data}
+            return {"id": rule_id, **(rec.payload if rec else {})}
+        if operation == "escalation_rules_delete":
+            from app.models.generic_record import GenericRecord
+            from sqlalchemy import select as sa_select
+            rule_id = path_params.get("ruleId")
+            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == rule_id, GenericRecord.tenant_id == user.tenant_id)).first()
+            if rec:
+                db.delete(rec)
+            return {"deleted": True, "id": rule_id}
+
         # Permit Commands
         if operation in ["permits_create", "mobile_permits_create"]:
             res = svc["permits"].create_permit(user, data)
@@ -1511,5 +1578,27 @@ class DomainDispatcher:
                 ],
                 "total": len(items),
             }
+
+        # ── Sites & Zones Queries ─────────────────────────────────────────────
+        if operation == "sites_list":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            items = repo.list_by_type(user.tenant_id, "sites", "site", limit=500)
+            return {"items": [{"id": r.id, **r.payload} for r in items], "total": len(items)}
+
+        if operation == "zones_list":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            site_id = payload.get("site_id") or payload.get("siteId")
+            items = repo.list_by_type(user.tenant_id, "sites", "zone", limit=500)
+            if site_id:
+                items = [i for i in items if i.payload.get("site_id") == site_id]
+            return {"items": [{"id": r.id, **r.payload} for r in items], "total": len(items)}
+
+        if operation == "escalation_rules_list":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            items = repo.list_by_type(user.tenant_id, "workflow", "escalation_rule", limit=200)
+            return {"items": [{"id": r.id, **r.payload} for r in items], "total": len(items)}
 
         return None

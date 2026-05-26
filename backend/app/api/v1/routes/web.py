@@ -113,6 +113,20 @@ ENDPOINTS = [
     ("POST", "/reports/vendors/export", "reports_vendors_export", "Export vendors"),
     ("POST", "/reports/assets/export", "reports_assets_export", "Export assets"),
     ("POST", "/reports/training/export", "reports_training_export", "Export training"),
+    # Sites & Zones
+    ("GET",    "/sites",               "sites_list",           "List sites"),
+    ("POST",   "/sites",               "sites_create",         "Create site"),
+    ("PATCH",  "/sites/{siteId}",      "sites_update",         "Update site"),
+    ("DELETE", "/sites/{siteId}",      "sites_delete",         "Delete site"),
+    ("GET",    "/zones",               "zones_list",           "List zones"),
+    ("POST",   "/zones",               "zones_create",         "Create zone"),
+    ("PATCH",  "/zones/{zoneId}",      "zones_update",         "Update zone"),
+    ("DELETE", "/zones/{zoneId}",      "zones_delete",         "Delete zone"),
+    # Escalation Rules
+    ("GET",    "/escalation-rules",            "escalation_rules_list",    "List escalation rules"),
+    ("POST",   "/escalation-rules",            "escalation_rules_create",  "Create escalation rule"),
+    ("PATCH",  "/escalation-rules/{ruleId}",   "escalation_rules_update",  "Update escalation rule"),
+    ("DELETE", "/escalation-rules/{ruleId}",   "escalation_rules_delete",  "Delete escalation rule"),
 ]
 
 register_catalog_routes(router, "web", ENDPOINTS)

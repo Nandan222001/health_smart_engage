@@ -2,9 +2,15 @@ import { useState } from "react";
 import {
   AlertTriangle, Bell, GitBranch, UserCheck, ClipboardList,
   CheckCircle2, Database, ChevronRight, Clock, ArrowUpRight,
-  TrendingUp, Zap, XCircle, AlertCircle, Play,
+  TrendingUp, Zap, XCircle, AlertCircle, Play, Plus, Trash2, Loader2, X,
 } from "lucide-react";
 import { useGetWorkflowDashboardQuery } from "@/features/workflow/api/workflowEngineApi";
+import {
+  useListEscalationRulesQuery,
+  useCreateEscalationRuleMutation,
+  useDeleteEscalationRuleMutation,
+} from "@/features/workflow/api/escalationRulesApi";
+import type { EscalationRule } from "@/features/workflow/api/escalationRulesApi";
 import type {
   WorkflowCase, ApprovalRequest, WorkflowCAPA,
   ResolutionItem, WorkflowAlert, WorkflowStage, CaseSeverity,
@@ -473,9 +479,193 @@ function AlertsPanel({ alerts }: { alerts: WorkflowAlert[] }) {
   );
 }
 
+// ─── 7. Escalation Rules ──────────────────────────────────────────────────────
+
+const TRIGGER_EVENTS = [
+  "permit_submitted",
+  "permit_overdue",
+  "incident_critical",
+  "capa_overdue",
+  "approval_pending",
+  "near_miss_reported",
+  "high_risk_assessment",
+];
+
+const ROLES = ["HSE Manager", "Site Manager", "Operations Director", "VP Safety", "CEO", "Admin"];
+const NOTIFY_VIA_OPTIONS = ["email", "sms", "push", "in_app"];
+
+interface EscRuleForm {
+  name: string;
+  trigger_event: string;
+  delay_minutes: number;
+  escalate_to_role: string;
+  notify_via: string[];
+  description: string;
+}
+
+const EMPTY_ESC_FORM: EscRuleForm = {
+  name: "",
+  trigger_event: "permit_overdue",
+  delay_minutes: 60,
+  escalate_to_role: "HSE Manager",
+  notify_via: ["email"],
+  description: "",
+};
+
+function EscalationRulesPanel() {
+  const { data: rules = [], isLoading } = useListEscalationRulesQuery();
+  const [createRule, { isLoading: creating }] = useCreateEscalationRuleMutation();
+  const [deleteRule] = useDeleteEscalationRuleMutation();
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState<EscRuleForm>(EMPTY_ESC_FORM);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  function toggleNotify(channel: string) {
+    setForm((f) => ({
+      ...f,
+      notify_via: f.notify_via.includes(channel)
+        ? f.notify_via.filter((c) => c !== channel)
+        : [...f.notify_via, channel],
+    }));
+  }
+
+  async function handleSave() {
+    if (!form.name.trim()) return;
+    await createRule({ ...form, is_active: true });
+    setForm(EMPTY_ESC_FORM);
+    setShowForm(false);
+  }
+
+  async function handleDelete(id: string) {
+    if (!window.confirm("Delete this escalation rule?")) return;
+    setDeletingId(id);
+    await deleteRule(id);
+    setDeletingId(null);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[15px] font-bold" style={{ color: "#111827" }}>Escalation Rules</h2>
+          <p className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>Auto-escalate workflow items when conditions are met</p>
+        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold"
+          style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}
+        >
+          <Plus className="w-4 h-4" /> Add Rule
+        </button>
+      </div>
+
+      {showForm && (
+        <Card>
+          <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "#E9EEF8" }}>
+            <h3 className="text-[14px] font-bold" style={{ color: "#111827" }}>New Escalation Rule</h3>
+            <button onClick={() => { setForm(EMPTY_ESC_FORM); setShowForm(false); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+          </div>
+          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-xs font-semibold" style={{ color: "#374151" }}>Rule Name *</label>
+              <input className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} placeholder="e.g. Permit Overdue → Director" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold" style={{ color: "#374151" }}>Trigger Event</label>
+              <select className="w-full px-3 py-2.5 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E3E9F6" }} value={form.trigger_event} onChange={(e) => setForm((f) => ({ ...f, trigger_event: e.target.value }))}>
+                {TRIGGER_EVENTS.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold" style={{ color: "#374151" }}>Delay (minutes)</label>
+              <input type="number" min={0} className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} value={form.delay_minutes} onChange={(e) => setForm((f) => ({ ...f, delay_minutes: Number(e.target.value) }))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold" style={{ color: "#374151" }}>Escalate To Role</label>
+              <select className="w-full px-3 py-2.5 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E3E9F6" }} value={form.escalate_to_role} onChange={(e) => setForm((f) => ({ ...f, escalate_to_role: e.target.value }))}>
+                {ROLES.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold" style={{ color: "#374151" }}>Notify Via</label>
+              <div className="flex gap-2 flex-wrap">
+                {NOTIFY_VIA_OPTIONS.map((ch) => (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() => toggleNotify(ch)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all capitalize"
+                    style={form.notify_via.includes(ch)
+                      ? { background: "#4A57B9", color: "#fff", borderColor: "#4A57B9" }
+                      : { background: "#F3F4F6", color: "#6B7280", borderColor: "#E3E9F6" }}
+                  >
+                    {ch.replace(/_/g, " ")}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-xs font-semibold" style={{ color: "#374151" }}>Description</label>
+              <input className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#E3E9F6" }} placeholder="Optional description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+            </div>
+          </div>
+          <div className="px-5 pb-5 flex gap-3">
+            <button onClick={handleSave} disabled={creating || !form.name.trim()} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-60" style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}>
+              {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Save Rule
+            </button>
+            <button onClick={() => { setForm(EMPTY_ESC_FORM); setShowForm(false); }} className="px-4 py-2 rounded-xl border text-sm font-semibold" style={{ borderColor: "#E3E9F6", color: "#374151" }}>Cancel</button>
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader title="Active Escalation Rules" sub="Rules that auto-escalate workflow items" count={rules.filter((r) => (r as EscalationRule & { is_active?: boolean }).is_active !== false).length} countColor="#4A57B9" />
+        <div className="divide-y" style={{ borderColor: "#F3F4F6" }}>
+          {isLoading ? (
+            <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin" style={{ color: "#4A57B9" }} /></div>
+          ) : rules.length === 0 ? (
+            <div className="py-12 text-center text-sm" style={{ color: "#9CA3AF" }}>No escalation rules yet. Add one above.</div>
+          ) : rules.map((rule) => (
+            <div key={rule.id} className="px-5 py-4 hover:bg-gray-50 flex items-start justify-between gap-3 group">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#EEF2FF", color: "#4A57B9" }}>
+                    {(rule.trigger_event || "—").replace(/_/g, " ")}
+                  </span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#D1FAE5", color: "#059669" }}>
+                    +{rule.delay_minutes || 0}m delay
+                  </span>
+                  {(rule.notify_via || []).map((ch: string) => (
+                    <span key={ch} className="text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize" style={{ background: "#FEF3C7", color: "#D97706" }}>{ch}</span>
+                  ))}
+                </div>
+                <div className="text-sm font-semibold" style={{ color: "#111827" }}>{rule.name}</div>
+                <div className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
+                  Escalates to: <span className="font-medium" style={{ color: "#374151" }}>{rule.escalate_to_role}</span>
+                  {rule.description && <> · {rule.description}</>}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDelete(rule.id)}
+                disabled={deletingId === rule.id}
+                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 transition-all disabled:opacity-50"
+                title="Delete rule"
+              >
+                {deletingId === rule.id
+                  ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#EF4444" }} />
+                  : <Trash2 className="w-4 h-4" style={{ color: "#EF4444" }} />}
+              </button>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────
 
-type TabId = "overview" | "cases" | "approvals" | "capas" | "resolution" | "alerts";
+type TabId = "overview" | "cases" | "approvals" | "capas" | "resolution" | "alerts" | "escalation";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "overview",    label: "Overview" },
@@ -484,6 +674,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "capas",       label: "Actions / CAPA" },
   { id: "resolution",  label: "Resolution" },
   { id: "alerts",      label: "Alerts" },
+  { id: "escalation",  label: "Escalation Rules" },
 ];
 
 export function WorkflowEnginePage() {
@@ -565,6 +756,7 @@ export function WorkflowEnginePage() {
         {(tab === "overview" || tab === "capas")      && <CAPAPanel capas={d.open_capas} />}
         {(tab === "overview" || tab === "resolution") && <ResolutionPanel resolutions={d.pending_resolutions} />}
         {(tab === "overview" || tab === "alerts")     && <AlertsPanel alerts={d.recent_alerts} />}
+        {tab === "escalation"                         && <EscalationRulesPanel />}
       </div>
     </div>
   );
