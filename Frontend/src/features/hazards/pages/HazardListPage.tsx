@@ -6,7 +6,7 @@ import {
   MapPin, Globe, Clock, Building2,
 } from "lucide-react";
 import { useListHazardsQuery, useCreateHazardMutation } from "@/features/hazards/api/hazardsApi";
-import { useGetSitesQuery, useGetZonesQuery } from "@/features/sites/api/sitesApi";
+import { useListSitesQuery, useListZonesQuery } from "@/features/sites/api/sitesApi";
 import type { Hazard } from "@/features/hazards/api/hazardsApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -702,7 +702,7 @@ function RiskControlsTab({ hazards, isLoading, refetch }: { hazards: Hazard[]; i
 // ── TAB 4: Site Mapping ───────────────────────────────────────────────────────
 
 function SiteHazardCardsSection({ hazards }: { hazards: Hazard[] }) {
-  const { data: sites = [] } = useGetSitesQuery();
+  const { data: sites = [] } = useListSitesQuery();
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
 
   const siteMap = useMemo(() => {
@@ -830,7 +830,7 @@ function SiteHazardCardsSection({ hazards }: { hazards: Hazard[] }) {
 }
 
 function ZoneDistributionSection({ hazards }: { hazards: Hazard[] }) {
-  const { data: zones = [] } = useGetZonesQuery();
+  const { data: zones = [] } = useListZonesQuery();
 
   const zoneMap = useMemo(() => {
     const map: Record<string, { name: string; type: string; riskScore: number; hazards: Hazard[] }> = {};
@@ -954,8 +954,8 @@ function UnassignedHazardsSection({ hazards }: { hazards: Hazard[] }) {
 }
 
 function SiteMappingTab({ hazards, isLoading }: { hazards: Hazard[]; isLoading: boolean }) {
-  const { isLoading: l2, refetch: r2 } = useGetSitesQuery();
-  const { isLoading: l3, refetch: r3 } = useGetZonesQuery();
+  const { isLoading: l2, refetch: r2 } = useListSitesQuery();
+  const { isLoading: l3, refetch: r3 } = useListZonesQuery();
   const loading = isLoading || l2 || l3;
   return (
     <div className="space-y-6">

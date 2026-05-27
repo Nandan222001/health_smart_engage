@@ -4,7 +4,7 @@ import {
   Loader2, RefreshCw, ShieldAlert, Building2,
 } from "lucide-react";
 import { useListHazardsQuery } from "@/features/hazards/api/hazardsApi";
-import { useGetSitesQuery, useGetZonesQuery } from "@/features/sites/api/sitesApi";
+import { useListSitesQuery, useListZonesQuery } from "@/features/sites/api/sitesApi";
 import type { Hazard } from "@/features/hazards/api/hazardsApi";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ function HeroStat({ label, value }: { label: string; value: string | number }) {
 // ── Site Hazard Cards Section ─────────────────────────────────────────────────
 
 function SiteHazardCardsSection({ hazards }: { hazards: Hazard[] }) {
-  const { data: sites = [] } = useGetSitesQuery();
+  const { data: sites = [] } = useListSitesQuery();
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
 
   const siteMap = useMemo(() => {
@@ -189,7 +189,7 @@ function SiteHazardCardsSection({ hazards }: { hazards: Hazard[] }) {
 // ── Zone Distribution Section ─────────────────────────────────────────────────
 
 function ZoneDistributionSection({ hazards }: { hazards: Hazard[] }) {
-  const { data: zones = [] } = useGetZonesQuery();
+  const { data: zones = [] } = useListZonesQuery();
 
   const zoneMap = useMemo(() => {
     const map: Record<string, { name: string; type: string; riskScore: number; hazards: Hazard[] }> = {};
@@ -332,11 +332,11 @@ function UnassignedHazardsSection({ hazards }: { hazards: Hazard[] }) {
 
 export function HazardSiteMappingPage() {
   const { data: hazards = [], isLoading: l1, refetch: r1 } = useListHazardsQuery();
-  const { isLoading: l2, refetch: r2 } = useGetSitesQuery();
-  const { isLoading: l3, refetch: r3 } = useGetZonesQuery();
+  const { isLoading: l2, refetch: r2 } = useListSitesQuery();
+  const { isLoading: l3, refetch: r3 } = useListZonesQuery();
   const isLoading = l1 || l2 || l3;
 
-  const { data: sites = [] } = useGetSitesQuery();
+  const { data: sites = [] } = useListSitesQuery();
   const sitesWithHazards = useMemo(() => {
     const siteIds = new Set(hazards.filter((h) => h.site_id).map((h) => h.site_id));
     return siteIds.size;
