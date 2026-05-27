@@ -4,6 +4,7 @@ import { useAuth } from "@/app/context/AuthContext";
 import {
   CheckCircle2,
   Circle,
+  Lock,
   Loader2,
   Building2,
   ChevronRight,
@@ -187,10 +188,17 @@ const cardStyle = { borderColor: "#E3E9F6" };
 function StepIndicator({
   currentStep,
   completedSteps,
+  onStepClick,
 }: {
   currentStep: number;
   completedSteps: number[];
+  onStepClick?: (step: number) => void;
 }) {
+  // Steps beyond the furthest completed step + 1 are locked
+  const maxReachable = completedSteps.length > 0
+    ? Math.min(Math.max(...completedSteps) + 1, 8)
+    : 1;
+
   return (
     <div className="bg-white rounded-2xl border p-5 overflow-x-auto" style={{ borderColor: "#E3E9F6" }}>
       <div className="flex items-center min-w-max gap-0">
@@ -198,6 +206,8 @@ function StepIndicator({
           const step = idx + 1;
           const isActive = step === currentStep;
           const isDone = completedSteps.includes(step);
+          const isLocked = step > maxReachable;
+          const isClickable = !isLocked && onStepClick;
 
           return (
             <div key={step} className="flex items-center">
@@ -206,17 +216,21 @@ function StepIndicator({
                   className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all"
                   style={
                     isDone
-                      ? { background: "#10B981", color: "#fff" }
+                      ? { background: "#10B981", color: "#fff", cursor: isClickable ? "pointer" : "default" }
                       : isActive
-                      ? { background: "linear-gradient(135deg, #4A57B9, #6F80E8)", color: "#fff", boxShadow: "0 4px 12px rgba(74,87,185,0.35)" }
-                      : { background: "#F3F4F6", color: "#9CA3AF" }
+                      ? { background: "linear-gradient(135deg, #4A57B9, #6F80E8)", color: "#fff", boxShadow: "0 4px 12px rgba(74,87,185,0.35)", cursor: "default" }
+                      : isLocked
+                      ? { background: "#F3F4F6", color: "#D1D5DB", cursor: "not-allowed" }
+                      : { background: "#F3F4F6", color: "#9CA3AF", cursor: isClickable ? "pointer" : "default" }
                   }
+                  onClick={() => isClickable && onStepClick(step)}
+                  title={isLocked ? "Complete previous steps first" : isDone ? `Go to step ${step}` : undefined}
                 >
-                  {isDone ? <CheckCircle2 className="w-4 h-4" /> : <span>{step}</span>}
+                  {isDone ? <CheckCircle2 className="w-4 h-4" /> : isLocked ? <Lock className="w-3.5 h-3.5" /> : <span>{step}</span>}
                 </div>
                 <span
                   className="text-[10px] font-semibold text-center w-16 leading-tight"
-                  style={{ color: isActive ? "#4A57B9" : isDone ? "#10B981" : "#9CA3AF" }}
+                  style={{ color: isActive ? "#4A57B9" : isDone ? "#10B981" : isLocked ? "#D1D5DB" : "#9CA3AF" }}
                 >
                   {label}
                 </span>
@@ -321,6 +335,7 @@ function Step1({
   const [apiToken, setApiToken] = useState("");
   const [apiStatus, setApiStatus] = useState<"idle" | "success" | "error">("idle");
   const [apiMsg, setApiMsg] = useState("");
+  const [stepError, setStepError] = useState("");
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -389,6 +404,21 @@ function Step1({
   };
 
   const handleNext = async () => {
+    // Validate required fields
+    if (!form.organizationName.trim()) {
+      setStepError("Organization name is required to proceed.");
+      return;
+    }
+    if (!form.officialEmail.trim()) {
+      setStepError("Official email is required to proceed.");
+      return;
+    }
+    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRx.test(form.officialEmail.trim())) {
+      setStepError("Please enter a valid email address (e.g. admin@company.com).");
+      return;
+    }
+    setStepError("");
     await saveStep1({
       ...form,
       employeeCount: Number(form.employeeCount) || 0,
@@ -580,6 +610,12 @@ function Step1({
         </>
       )}
 
+      {stepError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" }}>
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {stepError}
+        </div>
+      )}
       <div className="flex justify-end">
         <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleNext} disabled={saving || (active === "excel" && excelStatus === "idle" && !form.organizationName)}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -600,6 +636,7 @@ function Step2({
   onBack: () => void;
 }) {
   const [saveStep2, { isLoading }] = useSaveOrgSetupStep2Mutation();
+  const [stepError, setStepError] = useState("");
 
   const [selectedStandards, setSelectedStandards] = useState<string[]>([]);
   const [regulatoryRegion, setRegulatoryRegion] = useState("");
@@ -625,6 +662,11 @@ function Step2({
   };
 
   const handleNext = async () => {
+    if (selectedStandards.length === 0) {
+      setStepError("Please select at least one compliance standard before proceeding.");
+      return;
+    }
+    setStepError("");
     await saveStep2({
       applicableStandards: selectedStandards,
       regulatoryRegion,
@@ -781,6 +823,12 @@ function Step2({
         </div>
       </div>
 
+      {stepError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" }}>
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {stepError}
+        </div>
+      )}
       <div className="flex justify-between">
         <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={onBack}>Back</button>
         <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleNext} disabled={isLoading}>
@@ -809,6 +857,7 @@ function Step3({
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadSuccess, setUploadSuccess] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState("");
+  const [nextError, setNextError] = useState("");
 
   const [form, setForm] = useState({ name: "", type: "", address: "" });
   const [error, setError] = useState("");
@@ -961,9 +1010,26 @@ function Step3({
         )}
       </div>
 
+      {nextError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" }}>
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {nextError}
+        </div>
+      )}
       <div className="flex justify-between">
         <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={onBack}>Back</button>
-        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={onNext}>
+        <button
+          className={primaryBtnCls}
+          style={primaryBtnStyle}
+          onClick={() => {
+            if (sites.length === 0) {
+              setNextError("Please add at least one site before proceeding to the next step.");
+              return;
+            }
+            setNextError("");
+            onNext();
+          }}
+        >
           Next Step <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -988,6 +1054,7 @@ function Step4({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [hrmsImport, { isLoading: hrmsLoading }] = useHrmsImportMutation();
+  const [nextError, setNextError] = useState("");
 
   const [form, setForm] = useState({ name: "", email: "", role: "", department: "" });
   const [error, setError] = useState("");
@@ -1194,9 +1261,26 @@ function Step4({
         )}
       </div>
 
+      {nextError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" }}>
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {nextError}
+        </div>
+      )}
       <div className="flex justify-between">
         <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={onBack}>Back</button>
-        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={onNext}>
+        <button
+          className={primaryBtnCls}
+          style={primaryBtnStyle}
+          onClick={() => {
+            if (users.length === 0) {
+              setNextError("Please add at least one user before proceeding to the next step.");
+              return;
+            }
+            setNextError("");
+            onNext();
+          }}
+        >
           Next Step <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -1324,6 +1408,7 @@ function Step6({
   const { data: imports = [], isLoading: importsLoading, refetch: refetchImports } = useGetOrgSetupStep6aImportsQuery();
   const [uploadKnowledge, { isLoading: uploading }] = useUploadOrgSetupKnowledgeMutation();
   const [importData, { isLoading: importing }] = useImportOrgSetupDataMutation();
+  const [nextError, setNextError] = useState("");
 
   const docFileRef = useRef<HTMLInputElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -1559,9 +1644,26 @@ function Step6({
         </>
       )}
 
+      {nextError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" }}>
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {nextError}
+        </div>
+      )}
       <div className="flex justify-between">
         <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={onBack}>Back</button>
-        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={onNext}>
+        <button
+          className={primaryBtnCls}
+          style={primaryBtnStyle}
+          onClick={() => {
+            if (documents.length === 0 && imports.length === 0) {
+              setNextError("Please upload at least one document or import data before proceeding.");
+              return;
+            }
+            setNextError("");
+            onNext();
+          }}
+        >
           Next Step <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -1676,9 +1778,24 @@ function Step8({
   const { data: imports = [] } = useGetOrgSetupStep6aImportsQuery();
 
   const [activated, setActivated] = useState(false);
+  const [activateError, setActivateError] = useState("");
+
+  const allStepsComplete = [1, 2, 3, 4, 5, 6, 7].every((s) => completedSteps.includes(s));
 
   const handleActivate = async () => {
-    await activateOrg({ confirmed: true });
+    if (!allStepsComplete) {
+      const missing = [1, 2, 3, 4, 5, 6, 7]
+        .filter((s) => !completedSteps.includes(s))
+        .map((s) => STEP_LABELS[s - 1]);
+      setActivateError(`Please complete all steps before activating. Missing: ${missing.join(", ")}`);
+      return;
+    }
+    setActivateError("");
+    const result = await activateOrg({ confirmed: true });
+    if ("data" in result && (result.data as Record<string, unknown>)?.error) {
+      setActivateError(String((result.data as Record<string, unknown>).error));
+      return;
+    }
     setActivated(true);
   };
 
@@ -1744,13 +1861,25 @@ function Step8({
         <p className="text-sm mb-5" style={{ color: "#6B7280" }}>
           Clicking "Confirm & Activate" will finalize the organization setup and make all configured features live.
         </p>
+        {!allStepsComplete && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: "#FFFBEB", color: "#92400E", border: "1px solid #FDE68A" }}>
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            Some steps are incomplete. Please go back and finish all required steps before activating.
+          </div>
+        )}
+        {activateError && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" }}>
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            {activateError}
+          </div>
+        )}
         <div className="flex justify-between items-center flex-wrap gap-3">
           <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={onBack}>Back</button>
           <button
             className={`${primaryBtnCls} px-8 py-3 text-base`}
-            style={{ ...primaryBtnStyle, background: "linear-gradient(135deg, #059669, #10B981)" }}
+            style={{ ...primaryBtnStyle, background: allStepsComplete ? "linear-gradient(135deg, #059669, #10B981)" : "#D1D5DB" }}
             onClick={handleActivate}
-            disabled={isLoading}
+            disabled={isLoading || !allStepsComplete}
           >
             {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
             Confirm & Activate
@@ -1836,7 +1965,18 @@ export function OrgSetupWizardPage() {
       </div>
 
       {/* Step Indicator */}
-      <StepIndicator currentStep={currentStep} completedSteps={completedSteps} />
+      <StepIndicator
+        currentStep={currentStep}
+        completedSteps={completedSteps}
+        onStepClick={(step) => {
+          const maxReachable = completedSteps.length > 0
+            ? Math.min(Math.max(...completedSteps) + 1, 8)
+            : 1;
+          if (step <= maxReachable) {
+            setCurrentStep(step);
+          }
+        }}
+      />
 
       {/* Step Content */}
       {currentStep === 1 && (

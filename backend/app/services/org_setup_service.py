@@ -78,6 +78,45 @@ class OrgSetupService:
         }
         return mapping.get(rt)
 
+    def _check_prerequisite(self, tenant_id: str, required_step: int) -> dict | None:
+        """Return error dict if `required_step` is not yet complete, else None."""
+        step_names = {
+            1: "Organization Details",
+            2: "Compliance Setup",
+            3: "Sites Setup",
+            4: "Users Setup",
+            5: "Workflow Configuration",
+            6: "Knowledge & Data Import",
+            7: "AI Configuration",
+        }
+
+        def _is_complete(step: int) -> bool:
+            if step == 1:
+                return self._first(tenant_id, "step1_org_details") is not None
+            if step == 2:
+                return self._first(tenant_id, "step2_compliance") is not None
+            if step == 3:
+                return len(self.repo.list_by_type(tenant_id, MODULE, "step3_site", limit=1)) > 0
+            if step == 4:
+                return len(self.repo.list_by_type(tenant_id, MODULE, "step4_user", limit=1)) > 0
+            if step == 5:
+                return self._first(tenant_id, "step5_workflow_config") is not None
+            if step == 6:
+                has_doc = len(self.repo.list_by_type(tenant_id, MODULE, "step6_document", limit=1)) > 0
+                has_import = len(self.repo.list_by_type(tenant_id, MODULE, "step6a_import", limit=1)) > 0
+                return has_doc or has_import
+            if step == 7:
+                return self._first(tenant_id, "step7_ai_config") is not None
+            return False
+
+        if not _is_complete(required_step):
+            name = step_names.get(required_step, f"Step {required_step}")
+            return {
+                "error": f"Step {required_step} ({name}) must be completed before proceeding.",
+                "prerequisite_step": required_step,
+            }
+        return None
+
     # ── progress ─────────────────────────────────────────────────────────────
 
     def get_progress(self, user: CurrentUser) -> dict:
@@ -150,6 +189,9 @@ class OrgSetupService:
     # ── step 2: compliance ────────────────────────────────────────────────────
 
     def save_step2(self, user: CurrentUser, data: dict) -> dict:
+        err = self._check_prerequisite(user.tenant_id, 1)
+        if err:
+            return err
         record = self._upsert(user.tenant_id, "step2_compliance", data)
         return {"step": 2, "status": "saved", "record_id": record.id}
 
@@ -160,6 +202,9 @@ class OrgSetupService:
     # ── step 3: sites ─────────────────────────────────────────────────────────
 
     def create_site(self, user: CurrentUser, data: dict) -> dict:
+        err = self._check_prerequisite(user.tenant_id, 2)
+        if err:
+            return err
         record = self.repo.create(
             tenant_id=user.tenant_id,
             module=MODULE,
@@ -222,6 +267,9 @@ class OrgSetupService:
             self.db.flush()
 
     def create_user(self, user: CurrentUser, data: dict) -> dict:
+        err = self._check_prerequisite(user.tenant_id, 3)
+        if err:
+            return err
         record = self.repo.create(
             tenant_id=user.tenant_id,
             module=MODULE,
@@ -257,6 +305,9 @@ class OrgSetupService:
     # ── step 5: workflow config ───────────────────────────────────────────────
 
     def save_step5(self, user: CurrentUser, data: dict) -> dict:
+        err = self._check_prerequisite(user.tenant_id, 4)
+        if err:
+            return err
         record = self._upsert(user.tenant_id, "step5_workflow_config", data)
         return {"step": 5, "status": "saved", "record_id": record.id}
 
@@ -267,6 +318,9 @@ class OrgSetupService:
     # ── step 6: knowledge upload ──────────────────────────────────────────────
 
     def upload_document(self, user: CurrentUser, data: dict) -> dict:
+        err = self._check_prerequisite(user.tenant_id, 5)
+        if err:
+            return err
         record = self.repo.create(
             tenant_id=user.tenant_id,
             module=MODULE,
@@ -286,6 +340,9 @@ class OrgSetupService:
     # ── step 6a: data import ──────────────────────────────────────────────────
 
     def import_data(self, user: CurrentUser, data: dict) -> dict:
+        err = self._check_prerequisite(user.tenant_id, 5)
+        if err:
+            return err
         record = self.repo.create(
             tenant_id=user.tenant_id,
             module=MODULE,
@@ -305,6 +362,9 @@ class OrgSetupService:
     # ── step 7: ai config ─────────────────────────────────────────────────────
 
     def save_step7(self, user: CurrentUser, data: dict) -> dict:
+        err = self._check_prerequisite(user.tenant_id, 6)
+        if err:
+            return err
         record = self._upsert(user.tenant_id, "step7_ai_config", data)
         return {"step": 7, "status": "saved", "record_id": record.id}
 
@@ -317,6 +377,15 @@ class OrgSetupService:
     def activate(self, user: CurrentUser, data: dict) -> dict:
         if not data.get("confirmed", False):
             return {"error": "Activation requires confirmed=true"}
+
+        # Verify all steps 1–7 are complete before activating
+        for step in range(1, 8):
+            err = self._check_prerequisite(user.tenant_id, step)
+            if err:
+                return {
+                    "error": f"Cannot activate: {err['error']}",
+                    "prerequisite_step": err["prerequisite_step"],
+                }
 
         # Persist activation record
         self._upsert(
