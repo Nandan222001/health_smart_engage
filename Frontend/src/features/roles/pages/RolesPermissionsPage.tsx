@@ -9,7 +9,7 @@ import {
   useCreateRoleMutation,
   useDeleteRoleMutation,
 } from "@/features/superadmin/api/adminApi";
-import { useGetSitesQuery } from "@/features/sites/api/sitesApi";
+import { useListSitesQuery } from "@/features/sites/api/sitesApi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -686,7 +686,7 @@ export function RolesPermissionsPage() {
 
   const { data: roles = [], isLoading: rolesLoading } = useListRolesQuery();
   const { data: permissions = [], isLoading: permsLoading } = useListPermissionsQuery();
-  const { data: sites = [] } = useGetSitesQuery();
+  const { data: sites = [] } = useListSitesQuery();
   const [createRole, { isLoading: creating }] = useCreateRoleMutation();
   const [deleteRole] = useDeleteRoleMutation();
 
