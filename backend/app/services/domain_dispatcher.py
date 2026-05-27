@@ -124,6 +124,36 @@ class DomainDispatcher:
             return {"id": res.id, "status": res.status}
 
         # Foundation Commands
+        if operation == "foundation_org_nodes_create":
+            res = svc["foundation"].create_organisation_node(user, data)
+            return {"id": res.id}
+        if operation == "foundation_org_nodes_update":
+            res = svc["foundation"].update_organisation_node(user, path_params.get("nodeId"), data)
+            return {"id": res.id}
+        if operation == "foundation_org_nodes_delete":
+            svc["foundation"].delete_organisation_node(user, path_params.get("nodeId"))
+            return {"deleted": True, "id": path_params.get("nodeId")}
+
+        if operation == "foundation_users_create":
+            res = svc["foundation"].invite_user(user, data)
+            return {"id": res.id, "status": res.status}
+        if operation == "foundation_users_update":
+            res = svc["foundation"].update_user(user, path_params.get("userId"), data)
+            return {"id": res.id}
+        if operation == "foundation_users_delete":
+            svc["foundation"].delete_user(user, path_params.get("userId"))
+            return {"deleted": True, "id": path_params.get("userId")}
+
+        if operation == "foundation_roles_create":
+            res = svc["foundation"].create_role(user, data)
+            return {"id": res.id}
+        if operation == "foundation_roles_update":
+            res = svc["foundation"].update_role(user, path_params.get("roleId"), data)
+            return {"id": res.id}
+        if operation == "foundation_roles_delete":
+            svc["foundation"].delete_role(user, path_params.get("roleId"))
+            return {"deleted": True, "id": path_params.get("roleId")}
+
         if operation == "admin_roles_delete":
             from app.models.auth import Role
             from sqlalchemy import select
@@ -850,6 +880,28 @@ class DomainDispatcher:
         if operation == "admin_roles_list":
             items = svc["foundation"].list_roles(user)
             return {"items": [_to_dict(i) for i in items]}
+
+        # Foundation Queries
+        if operation == "foundation_org_nodes_list":
+            items = svc["foundation"].list_organisation_nodes(user)
+            return {"items": [_to_dict(i) for i in items]}
+        if operation == "foundation_org_nodes_get":
+            res = svc["foundation"].get_organisation_node(user, path_params.get("nodeId"))
+            return _to_dict(res)
+
+        if operation == "foundation_users_list":
+            items = svc["foundation"].list_users(user)
+            return {"items": [_to_dict(i) for i in items]}
+        if operation == "foundation_users_get":
+            res = svc["foundation"].get_user(user, path_params.get("userId"))
+            return _to_dict(res)
+
+        if operation == "foundation_roles_list":
+            items = svc["foundation"].list_roles(user)
+            return {"items": [_to_dict(i) for i in items]}
+        if operation == "foundation_roles_get":
+            res = svc["foundation"].get_role(user, path_params.get("roleId"))
+            return _to_dict(res)
 
         # Dashboard Queries
         if operation == "dashboard_executive_safety":
@@ -2260,5 +2312,8 @@ class DomainDispatcher:
                 "closed_corrective_actions": closed_ca,
                 "trir": round((total * 200000) / max(total * 2000, 1), 2),
             }
+
+        if operation == "incidents_reports_get":
+            return svc["compliance"].get_incident_reports(user)
 
         return None
