@@ -4,7 +4,7 @@ import {
   MapPin, Layers, BarChart3, Shield, Globe, Clock, Filter,
 } from "lucide-react";
 import { useListHazardsQuery } from "@/features/hazards/api/hazardsApi";
-import { useGetSitesQuery, useGetZonesQuery } from "@/features/sites/api/sitesApi";
+import { useListSitesQuery, useListZonesQuery } from "@/features/sites/api/sitesApi";
 import type { Hazard } from "@/features/hazards/api/hazardsApi";
 
 // ─── colour maps ───────────────────────────────────────────────────────────────
@@ -380,8 +380,8 @@ function SiteMappingSection({ hazards, sitesLoading, zonesLoading }: {
   sitesLoading: boolean;
   zonesLoading: boolean;
 }) {
-  const { data: sites = [] } = useGetSitesQuery();
-  const { data: zones  = [] } = useGetZonesQuery();
+  const { data: sites = [] } = useListSitesQuery();
+  const { data: zones  = [] } = useListZonesQuery();
   const [selectedSite, setSelectedSite] = useState<string | null>(null);
 
   const siteMap = useMemo(() => {
@@ -606,8 +606,8 @@ function SiteMappingSection({ hazards, sitesLoading, zonesLoading }: {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export function HazardRegisterPage() {
   const { data: hazards = [], isLoading: hLoading } = useListHazardsQuery();
-  const { isLoading: sitesLoading } = useGetSitesQuery();
-  const { isLoading: zonesLoading } = useGetZonesQuery();
+  const { isLoading: sitesLoading } = useListSitesQuery();
+  const { isLoading: zonesLoading } = useListZonesQuery();
 
   const totalOpen       = hazards.filter((h) => h.status === "open").length;
   const totalMitigated  = hazards.filter((h) => h.status === "mitigated").length;
