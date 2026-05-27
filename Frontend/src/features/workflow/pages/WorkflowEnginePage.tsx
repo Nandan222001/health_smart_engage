@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router";
 import {
   AlertTriangle, Bell, GitBranch, UserCheck, ClipboardList,
   CheckCircle2, Database, ChevronRight, Clock, ArrowUpRight,
-  TrendingUp, Zap, XCircle, AlertCircle, Play, Plus, Trash2, Loader2, X,
+  TrendingUp, Zap, XCircle, AlertCircle, Play, Plus, Trash2, Loader2, X, Settings,
 } from "lucide-react";
 import { useGetWorkflowDashboardQuery } from "@/features/workflow/api/workflowEngineApi";
 import {
@@ -678,7 +679,24 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 export function WorkflowEnginePage() {
-  const [tab, setTab] = useState<TabId>("overview");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
+  const urlTab = searchParams.get("tab") as TabId;
+  
+  const [tab, setTab] = useState<TabId>(urlTab && TABS.some(t => t.id === urlTab) ? urlTab : "overview");
+
+  useEffect(() => {
+    if (urlTab && TABS.some(t => t.id === urlTab) && urlTab !== tab) {
+      setTab(urlTab);
+    }
+  }, [urlTab]);
+
+  const handleTabChange = (newTab: TabId) => {
+    setTab(newTab);
+    navigate(`?tab=${newTab}`, { replace: true });
+  };
+
   const { data: raw } = useGetWorkflowDashboardQuery();
   const d = raw ?? MOCK_DASHBOARD;
 
@@ -732,7 +750,7 @@ export function WorkflowEnginePage() {
           return (
             <button
               key={id}
-              onClick={() => setTab(id)}
+              onClick={() => handleTabChange(id)}
               className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
               style={tab === id
                 ? { background: "#4A57B9", color: "#fff", boxShadow: "0 4px 10px rgba(74,87,185,0.25)" }

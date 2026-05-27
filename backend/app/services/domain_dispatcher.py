@@ -293,6 +293,18 @@ class DomainDispatcher:
         if operation == "capas_approve_closure":
             res = svc["compliance"].approve_capa_closure(user, path_params.get("capaId"), data)
             return {"id": res.id, "status": res.status}
+        if operation == "hazards_create":
+            import uuid
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            hazard_id = str(uuid.uuid4())
+            payload = {**data, "id": hazard_id, "status": data.get("status", "open"), "reported_by": user.user_id}
+            repo.create(tenant_id=user.tenant_id, module="hazards", record_type="hazard", payload=payload, status="active")
+            return {"id": hazard_id, "status": "accepted"}
+
+        if operation == "incidents_create":
+            res = svc["compliance"].create_incident(user, data)
+            return {"id": res.id, "status": res.status}
         if operation == "incidents_classify":
             res = svc["compliance"].classify_incident(user, path_params.get("incidentId"), data)
             return {"id": res.id, "status": res.status}
@@ -866,6 +878,93 @@ class DomainDispatcher:
             return svc["dashboards"].get_ai_intelligence(user)
         if operation == "dashboard_data_quality":
             return svc["dashboards"].get_data_quality(user)
+
+        # Hazard Queries
+        if operation == "hazards_list":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            records = repo.list_by_type(user.tenant_id, module="hazards", record_type="hazard", limit=500)
+            return {"items": [r.payload for r in records]}
+
+        # Violation Queries
+        if operation == "violations_list":
+            # Mock violations data as requested for Org Dashboard
+            return {
+                "items": [
+                    {
+                        "Violation_ID": "V-1001",
+                        "Violation_Type": "PPE Missing",
+                        "Zone_ID": "Z-ALPHA",
+                        "Site_ID": "S-NORTH",
+                        "Severity": "High",
+                        "PPE_Missing": "Helmet",
+                        "Worker_ID": "W-442",
+                        "Detected_At": "2026-05-26T10:30:00Z",
+                        "Status": "Open",
+                        "Assigned_To": "Safety Manager",
+                    },
+                    {
+                        "Violation_ID": "V-1002",
+                        "Violation_Type": "Unauthorized Access",
+                        "Zone_ID": "Z-BETA",
+                        "Site_ID": "S-SOUTH",
+                        "Severity": "Critical",
+                        "Worker_ID": "W-501",
+                        "Detected_At": "2026-05-26T11:45:00Z",
+                        "Status": "In Progress",
+                        "Assigned_To": "Security Head",
+                    }
+                ]
+            }
+        
+        if operation == "violations_get":
+            return {
+                "Violation_ID": path_params.get("violationId"),
+                "Violation_Type": "PPE Missing",
+                "Severity": "High",
+                "Status": "Open",
+            }
+
+        # Incident Queries
+        if operation == "incidents_list":
+            from app.repositories.incident_repository import IncidentRepository
+            repo = IncidentRepository(db)
+            items = repo.list_by_tenant(user.tenant_id)
+            return {
+                "items": [
+                    {
+                        "id": i.id,
+                        "title": i.incident_ref,
+                        "type": i.incident_type,
+                        "severity": i.severity,
+                        "status": i.status,
+                        "reported_by": i.reporter_user_id,
+                        "occurred_at": i.created_at.isoformat() if i.created_at else None,
+                        "description": i.description,
+                        "created_at": i.created_at.isoformat() if i.created_at else None,
+                    }
+                    for i in items
+                ]
+            }
+
+        if operation == "investigations_list":
+            from app.repositories.incident_repository import IncidentRepository
+            repo = IncidentRepository(db)
+            items = repo.list_investigations(user.tenant_id)
+            return {
+                "items": [
+                    {
+                        "id": i.id,
+                        "incident_id": i.incident_id,
+                        "lead_investigator": i.lead_user_id,
+                        "rca_method": i.rca_method,
+                        "findings": i.findings or {},
+                        "status": i.status,
+                        "created_at": i.created_at.isoformat() if i.created_at else None,
+                    }
+                    for i in items
+                ]
+            }
 
         # Compliance Queries
         if operation == "compliance_dashboard_get":

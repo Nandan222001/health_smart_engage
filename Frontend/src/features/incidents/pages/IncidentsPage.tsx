@@ -137,8 +137,8 @@ function EmptyState({ message }: { message: string }) {
   return (
     <tr>
       <td colSpan={99} className="text-center py-12">
-        <AlertTriangle className="w-8 h-8 mx-auto mb-2" style={{ color: "#D1D5DB" }} />
-        <p className="text-sm" style={{ color: "#6B7280" }}>
+        <AlertTriangle className="w-10 h-10 mx-auto mb-3" style={{ color: "#D1D5DB" }} />
+        <p className="text-sm font-semibold" style={{ color: "#374151" }}>
           {message}
         </p>
       </td>
@@ -565,7 +565,7 @@ function NearMissesTab() {
             <h3 className="font-semibold text-sm" style={{ color: "#111827" }}>
               Report Near Miss
             </h3>
-            <button onClick={() => setShowForm(false)}>
+            <button onClick={setShowForm.bind(null, false)}>
               <X className="w-4 h-4" style={{ color: "#6B7280" }} />
             </button>
           </div>
@@ -1205,7 +1205,13 @@ function AnalyticsTab() {
   }
 
   if (!analytics) {
-    return <EmptyState message="Analytics unavailable" />;
+    return (
+        <table className="w-full">
+            <tbody>
+                <EmptyState message="Analytics unavailable" />
+            </tbody>
+        </table>
+    );
   }
 
   const kpis = [

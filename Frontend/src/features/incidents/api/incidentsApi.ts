@@ -6,10 +6,12 @@ export interface Incident {
   title: string;
   description?: string;
   type: string;
-  incident_type: string;
+  incident_type?: string;
   severity: string;
   status: string;
   is_confidential?: boolean;
+  site_id?: string;
+  zone_id?: string;
   reported_by: string;
   occurred_at: string;
 }
@@ -17,10 +19,12 @@ export interface Incident {
 export interface Investigation {
   id: string;
   incident_id: string;
-  lead_user_id: string;
+  lead_user_id?: string;
+  lead_investigator?: string;
   rca_method: string;
   findings?: Record<string, unknown>;
   status: string;
+  created_at?: string;
 }
 
 export interface RcaRecord {
@@ -60,6 +64,16 @@ function toArray<T>(data: ListResponse<T>): T[] {
   return data?.items ?? [];
 }
 
+export interface CreateIncidentInput {
+  title: string;
+  type: string;
+  severity: string;
+  description: string;
+  incident_type?: string;
+  location_id?: string;
+  is_confidential?: boolean;
+}
+
 export const incidentsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     listIncidents: builder.query<Incident[], Record<string, string> | void>({
@@ -71,13 +85,7 @@ export const incidentsApi = baseApi.injectEndpoints({
       providesTags: ["Incident"],
     }),
 
-    createIncident: builder.mutation<{ id: string; ref: string; status: string }, {
-      description: string;
-      incident_type: string;
-      severity: string;
-      location_id?: string;
-      is_confidential?: boolean;
-    }>({
+    createIncident: builder.mutation<{ id: string; ref?: string; status: string }, CreateIncidentInput>({
       query: (body) => ({ url: "/incidents", method: "POST", body }),
       invalidatesTags: ["Incident"],
     }),
@@ -133,8 +141,8 @@ export const incidentsApi = baseApi.injectEndpoints({
       invalidatesTags: ["Incident"],
     }),
 
-    listInvestigations: builder.query<Investigation[], string>({
-      query: (incidentId) => `/incidents/${incidentId}/investigations`,
+    listInvestigations: builder.query<Investigation[], string | void>({
+      query: (incidentId) => incidentId ? `/incidents/${incidentId}/investigations` : "/investigations",
       transformResponse: (raw: ListResponse<Investigation>) => toArray(raw),
       providesTags: ["Incident"],
     }),

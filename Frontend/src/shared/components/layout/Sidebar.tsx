@@ -135,55 +135,55 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   "Vendors": {
     icon: Building2,
     items: [
-      { name: "Vendor List",      path: "/vendors" },
-      { name: "Vendor Compliance",path: "/vendors?tab=compliance" },
-      { name: "Certifications",   path: "/vendors?tab=certifications" },
-      { name: "Vendor Risk Score",path: "/vendors?tab=risk" },
+      { name: "Vendor List",       path: "/vendors" },
+      { name: "Vendor Compliance", path: "/vendor-compliance" },
+      { name: "Certifications",    path: "/vendor-certifications" },
+      { name: "Vendor Risk Score", path: "/vendor-risk-score" },
     ],
   },
   "Assets": {
     icon: FolderClosed,
     items: [
-      { name: "Asset Register",        path: "/equipment-certification" },
-      { name: "Asset Categories",      path: "/equipment-certification?tab=categories" },
-      { name: "Maintenance Logs",      path: "/equipment-certification?tab=maintenance" },
-      { name: "Equipment Inspections", path: "/equipment-certification?tab=inspections" },
-      { name: "Asset Risk Mapping",    path: "/equipment-certification?tab=risk" },
+      { name: "Asset Register",        path: "/asset-register" },
+      { name: "Asset Categories",      path: "/asset-categories" },
+      { name: "Maintenance Logs",      path: "/maintenance-logs" },
+      { name: "Equipment Inspections", path: "/equipment-inspections" },
+      { name: "Asset Risk Mapping",    path: "/asset-risk-mapping" },
     ],
   },
   "Compliance": {
     icon: ClipboardCheck,
     items: [
-      { name: "Compliance Dashboard", path: "/compliance" },
-      { name: "Standards & Policies", path: "/policies" },
-      { name: "Audit Management",     path: "/audits" },
-      { name: "Inspections",          path: "/audits?tab=inspections" },
-      { name: "CAPA",                 path: "/audits?tab=capa" },
-      { name: "Regulatory Tracking",  path: "/compliance?tab=regulatory" },
-      { name: "Documentation",        path: "/compliance?tab=documentation" },
+      { name: "Compliance Dashboard", path: "/compliance-dashboard" },
+      { name: "Standards & Policies", path: "/standards-policies" },
+      { name: "Audit Management",     path: "/audit-management" },
+      { name: "Inspections",          path: "/inspections" },
+      { name: "CAPA",                 path: "/capa" },
+      { name: "Regulatory Tracking",  path: "/regulatory-tracking" },
+      { name: "Documentation",        path: "/documentation" },
     ],
   },
   "Risk": {
     icon: ShieldAlert,
     items: [
-      { name: "Risk Assessments",   path: "/root-cause-analysis" },
-      { name: "Hazard Register",    path: "/hazards" },
+      { name: "Risk Assessments",   path: "/risk-assessments" },
+      { name: "Hazard Register",    path: "/hazard-list" },
       { name: "Near Miss Reports",  path: "/near-miss" },
       { name: "Incident Management",path: "/incidents" },
-      { name: "Risk Matrix",        path: "/root-cause-analysis?tab=matrix" },
-      { name: "High-Risk Areas",    path: "/root-cause-analysis?tab=high-risk" },
-      { name: "Predictive Risk AI", path: "/ai-intelligence" },
+      { name: "Risk Matrix",        path: "/risk-matrix" },
+      { name: "High-Risk Areas",    path: "/high-risk-areas" },
+      { name: "Predictive Risk AI", path: "/predictive-risk-ai" },
     ],
   },
   "Work": {
     icon: Briefcase,
     items: [
       { name: "Permit To Work (PTW)",path: "/permits" },
-      { name: "Permit Requests",    path: "/permits?tab=requests" },
-      { name: "Approval Queue",     path: "/permits?tab=approval" },
-      { name: "Active Work Permits",path: "/permits?tab=active" },
-      { name: "Workflow Management",path: "/workflow" },
-      { name: "Escalation Rules",   path: "/workflow?tab=escalation" },
+      { name: "Permit Requests",    path: "/permit-requests" },
+      { name: "Approval Queue",     path: "/approval-queue" },
+      { name: "Active Work Permits",path: "/active-work-permits" },
+      { name: "Workflow Management",path: "/workflow-management?tab=config" },
+      { name: "Escalation Rules",   path: "/workflow-management?tab=escalation" },
       { name: "Site Operations",    path: "/sites-zones" },
     ],
   },
@@ -191,13 +191,9 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
     icon: AlertTriangle,
     items: [
       { name: "Incident Reports",    path: "/incidents" },
-      { name: "Near Misses",         path: "/near-miss" },
-      { name: "Unsafe Acts",         path: "/violations" },
-      { name: "Unsafe Conditions",   path: "/violations?tab=conditions" },
-      { name: "Investigation",       path: "/incidents?tab=investigation" },
-      { name: "Root Cause Analysis", path: "/root-cause-analysis" },
-      { name: "Corrective Actions",  path: "/actions" },
-      { name: "Incident Analytics",  path: "/analytics" },
+      { name: "Incident Severity",   path: "/incident-severity" },
+      { name: "Investigation Status",path: "/investigation-status" },
+      { name: "Root Causes",         path: "/root-causes" },
     ],
   },
   "Intelligence": {
@@ -273,7 +269,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [opsExpanded, setOpsExpanded] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-  const orgLabel = (user?.companyName || user?.orgCode || "").trim();
+  const orgLabel = user?.companyName?.trim() || "";
 
   const isOrgAdmin = !isSuperAdmin && user?.role === "Admin";
 
