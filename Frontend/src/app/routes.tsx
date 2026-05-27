@@ -15,6 +15,12 @@ import { VendorCertificationsPage } from "@/features/vendors/pages/VendorCertifi
 import { VendorRiskScorePage } from "@/features/vendors/pages/VendorRiskScorePage";
 import { ActionsPage } from "@/features/actions/pages/ActionsPage";
 import { AnalyticsPage } from "@/features/analytics/pages/AnalyticsPage";
+import { KpiReportsPage } from "@/features/analytics/pages/KpiReportsPage";
+import { IncidentReportsPage } from "@/features/analytics/pages/IncidentReportsPage";
+import { AuditReportsPage } from "@/features/analytics/pages/AuditReportsPage";
+import { ComplianceReportsPage } from "@/features/analytics/pages/ComplianceReportsPage";
+import { RiskReportsPage } from "@/features/analytics/pages/RiskReportsPage";
+import { WorkforceReportsPage } from "@/features/analytics/pages/WorkforceReportsPage";
 import { AIAgentPage } from "@/features/ai-agent/pages/AIAgentPage";
 import { CompliancePage } from "@/features/compliance/pages/CompliancePage";
 import { ChecklistPage } from "@/features/checklists/pages/ChecklistPage";
@@ -44,6 +50,8 @@ import { OnboardingPage } from "@/features/auth/pages/OnboardingPage";
 import { OrgInvitationsPage } from "@/features/admin/pages/OrgInvitationsPage";
 import { DepartmentsPage } from "@/features/admin/pages/DepartmentsPage";
 import { HSEManagersPage } from "@/features/admin/pages/HSEManagersPage";
+import { ManagementReportsPage } from "@/features/admin/pages/ManagementReportsPage";
+import { OrganizationSettingsPage } from "@/features/admin/pages/OrganizationSettingsPage";
 // Super Admin
 import { SuperAdminDashboard } from "@/features/superadmin/pages/SuperAdminDashboard";
 import { TenantListPage } from "@/features/superadmin/pages/TenantListPage";
@@ -61,6 +69,11 @@ import { PlatformAuditLogsPage } from "@/features/superadmin/pages/PlatformAudit
 import { SuperAdminUsersPage } from "@/features/superadmin/pages/SuperAdminUsersPage";
 // AI Intelligence (Layer 4)
 import { AIIntelligencePage } from "@/features/ai-intelligence/pages/AIIntelligencePage";
+import { AIDashboardPage } from "@/features/ai-intelligence/pages/AIDashboardPage";
+import { ComplianceIntelligencePage } from "@/features/compliance/pages/ComplianceIntelligencePage";
+import { SafetyRecommendationsPage } from "@/features/ai-intelligence/pages/SafetyRecommendationsPage";
+import { TrendAnalysisPage } from "@/features/ai-intelligence/pages/TrendAnalysisPage";
+import { BenchmarkingPage } from "@/features/ai-intelligence/pages/BenchmarkingPage";
 // Decision & Workflow Engine (Layer 5)
 import { WorkflowEnginePage } from "@/features/workflow/pages/WorkflowEnginePage";
 import { WorkflowManagementPage } from "@/features/workflow/pages/WorkflowManagementPage";
@@ -71,6 +84,7 @@ import { ContinuousLearningPage } from "@/features/learning/pages/ContinuousLear
 // New feature pages
 import { PermitsPage } from "@/features/permits/pages/PermitsPage";
 import { IncidentsPage } from "@/features/incidents/pages/IncidentsPage";
+import AdminIncidentReportsPage from "@/features/incidents/pages/AdminIncidentReportsPage";
 import { IncidentSeverityPage } from "@/features/incidents/pages/IncidentSeverityPage";
 import { InvestigationStatusPage } from "@/features/incidents/pages/InvestigationStatusPage";
 import { RootCausesPage } from "@/features/incidents/pages/RootCausesPage";
@@ -82,6 +96,7 @@ import { HazardListPage } from "@/features/hazards/pages/HazardListPage";
 import { RiskMatrixPage } from "@/features/risk/pages/RiskMatrixPage";
 import { HighRiskAreasPage } from "@/features/risk/pages/HighRiskAreasPage";
 import { PredictiveRiskAIPage } from "@/features/risk/pages/PredictiveRiskAIPage";
+import { RiskPredictionsPage } from "@/features/risk/pages/RiskPredictionsPage";
 import { ApprovalQueuePage } from "@/features/permits/pages/ApprovalQueuePage";
 import { PermitRequestsPage } from "@/features/permits/pages/PermitRequestsPage";
 import { ActiveWorkPermitsPage } from "@/features/permits/pages/ActiveWorkPermitsPage";
@@ -91,6 +106,11 @@ import { KPIsPage } from "@/features/kpis/pages/KPIsPage";
 import { ActivitiesPage } from "@/features/activities/pages/ActivitiesPage";
 import { ShiftDashboardPage } from "@/features/shift-management/pages/ShiftDashboardPage";
 import { DataManagementPage } from "@/features/data-management/pages/DataManagementPage";
+import { CSVImportPage } from "@/features/data-management/pages/CSVImportPage";
+import { ImportHistoryPage } from "@/features/data-management/pages/ImportHistoryPage";
+import { ValidationLogsPage } from "@/features/data-management/pages/ValidationLogsPage";
+import { SyncStatusPage } from "@/features/data-management/pages/SyncStatusPage";
+import { ApiIntegrationsPage } from "@/features/integrations/pages/ApiIntegrationsPage";
 import { HelpPage } from "@/features/help/pages/HelpPage";
 import { WorkersPage } from "@/features/workers/pages/WorkersPage";
 import { SupervisorsPage } from "@/features/supervisors/pages/SupervisorsPage";
@@ -255,6 +275,11 @@ export const router = createBrowserRouter([
       { path: "vendor-certifications", Component: VendorCertificationsPage },
       { path: "vendor-risk-score",     Component: VendorRiskScorePage },
       { path: "analytics", Component: AnalyticsRoute },
+      { path: "kpi-reports", Component: KpiReportsPage },
+      { path: "audit-reports", Component: AuditReportsPage },
+      { path: "compliance-reports", Component: ComplianceReportsPage },
+      { path: "risk-reports", Component: RiskReportsPage },
+      { path: "workforce-reports", Component: WorkforceReportsPage },
       { path: "ai-agent", Component: AIAgentRoute },
       { path: "billing", Component: BillingRoute },
       { path: "notifications", Component: NotificationsRoute },
@@ -280,6 +305,8 @@ export const router = createBrowserRouter([
       // New operational pages
       { path: "permits", Component: PermitsPage },
       { path: "incidents", Component: IncidentsPage },
+      { path: "incident-management", Component: AdminIncidentReportsPage },
+      { path: "incident-reports", Component: IncidentReportsPage },
       { path: "incident-severity",    Component: IncidentSeverityPage },
       { path: "investigation-status", Component: InvestigationStatusPage },
       { path: "root-causes",          Component: RootCausesPage },
@@ -290,7 +317,8 @@ export const router = createBrowserRouter([
       { path: "hazard-list",    Component: HazardListPage },
       { path: "risk-matrix",    Component: RiskMatrixPage },
       { path: "high-risk-areas",    Component: HighRiskAreasPage },
-      { path: "predictive-risk-ai", Component: PredictiveRiskAIPage },
+      { path: "predictive-risk-ai",  Component: PredictiveRiskAIPage },
+      { path: "risk-predictions",    Component: RiskPredictionsPage },
       { path: "approval-queue",    Component: ApprovalQueuePage },
       { path: "permit-requests",   Component: PermitRequestsPage },
       { path: "active-work-permits", Component: ActiveWorkPermitsPage },
@@ -299,6 +327,8 @@ export const router = createBrowserRouter([
       { path: "admin/invitations", Component: OrgInvitationsPage },
       { path: "admin/departments", Component: DepartmentsPage },
       { path: "admin/hse-managers", Component: HSEManagersPage },
+      { path: "admin/management-reports", Component: ManagementReportsPage },
+      { path: "admin/organization-settings", Component: OrganizationSettingsPage },
       { path: "org-setup", Component: OrgSetupWizardPage },
       { path: "overview", Component: OverviewPage },
       { path: "kpis", Component: KPIsPage },
@@ -310,6 +340,11 @@ export const router = createBrowserRouter([
       { path: "auditors", Component: AuditorsPage },
       { path: "contractors", Component: ContractorsPage },
       { path: "data-management", Component: DataManagementPage },
+      { path: "csv-import",      Component: CSVImportPage      },
+      { path: "import-history",  Component: ImportHistoryPage  },
+      { path: "validation-logs", Component: ValidationLogsPage },
+      { path: "sync-status",     Component: SyncStatusPage     },
+      { path: "api-integrations", Component: ApiIntegrationsPage },
       { path: "help", Component: HelpPage },
       // Super Admin pages
       { path: "superadmin", Component: SuperAdminDashboard },
@@ -326,7 +361,12 @@ export const router = createBrowserRouter([
       { path: "superadmin/audit-logs", Component: PlatformAuditLogsPage },
       { path: "superadmin/tenants/:tenantId", Component: TenantDetailPage },
       // AI Intelligence Layer 4
+      { path: "ai-dashboard", Component: AIDashboardPage },
       { path: "ai-intelligence", Component: AIIntelligencePage },
+      { path: "compliance-intelligence",   Component: ComplianceIntelligencePage },
+      { path: "safety-recommendations",   Component: SafetyRecommendationsPage },
+      { path: "trend-analysis",           Component: TrendAnalysisPage },
+      { path: "benchmarking",             Component: BenchmarkingPage },
       // Decision & Workflow Engine Layer 5
       { path: "workflow", Component: WorkflowEnginePage },
       { path: "workflow-management", Component: WorkflowManagementPage },

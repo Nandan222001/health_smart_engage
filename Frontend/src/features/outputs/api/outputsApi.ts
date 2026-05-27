@@ -26,7 +26,7 @@ export interface OperationalDashboard {
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 
-export type ReportType = "compliance" | "audit" | "incident" | "capa" | "kpi" | "risk" | "training";
+export type ReportType = "compliance" | "audit" | "incident" | "capa" | "kpi" | "risk" | "training" | "management" | "ai_intelligence";
 export type ReportStatus = "ready" | "generating" | "failed" | "scheduled";
 export type ReportFormat = "pdf" | "excel" | "csv";
 

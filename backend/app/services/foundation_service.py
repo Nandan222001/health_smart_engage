@@ -43,9 +43,29 @@ class FoundationService:
     def update_organisation_node(self, user: CurrentUser, node_id: str, data: dict) -> OrganisationNode:
         return self.repo.update(OrganisationNode, user.tenant_id, node_id, data)
 
+    def get_organisation_node(self, user: CurrentUser, node_id: str) -> OrganisationNode:
+        return self.repo.get(OrganisationNode, user.tenant_id, node_id)
+
+    def delete_organisation_node(self, user: CurrentUser, node_id: str) -> None:
+        self.repo.delete(OrganisationNode, user.tenant_id, node_id)
+
     # Users
     def list_users(self, user: CurrentUser, filters: dict = None) -> list[User]:
         return self.repo.list(User, user.tenant_id, filters)
+
+    def get_user(self, user: CurrentUser, user_id: str) -> User:
+        return self.repo.get(User, user.tenant_id, user_id)
+
+    def create_user(self, user: CurrentUser, data: dict) -> User:
+        if "id" not in data:
+            data["id"] = str(uuid.uuid4())
+        return self.repo.create(User, user.tenant_id, data)
+
+    def update_user(self, user: CurrentUser, user_id: str, data: dict) -> User:
+        return self.repo.update(User, user.tenant_id, user_id, data)
+
+    def delete_user(self, user: CurrentUser, user_id: str) -> None:
+        self.repo.delete(User, user.tenant_id, user_id)
 
     def invite_user(self, user: CurrentUser, data: dict) -> User:
         if not data.get("email"):
@@ -97,3 +117,9 @@ class FoundationService:
 
     def update_role(self, user: CurrentUser, role_id: str, data: dict) -> Role:
         return self.repo.update(Role, user.tenant_id, role_id, data)
+
+    def get_role(self, user: CurrentUser, role_id: str) -> Role:
+        return self.repo.get(Role, user.tenant_id, role_id)
+
+    def delete_role(self, user: CurrentUser, role_id: str) -> None:
+        self.repo.delete(Role, user.tenant_id, role_id)

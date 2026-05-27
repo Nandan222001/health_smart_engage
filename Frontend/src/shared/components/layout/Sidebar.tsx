@@ -169,10 +169,11 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
       { name: "Risk Assessments",   path: "/risk-assessments" },
       { name: "Hazard Register",    path: "/hazard-list" },
       { name: "Near Miss Reports",  path: "/near-miss" },
-      { name: "Incident Management",path: "/incidents" },
+      { name: "Incident Management",path: "/incident-management" },
       { name: "Risk Matrix",        path: "/risk-matrix" },
       { name: "High-Risk Areas",    path: "/high-risk-areas" },
       { name: "Predictive Risk AI", path: "/predictive-risk-ai" },
+      { name: "Risk Predictions",   path: "/risk-predictions" },
     ],
   },
   "Work": {
@@ -190,7 +191,7 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   "Incidents": {
     icon: AlertTriangle,
     items: [
-      { name: "Incident Reports",    path: "/incidents" },
+      { name: "Incident Management", path: "/incident-management" },
       { name: "Incident Severity",   path: "/incident-severity" },
       { name: "Investigation Status",path: "/investigation-status" },
       { name: "Root Causes",         path: "/root-causes" },
@@ -199,13 +200,13 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   "Intelligence": {
     icon: BrainCircuit,
     items: [
-      { name: "AI Dashboard",            path: "/ai-intelligence" },
+      { name: "AI Dashboard",            path: "/ai-dashboard" },
       { name: "AI Assistant",            path: "/ai-agent" },
-      { name: "Risk Predictions",        path: "/ai-intelligence?tab=risk" },
-      { name: "Compliance Intelligence", path: "/ai-intelligence?tab=compliance" },
-      { name: "Safety Recommendations",  path: "/ai-intelligence?tab=safety" },
-      { name: "Trend Analysis",          path: "/ai-intelligence?tab=trends" },
-      { name: "Benchmarking",            path: "/ai-intelligence?tab=benchmarking" },
+      { name: "Risk Predictions",        path: "/risk-predictions" },
+      { name: "Compliance Intelligence", path: "/compliance-intelligence" },
+      { name: "Safety Recommendations",  path: "/safety-recommendations" },
+      { name: "Trend Analysis",          path: "/trend-analysis" },
+      { name: "Benchmarking",            path: "/benchmarking" },
       { name: "AI Knowledge Search",     path: "/ai-agent?tab=search" },
     ],
   },
@@ -213,35 +214,35 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
     icon: Database,
     items: [
       { name: "Excel Upload",    path: "/data-management" },
-      { name: "CSV Import",      path: "/data-management?tab=csv" },
-      { name: "API Integrations",path: "/settings?tab=api" },
-      { name: "Import History",  path: "/data-management?tab=history" },
-      { name: "Validation Logs", path: "/data-management?tab=logs" },
-      { name: "Sync Status",     path: "/data-management?tab=sync" },
+      { name: "CSV Import",      path: "/csv-import" },
+      { name: "API Integrations",path: "/api-integrations" },
+      { name: "Import History",  path: "/import-history" },
+      { name: "Validation Logs", path: "/validation-logs" },
+      { name: "Sync Status",     path: "/sync-status" },
     ],
   },
   "Reports": {
     icon: BarChart3,
     items: [
-      { name: "KPI Reports",        path: "/analytics" },
-      { name: "Incident Reports",   path: "/analytics?tab=incidents" },
-      { name: "Audit Reports",      path: "/analytics?tab=audits" },
-      { name: "Compliance Reports",  path: "/analytics?tab=compliance" },
-      { name: "Risk Reports",        path: "/analytics?tab=risk" },
-      { name: "Workforce Reports",   path: "/analytics?tab=workforce" },
-      { name: "Management Reports",  path: "/analytics?tab=management" },
+      { name: "KPI Reports",        path: "/kpi-reports" },
+      { name: "Incident Reports",   path: "/incident-reports" },
+      { name: "Audit Reports",      path: "/audit-reports" },
+      { name: "Compliance Reports",  path: "/compliance-reports" },
+      { name: "Risk Reports",        path: "/risk-reports" },
+      { name: "Workforce Reports",   path: "/workforce-reports" },
+      { name: "Management Reports",  path: "/admin/management-reports" },
     ],
   },
   "Settings": {
     icon: Settings,
     items: [
-      { name: "Organization Settings", path: "/settings" },
+      { name: "Organization Settings", path: "/admin/organization-settings" },
       { name: "Site Settings",         path: "/settings?tab=sites" },
       { name: "Workflow Settings",     path: "/settings?tab=workflow" },
       { name: "Approval Matrix",       path: "/settings?tab=approval" },
       { name: "Notification Settings", path: "/settings?tab=notifications" },
       { name: "Security Settings",     path: "/settings?tab=security" },
-      { name: "API Settings",          path: "/settings?tab=api" },
+      { name: "API Settings",          path: "/api-integrations" },
     ],
   },
   "Help": {
@@ -280,7 +281,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   // Auto-expand ops section if on an ops route (for non-org-admin users)
   useEffect(() => {
     if (!isOrgAdmin) {
-      const opsPaths = ["/employees", "/permits", "/incidents", "/hazards", "/training", "/audits"];
+      const opsPaths = ["/employees", "/permits", "/incidents", "/incident-management", "/hazards", "/training", "/audits"];
       if (opsPaths.some((p) => location.pathname.startsWith(p))) {
         setOpsExpanded(true);
       }

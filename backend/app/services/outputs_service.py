@@ -58,16 +58,31 @@ class OutputsService:
 
     def generate_report(self, user: CurrentUser, data: dict) -> dict:
         report_id = str(uuid.uuid4())
+        rtype = data.get("type", "compliance")
         period = f"{data.get('period_start', '')} – {data.get('period_end', '')}"
+        
+        type_labels = {
+            "management": "Executive Summary",
+            "incident": "Monthly Safety Report",
+            "ai_intelligence": "AI Intelligence Report",
+            "kpi": "Performance Dashboard Export",
+            "compliance": "Compliance Report",
+            "audit": "Audit Summary",
+            "capa": "CAPA Tracker",
+            "risk": "Risk Assessment Report",
+            "training": "Training Compliance Report",
+        }
+        label = type_labels.get(rtype, rtype.capitalize())
+        
         report = Report(
             id=report_id,
             tenant_id=user.tenant_id,
-            title=f"{data.get('type', 'compliance').capitalize()} Report — {period}",
-            report_type=data.get("type", "compliance"),
+            title=f"{label} — {period}",
+            report_type=rtype,
             status="ready",
             format=data.get("format", "pdf"),
             size_kb=240,
-            generated_by=user.display_name,
+            generated_by=user.display_name or user.email,
             period=period,
             generated_at=utc_now(),
             filters=data.get("filters", {}),
