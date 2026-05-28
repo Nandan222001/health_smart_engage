@@ -5,7 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8-sig",
+        extra="ignore"
+    )
 
     app_name: str = "HSE Safety Compliance Intelligence API"
     app_version: str = "0.1.0"
@@ -45,6 +49,11 @@ class Settings(BaseSettings):
     azure_search_endpoint: str = Field(default="", validation_alias="AZURE_SEARCH_ENDPOINT")
     azure_search_api_key: str = Field(default="", validation_alias="AZURE_SEARCH_API_KEY")
     azure_search_index: str = Field(default="hse-knowledge", validation_alias="AZURE_SEARCH_INDEX")
+
+    # Anthropic settings
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
+    anthropic_base_url: str = Field(default="", validation_alias="ANTHROPIC_BASE_URL")
+    anthropic_model: str = Field(default="claude-3-5-sonnet-20240620", validation_alias="ANTHROPIC_MODEL")
 
     frontend_base_url: str = Field(default="http://localhost:5173", validation_alias="FRONTEND_BASE_URL")
 

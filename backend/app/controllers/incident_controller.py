@@ -38,3 +38,7 @@ class IncidentController:
     def update_investigation(self, user: CurrentUser, incident_id: str, investigation_id: str, payload: dict) -> dict:
         result = self.service.update_investigation(user, incident_id, investigation_id, payload)
         return accepted(result)
+
+    def get_reports(self, user: CurrentUser) -> dict:
+        result = self.service.get_incident_reports(user)
+        return ok(result)

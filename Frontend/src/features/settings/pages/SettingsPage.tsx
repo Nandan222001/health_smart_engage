@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import { StatusBadge } from "@/shared/components/common/StatusBadge";
 import { Upload, Plus, Trash2, FileText, Loader2 } from "lucide-react";
 import { useGetOrgAdminOverviewQuery, useSaveOrgSetupStep1Mutation } from "@/features/org-setup/api/orgSetupApi";
@@ -32,7 +33,8 @@ const knowledgeBaseDocs = [
 ];
 
 export function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("general");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "general");
   const [isUploading, setIsUploading] = useState(false);
   const [docsList, setDocsList] = useState(knowledgeBaseDocs);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,6 +51,18 @@ export function SettingsPage() {
       setTimezone(overview.timezone || "");
     }
   }, [overview]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId });
+  };
 
   const handleSaveGeneral = async () => {
     try {
@@ -118,7 +132,7 @@ export function SettingsPage() {
         {tabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
             className="px-4 py-2.5 text-[13px] transition-colors relative"
             style={{ color: activeTab === tab.id ? '#1B5E20' : '#4A5568', fontWeight: activeTab === tab.id ? 600 : 400 }}
           >

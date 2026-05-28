@@ -10,6 +10,7 @@ from app.models.compliance import (
     AuditChecklist, AuditExecution, Capa, ComplianceDocument,
     ComplianceStandard, Finding, RegulatoryRequirement,
 )
+from app.models.foundation import OrganisationNode
 from app.models.incidents import Incident, Investigation
 from app.models.risks import RiskAssessment, HazardObservation
 from app.repositories.domain_repository import DomainRepository
@@ -394,3 +395,84 @@ class ComplianceService:
         data["incident_id"] = incident_id
         data["lead_user_id"] = user.user_id
         return self.repo.create(Investigation, user.tenant_id, data)
+
+    def get_incident_reports(self, user: CurrentUser) -> dict:
+        tid = user.tenant_id
+        
+        # 1. Fetch all related data
+        all_incidents = self.db.scalars(
+            select(Incident).where(Incident.tenant_id == tid).order_by(Incident.created_at.desc())
+        ).all()
+        
+        investigations = self.db.scalars(
+            select(Investigation).where(Investigation.tenant_id == tid)
+        ).all()
+        
+        nodes = self.db.scalars(
+            select(OrganisationNode).where(OrganisationNode.tenant_id == tid)
+        ).all()
+        node_map = {n.id: n for n in nodes}
+        
+        from app.repositories.generic_repository import GenericRepository
+        g_repo = GenericRepository(self.db)
+        rcas = g_repo.list_by_type(tid, "incidents", "rca", limit=1000)
+        cas = g_repo.list_by_type(tid, "incidents", "corrective_action", limit=1000)
+        
+        # 2. Aggregations
+        total_incidents = len(all_incidents)
+        severity_dist = {}
+        status_dist = {}
+        site_dist = {}
+        dept_dist = {}
+        investigation_dist = {}
+        
+        for i in all_incidents:
+            severity_dist[i.severity] = severity_dist.get(i.severity, 0) + 1
+            status_dist[i.status] = status_dist.get(i.status, 0) + 1
+            
+            if i.location_id and i.location_id in node_map:
+                node = node_map[i.location_id]
+                if node.node_type == "site":
+                    site_dist[node.name] = site_dist.get(node.name, 0) + 1
+                elif node.node_type == "department":
+                    dept_dist[node.name] = dept_dist.get(node.name, 0) + 1
+        
+        for inv in investigations:
+            investigation_dist[inv.status] = investigation_dist.get(inv.status, 0) + 1
+            
+        # 3. Mapping RCA and Corrective Actions for detailed list
+        rca_map = {r.payload.get("incident_id"): r.payload.get("root_cause") for r in rcas}
+        ca_map = {}
+        for c in cas:
+            inc_id = c.payload.get("incident_id")
+            if inc_id:
+                if inc_id not in ca_map:
+                    ca_map[inc_id] = []
+                ca_map[inc_id].append(c.payload.get("title") or c.payload.get("description"))
+                
+        # 4. Detailed list
+        detailed_items = []
+        for i in all_incidents:
+            loc_name = node_map[i.location_id].name if i.location_id and i.location_id in node_map else "Unknown"
+            detailed_items.append({
+                "id": i.id,
+                "ref": i.incident_ref,
+                "occurred_at": str(i.created_at) if i.created_at else None,
+                "location": loc_name,
+                "severity": i.severity,
+                "status": i.status,
+                "description": i.description,
+                "injured_persons": i.injured_persons or "None",
+                "root_cause": rca_map.get(i.id, "Pending"),
+                "corrective_actions": ", ".join(ca_map.get(i.id, ["Pending"])),
+            })
+            
+        return {
+            "total_incidents": total_incidents,
+            "severity_distribution": severity_dist,
+            "status_distribution": status_dist,
+            "site_distribution": site_dist,
+            "dept_distribution": dept_dist,
+            "investigation_distribution": investigation_dist,
+            "items": detailed_items
+        }

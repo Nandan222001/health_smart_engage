@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import {
   Brain, Gauge, BarChart3, ShieldAlert, CheckSquare,
@@ -6,7 +6,13 @@ import {
   Minus, AlertTriangle, CheckCircle2, Zap, ArrowUpRight, ArrowDownRight,
   Activity, Cpu, Database, Star, Send, Search, Sparkles, Wifi, WifiOff,
   Bot, MessageSquare, BarChart2, FileSearch,
+  MapPin, User, FileText, Loader2,
 } from "lucide-react";
+import { useListHazardsQuery } from "@/features/hazards/api/hazardsApi";
+import { useGetViolationsQuery } from "@/features/violations/api/violationsApi";
+import { useListPermitsQuery } from "@/features/permits/api/permitsApi";
+import type { Hazard } from "@/features/hazards/api/hazardsApi";
+import type { Permit } from "@/features/permits/api/permitsApi";
 import {
   useGetComplianceBenchmarkingQuery,
   useGetRiskScoringQuery,
@@ -388,127 +394,180 @@ function AiAssistantTab() {
 // ─── Tab 3: Risk Predictions ──────────────────────────────────────────────
 
 function RiskPredictionsTab() {
-  const { data: aiPreds, isLoading: aiLoading } = useGetRiskPredictionsQuery();
-  const { data: riskData, isLoading: riskLoading } = useGetRiskScoringQuery();
-  const { data: pirsData, isLoading: pirsLoading } = useGetPIRSQuery();
+  const { data: rawHazards = [], isLoading: l1, refetch: r1 } = useListHazardsQuery();
+  const { data: rawViol,         isLoading: l2, refetch: r2 } = useGetViolationsQuery();
+  const { data: rawPermits = [], isLoading: l3, refetch: r3 } = useListPermitsQuery();
 
-  const riskD = riskData ?? MOCK_RISK;
-  const pirsD = pirsData ?? MOCK_PIRS;
+  const loading = l1 || l2 || l3;
+  const hazards: Hazard[] = Array.isArray(rawHazards) ? rawHazards : [];
+  const violations: { Zone_ID?: string; Site_ID?: string; Severity?: string; Employee_Name?: string }[] =
+    Array.isArray(rawViol) ? rawViol : (((rawViol as { items?: unknown[] })?.items) ?? []) as typeof violations;
+  const permits: Permit[] = Array.isArray(rawPermits) ? rawPermits : [];
+
+  const RC: Record<string, string> = { Critical: "#EF4444", High: "#F97316", Medium: "#F59E0B", Low: "#10B981" };
+  const SEV: Record<string, number> = { critical: 4, Critical: 4, high: 3, High: 3, medium: 2, Medium: 2, low: 1, Low: 1 };
+  function lv(n: number) { return n >= 16 ? "Critical" : n >= 9 ? "High" : n >= 4 ? "Medium" : "Low"; }
+
+  const zonePreds = useMemo(() => {
+    const map = new Map<string, { score: number; h: number; v: number; oc: number; rec: number; old: number }>();
+    const now = new Date();
+    const t2 = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const t4 = new Date(now.getFullYear(), now.getMonth() - 4, 1);
+    const g = (k: string) => { if (!map.has(k)) map.set(k, { score: 0, h: 0, v: 0, oc: 0, rec: 0, old: 0 }); return map.get(k)!; };
+    for (const h of hazards) {
+      const z = g(h.zone_id || h.site_id || "Unknown Zone");
+      z.score += SEV[h.severity] ?? 1; z.h++;
+      if ((h.severity === "critical" || h.severity === "high") && h.status === "open") z.oc++;
+      const dt = new Date(h.identified_at);
+      if (!isNaN(dt.getTime())) { if (dt >= t2) z.rec++; else if (dt >= t4) z.old++; }
+    }
+    for (const v of violations) {
+      const z = g(v.Zone_ID || v.Site_ID || "Unknown Zone");
+      z.score += SEV[v.Severity ?? ""] ?? 1; z.v++;
+    }
+    return Array.from(map.entries()).map(([zone, d]) => ({
+      zone, score: d.score, level: lv(d.score),
+      confidence: Math.min(97, d.h * 10 + d.v * 7 + 18),
+      trend: d.rec > d.old ? "up" : d.rec < d.old ? "down" : "stable" as "up" | "down" | "stable",
+      hazards: d.h, violations: d.v, openCrit: d.oc,
+    })).sort((a, b) => b.score - a.score);
+  }, [hazards, violations]);
+
+  const workerRisks = useMemo(() => {
+    const map = new Map<string, { t: number; c: number; h: number }>();
+    for (const v of violations) {
+      const n = (v.Employee_Name || "Unknown Worker").trim();
+      if (!map.has(n)) map.set(n, { t: 0, c: 0, h: 0 });
+      const w = map.get(n)!; w.t++;
+      const s = (v.Severity || "").toLowerCase();
+      if (s === "critical") w.c++; else if (s === "high") w.h++;
+    }
+    return Array.from(map.entries()).map(([name, d]) => {
+      const score = d.c * 4 + d.h * 3 + (d.t - d.c - d.h);
+      return { name, violations: d.t, critical: d.c, level: lv(score), confidence: Math.min(97, 40 + d.t * 8 + d.c * 12) };
+    }).sort((a, b) => b.violations - a.violations).slice(0, 10);
+  }, [violations]);
+
+  const locRisks = useMemo(() => {
+    const map = new Map<string, { score: number; h: number; v: number }>();
+    const g = (k: string) => { if (!map.has(k)) map.set(k, { score: 0, h: 0, v: 0 }); return map.get(k)!; };
+    for (const h of hazards) { const z = g(h.zone_id || h.site_id || "Unknown"); z.score += SEV[h.severity] ?? 1; z.h++; }
+    for (const v of violations) { const z = g(v.Zone_ID || v.Site_ID || "Unknown"); z.score += SEV[v.Severity ?? ""] ?? 1; z.v++; }
+    return Array.from(map.entries())
+      .map(([name, d]) => ({ name, score: d.score, level: lv(d.score), hazards: d.h, violations: d.v }))
+      .sort((a, b) => b.score - a.score);
+  }, [hazards, violations]);
+
+  const hazardForecasts = useMemo(() => {
+    const now = new Date(); const t2 = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const curr = new Map<string, number>(); const prev = new Map<string, number>();
+    for (const h of hazards) {
+      const cat = h.type || "Uncategorised";
+      const dt = new Date(h.identified_at);
+      if (!isNaN(dt.getTime())) { if (dt >= t2) curr.set(cat, (curr.get(cat) ?? 0) + 1); else prev.set(cat, (prev.get(cat) ?? 0) + 1); }
+    }
+    return Array.from(new Set([...curr.keys(), ...prev.keys()])).map((cat) => {
+      const c = curr.get(cat) ?? 0; const p = Math.max(prev.get(cat) ?? 1, 1);
+      const projected = Math.round(c * (c / p));
+      const pct = Math.round(Math.abs(((projected - c) / Math.max(c, 1)) * 100));
+      return { cat, current: c, projected, dir: projected > c ? "up" : projected < c ? "down" : "stable" as "up" | "down" | "stable", pct, level: lv(c + projected >= 8 ? 16 : c + projected >= 4 ? 9 : c + projected >= 2 ? 4 : 0) };
+    }).sort((a, b) => b.current + b.projected - (a.current + a.projected)).slice(0, 8);
+  }, [hazards]);
+
+  const permitRisks = useMemo(() => {
+    const now = new Date();
+    return permits.map((p) => {
+      let score = 0; const reasons: string[] = [];
+      if (p.status === "draft")     { score += 3; reasons.push("Still in draft"); }
+      if (p.status === "submitted") { score += 2; reasons.push("Awaiting approval"); }
+      if (p.status === "rejected")  { score += 5; reasons.push("Previously rejected"); }
+      const age = p.created_at ? Math.floor((now.getTime() - new Date(p.created_at).getTime()) / 86400000) : 0;
+      if (age > 30) { score += 3; reasons.push(`${age}d old`); }
+      if (p.end_date && new Date(p.end_date) < now) { score += 4; reasons.push("Expired"); }
+      if (!p.approved_by && p.status !== "draft") { score += 2; reasons.push("No approver"); }
+      return { id: p.id, title: p.title || "Untitled Permit", status: p.status, level: lv(score >= 8 ? 16 : score >= 5 ? 9 : score >= 3 ? 4 : 0), confidence: Math.min(95, 40 + score * 8), reasons };
+    }).filter((p) => p.reasons.length > 0).sort((a, b) => b.confidence - a.confidence);
+  }, [permits]);
+
+  const totalZones  = new Set([...hazards.map((h) => h.zone_id || h.site_id), ...violations.map((v) => v.Zone_ID || v.Site_ID)]).size;
+  const critZones   = zonePreds.filter((p) => p.level === "Critical").length;
+  const highWorkers = workerRisks.filter((w) => w.level === "Critical" || w.level === "High").length;
+  const atRiskPerm  = permitRisks.filter((p) => p.level === "Critical" || p.level === "High").length;
+  const maxLocScore = locRisks[0]?.score ?? 1;
+  const maxHazVal   = Math.max(...hazardForecasts.map((f) => Math.max(f.current, f.projected)), 1);
+  const SC: Record<string, string> = { draft: "#9CA3AF", submitted: "#3B82F6", approved: "#10B981", rejected: "#EF4444", active: "#10B981", closed: "#9CA3AF" };
+
+  const spin = (
+    <div className="flex items-center justify-center py-12">
+      <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D1D5DB" }} />
+    </div>
+  );
 
   return (
     <div className="space-y-5">
-      {/* AI Predictions from Azure AI Foundry */}
-      <Card>
-        <SectionHeader icon={Sparkles} title="AI-Powered Risk Predictions" sub="Azure AI Foundry analyses patterns to predict future risks" accent="#4A57B9" />
-        {aiLoading ? <Spinner /> : !aiPreds?.configured ? <AiUnconfiguredBanner /> : (
-          <div className="space-y-3">
-            {(aiPreds?.predictions ?? []).length === 0 ? (
-              <p className="text-sm py-4 text-center" style={{ color: "#9CA3AF" }}>No predictions generated yet — add more data to improve model accuracy.</p>
-            ) : (aiPreds?.predictions ?? []).map((pred, i) => {
-              const likelihood = Math.round(pred.likelihood * 100);
-              const impact = Math.round(pred.impact * 100);
-              const score = Math.round(pred.score * 100);
-              const color = score > 70 ? "#EF4444" : score > 40 ? "#F97316" : "#F59E0B";
-              return (
-                <div key={i} className="rounded-xl border p-4 space-y-2" style={{ borderColor: "#E3E9F6" }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-semibold" style={{ color: "#111827" }}>{pred.entity}</p>
-                    <span className="text-lg font-black flex-shrink-0" style={{ color }}>{score}%</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1" style={{ color: "#6B7280" }}>
-                        <span>Likelihood</span><span>{likelihood}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#E5E7EB" }}>
-                        <div className="h-full rounded-full" style={{ width: `${likelihood}%`, background: "#F59E0B" }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1" style={{ color: "#6B7280" }}>
-                        <span>Impact</span><span>{impact}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#E5E7EB" }}>
-                        <div className="h-full rounded-full" style={{ width: `${impact}%`, background: "#EF4444" }} />
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-xs px-2.5 py-1.5 rounded-lg" style={{ background: "#EEF2FB", color: "#3730A3" }}>
-                    <span className="font-semibold">AI Recommendation: </span>{pred.recommendation}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
 
-      {/* Existing risk scoring */}
-      <Card>
-        <SectionHeader icon={Gauge} title="Real-time Risk Scoring" sub="Task · Site · Permit · Workforce risk levels" accent="#EF4444" />
-        {riskLoading ? <Spinner /> : (
-          <div className="space-y-3">
-            {riskD.scores.map((s: RiskScore) => {
-              const color = RISK_COLOR[s.level];
-              return (
-                <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "#F8FAFF" }}>
-                  <div className="w-32 text-xs font-semibold flex-shrink-0" style={{ color: "#374151" }}>
-                    <div>{s.entity_name}</div>
-                    <div className="font-normal capitalize" style={{ color: "#9CA3AF" }}>{s.entity_type}</div>
-                  </div>
-                  <div className="flex-1 h-2.5 rounded-full overflow-hidden" style={{ background: "#E5E7EB" }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: `${s.score}%`, background: color }} />
-                  </div>
-                  <div className="w-8 text-sm font-bold text-right" style={{ color }}>{s.score}</div>
-                  <span className="text-xs font-semibold capitalize px-2 py-0.5 rounded-full w-16 text-center" style={{ background: color + "1A", color }}>{s.level}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+      {/* Summary stat tiles — mirrors AI Dashboard top stats */}
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+        {[
+          { label: "Zones Analysed",    value: totalZones,       color: "#4A57B9" },
+          { label: "Critical Zones",    value: critZones,        color: "#EF4444" },
+          { label: "High-Risk Workers", value: highWorkers,      color: "#F97316" },
+          { label: "At-Risk Permits",   value: atRiskPerm,       color: "#3B82F6" },
+          { label: "Hazard Records",    value: hazards.length,   color: "#8B5CF6" },
+          { label: "AI Predictions",    value: zonePreds.length, color: "#10B981" },
+        ].map((s) => (
+          <Card key={s.label} className="!p-3 text-center">
+            <div className="text-[22px] font-black leading-none" style={{ color: s.color }}>{loading ? "…" : s.value}</div>
+            <div className="mt-1 text-[9px] font-semibold uppercase" style={{ color: "#6B7280" }}>{s.label}</div>
+          </Card>
+        ))}
+      </div>
 
-      {/* PIRS */}
+      {/* Row 1: Predicted Incidents — full width */}
       <Card>
-        <div className="flex items-start justify-between mb-4">
-          <SectionHeader icon={ShieldAlert} title="PIRS — Predictive Injury Risk Scoring" sub="AI predicts injury probability per worker, site, and task" accent="#F97316" />
-          <div className="text-right flex-shrink-0">
-            <div className="text-lg font-bold" style={{ color: "#4A57B9" }}>{pirsD.model_accuracy}%</div>
-            <div className="text-xs" style={{ color: "#9CA3AF" }}>Model accuracy</div>
+        <div className="flex items-center justify-between gap-3 pb-4 mb-5 border-b" style={{ borderColor: "#F3F4F6" }}>
+          <SectionHeader icon={AlertTriangle} title="Predicted Incidents" sub="AI-predicted incidents by zone & severity" accent="#EF4444" />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => { r1(); r2(); r3(); }} disabled={loading}
+              className="flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+              style={{ borderColor: "#E3E9F6", color: "#6B7280" }}>
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+            <span className="rounded-full px-3 py-1 text-[10px] font-bold uppercase" style={{ background: "#FEE2E2", color: "#EF4444" }}>Predictive AI</span>
           </div>
         </div>
-        {pirsLoading ? <Spinner /> : (
-          <div className="space-y-3">
-            {pirsD.predictions.map((p: PIRSEntry) => {
-              const pct = Math.round(p.injury_probability * 100);
-              const color = pct > 65 ? "#EF4444" : pct > 40 ? "#F97316" : "#F59E0B";
+        {loading ? spin : !zonePreds.length ? (
+          <p className="text-sm text-center py-8" style={{ color: "#9CA3AF" }}>No zone data. Add hazards and violations to generate predictions.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {zonePreds.map((p) => {
+              const TI = p.trend === "up" ? TrendingUp : p.trend === "down" ? TrendingDown : BarChart3;
+              const tc = p.trend === "up" ? "#EF4444" : p.trend === "down" ? "#10B981" : "#9CA3AF";
+              const color = RC[p.level];
               return (
-                <div key={p.entity_id} className="rounded-xl border p-3.5 space-y-2" style={{ borderColor: pct > 65 ? "#FECACA" : "#E3E9F6", background: pct > 65 ? "#FFF5F5" : "#F8FAFF" }}>
-                  <div className="flex items-center justify-between">
+                <div key={p.zone} className="rounded-xl border p-4" style={{ borderColor: `${color}44`, background: `${color}0D` }}>
+                  <div className="mb-2 flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-sm font-semibold" style={{ color: "#111827" }}>{p.entity_name}</div>
-                      <div className="text-xs capitalize" style={{ color: "#9CA3AF" }}>{p.entity_type}</div>
+                      <div className="text-sm font-bold" style={{ color: "#111827" }}>{p.zone}</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase" style={{ background: `${color}1A`, color }}>{p.level}</span>
+                        <TI className="h-3.5 w-3.5" style={{ color: tc }} />
+                        <span className="text-[11px] font-semibold" style={{ color: tc }}>{p.trend === "up" ? "Rising" : p.trend === "down" ? "Improving" : "Stable"}</span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-xl font-black" style={{ color }}>{pct}%</div>
-                      <div className="text-xs font-semibold" style={{ color }}>injury probability</div>
-                    </div>
+                    <span className="text-[18px] font-black" style={{ color }}>{p.confidence}%</span>
                   </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "#E5E7EB" }}>
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+                  <div className="h-2 overflow-hidden rounded-full" style={{ background: "#E5E7EB" }}>
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (p.score / 30) * 100)}%`, background: color }} />
                   </div>
-                  <div className="flex items-start gap-2 pt-1">
-                    <div className="flex-1 text-xs space-y-0.5" style={{ color: "#6B7280" }}>
-                      {p.risk_factors.map((f) => (
-                        <div key={f.factor} className="flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                          {f.factor} <span className="font-medium" style={{ color: "#374151" }}>({Math.round(f.weight * 100)}%)</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex-1 text-xs p-2 rounded-lg" style={{ background: "#EEF2FB", color: "#3730A3" }}>
-                      <span className="font-semibold">Recommended: </span>{p.recommended_action}
-                    </div>
+                  <div className="mt-3 flex gap-2">
+                    {([["Hazards", p.hazards, "#8B5CF6"], ["Violations", p.violations, "#EF4444"], ["Open Crit.", p.openCrit, "#F97316"]] as [string, number, string][]).map(([l, v, c]) => (
+                      <div key={l} className="flex-1 rounded-lg p-2 text-center" style={{ background: "#F8FAFF", border: "1px solid #E3E9F6" }}>
+                        <div className="text-[15px] font-black" style={{ color: c }}>{v}</div>
+                        <div className="text-[9px]" style={{ color: "#9CA3AF" }}>{l}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
@@ -516,6 +575,242 @@ function RiskPredictionsTab() {
           </div>
         )}
       </Card>
+
+      {/* Row 2: High-Risk Workers + High-Risk Locations */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+
+        <Card>
+          <div className="flex items-center justify-between gap-3 pb-4 mb-4 border-b" style={{ borderColor: "#F3F4F6" }}>
+            <SectionHeader icon={User} title="High-Risk Workers" sub="Ranked by violation frequency & critical severity" accent="#F97316" />
+            <span className="rounded-full px-3 py-1 text-[10px] font-bold uppercase flex-shrink-0" style={{ background: "#FFEDD5", color: "#F97316" }}>Predictive AI</span>
+          </div>
+          {loading ? spin : (
+            <>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {[
+                  { label: "Workers Tracked", value: workerRisks.length,                                        color: "#4A57B9" },
+                  { label: "Critical Risk",    value: workerRisks.filter((w) => w.level === "Critical").length, color: "#EF4444" },
+                  { label: "Total Violations", value: workerRisks.reduce((a, b) => a + b.violations, 0),        color: "#F97316" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: `${s.color}12`, border: `1px solid ${s.color}33` }}>
+                    <div className="text-[22px] font-black" style={{ color: s.color }}>{s.value}</div>
+                    <div className="text-[10px] font-semibold uppercase" style={{ color: "#6B7280" }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              {!workerRisks.length ? (
+                <p className="text-sm text-center py-8" style={{ color: "#9CA3AF" }}>No worker violation data. Violations need to be linked to employees.</p>
+              ) : (
+                <div className="space-y-2">
+                  {workerRisks.map((w, i) => {
+                    const color = RC[w.level];
+                    return (
+                      <div key={w.name} className="rounded-xl border p-3" style={{ borderColor: `${color}33`, background: `${color}0D` }}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-black" style={{ background: `${color}20`, color }}>{i + 1}</div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-bold truncate" style={{ color: "#111827" }}>{w.name}</div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase" style={{ background: `${color}1A`, color }}>{w.level}</span>
+                                {w.critical > 0 && <span className="text-[11px]" style={{ color: "#EF4444" }}>{w.critical} critical</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="text-[18px] font-black" style={{ color }}>{w.violations}</div>
+                            <div className="text-[10px]" style={{ color: "#9CA3AF" }}>violations</div>
+                          </div>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ background: "#E5E7EB" }}>
+                          <div className="h-full rounded-full" style={{ width: `${w.confidence}%`, background: color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between gap-3 pb-4 mb-4 border-b" style={{ borderColor: "#F3F4F6" }}>
+            <SectionHeader icon={MapPin} title="High-Risk Locations" sub="Sites & zones by composite risk score" accent="#F59E0B" />
+            <span className="rounded-full px-3 py-1 text-[10px] font-bold uppercase flex-shrink-0" style={{ background: "#FEF3C7", color: "#F59E0B" }}>Predictive AI</span>
+          </div>
+          {loading ? spin : !locRisks.length ? (
+            <p className="text-sm text-center py-8" style={{ color: "#9CA3AF" }}>No location data. Add sites, zones, hazards and violations to rank risk.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {locRisks.slice(0, 3).map((loc, i) => {
+                  const color = RC[loc.level];
+                  const pct = Math.min(100, Math.round((loc.score / maxLocScore) * 100));
+                  return (
+                    <div key={loc.name} className="rounded-xl border p-3 text-center" style={{ borderColor: `${color}44`, background: `${color}0D` }}>
+                      <div className="text-[10px] font-bold uppercase mb-1" style={{ color }}>#{i + 1} Risk Zone</div>
+                      <div className="text-[26px] font-black leading-none" style={{ color }}>{pct}</div>
+                      <div className="text-[10px] mb-2" style={{ color: "#6B7280" }}>Risk Index</div>
+                      <div className="h-2 overflow-hidden rounded-full" style={{ background: "#E5E7EB" }}>
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+                      </div>
+                      <div className="mt-1.5 text-[11px] font-bold truncate" style={{ color: "#111827" }}>{loc.name}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="space-y-2">
+                {locRisks.slice(3).map((loc, i) => {
+                  const color = RC[loc.level];
+                  return (
+                    <div key={loc.name} className="rounded-xl border p-3" style={{ borderColor: "#E3E9F6" }}>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[11px] font-black flex-shrink-0" style={{ color: "#9CA3AF" }}>#{i + 4}</span>
+                          <MapPin className="h-3.5 w-3.5 flex-shrink-0" style={{ color }} />
+                          <span className="text-sm font-bold truncate" style={{ color: "#111827" }}>{loc.name}</span>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase flex-shrink-0" style={{ background: `${color}1A`, color }}>{loc.level}</span>
+                        </div>
+                        <span className="text-[16px] font-black" style={{ color }}>{loc.score}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full" style={{ background: "#E5E7EB" }}>
+                        <div className="h-full rounded-full" style={{ width: `${(loc.score / maxLocScore) * 100}%`, background: color }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </Card>
+      </div>
+
+      {/* Row 3: Future Hazard Forecasts + Permit Failure Predictions */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+
+        <Card>
+          <div className="flex items-center justify-between gap-3 pb-4 mb-4 border-b" style={{ borderColor: "#F3F4F6" }}>
+            <SectionHeader icon={Brain} title="Future Hazard Forecasts" sub="Projected hazard trends vs previous period" accent="#8B5CF6" />
+            <span className="rounded-full px-3 py-1 text-[10px] font-bold uppercase flex-shrink-0" style={{ background: "#F5F3FF", color: "#8B5CF6" }}>Predictive AI</span>
+          </div>
+          {loading ? spin : (
+            <>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {[
+                  { label: "Categories",    value: hazardForecasts.length,                              color: "#8B5CF6" },
+                  { label: "Rising",        value: hazardForecasts.filter((f) => f.dir === "up").length,    color: "#EF4444" },
+                  { label: "Improving",     value: hazardForecasts.filter((f) => f.dir === "down").length,  color: "#10B981" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: `${s.color}12`, border: `1px solid ${s.color}33` }}>
+                    <div className="text-[22px] font-black" style={{ color: s.color }}>{s.value}</div>
+                    <div className="text-[10px] font-semibold uppercase" style={{ color: "#6B7280" }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-4 mb-4">
+                {[{ label: "Current Period", color: "#4A57B9", dash: false }, { label: "AI Forecast", color: "#8B5CF6", dash: true }].map((l) => (
+                  <div key={l.label} className="flex items-center gap-1.5">
+                    <div className="w-5 h-2.5 rounded" style={{ background: l.dash ? "transparent" : l.color, border: l.dash ? `2px dashed ${l.color}` : "none" }} />
+                    <span className="text-xs" style={{ color: "#6B7280" }}>{l.label}</span>
+                  </div>
+                ))}
+              </div>
+              {!hazardForecasts.length ? (
+                <p className="text-sm text-center py-8" style={{ color: "#9CA3AF" }}>No hazard records. Register hazards to enable AI forecasting.</p>
+              ) : (
+                <div className="space-y-4">
+                  {hazardForecasts.map((f) => {
+                    const color = RC[f.level];
+                    const TI = f.dir === "up" ? TrendingUp : f.dir === "down" ? TrendingDown : BarChart3;
+                    const tc = f.dir === "up" ? "#EF4444" : f.dir === "down" ? "#10B981" : "#9CA3AF";
+                    return (
+                      <div key={f.cat}>
+                        <div className="mb-1.5 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs font-bold truncate" style={{ color: "#374151" }}>{f.cat}</span>
+                            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase flex-shrink-0" style={{ background: `${color}1A`, color }}>{f.level}</span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <TI className="h-3 w-3" style={{ color: tc }} />
+                            <span className="text-xs font-black" style={{ color: tc }}>{f.dir !== "stable" ? `${f.dir === "up" ? "+" : "-"}${f.pct}%` : "Stable"}</span>
+                          </div>
+                        </div>
+                        <div className="mb-1 h-2 overflow-hidden rounded-full" style={{ background: "#E5E7EB" }}>
+                          <div className="h-full rounded-full" style={{ width: `${Math.max(3, (f.current / maxHazVal) * 100)}%`, background: "#4A57B9" }} />
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full" style={{ background: "#E5E7EB" }}>
+                          <div className="h-full rounded-full" style={{ width: `${Math.max(3, (f.projected / maxHazVal) * 100)}%`, background: color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between gap-3 pb-4 mb-4 border-b" style={{ borderColor: "#F3F4F6" }}>
+            <SectionHeader icon={FileText} title="Permit Failure Predictions" sub="Permits at risk of rejection, expiry or breach" accent="#3B82F6" />
+            <span className="rounded-full px-3 py-1 text-[10px] font-bold uppercase flex-shrink-0" style={{ background: "#EFF6FF", color: "#3B82F6" }}>Predictive AI</span>
+          </div>
+          {loading ? spin : (
+            <>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {[
+                  { label: "At-Risk Permits", value: permitRisks.length,                                        color: "#4A57B9" },
+                  { label: "Critical Risk",    value: permitRisks.filter((r) => r.level === "Critical").length, color: "#EF4444" },
+                  { label: "High Risk",        value: permitRisks.filter((r) => r.level === "High").length,     color: "#F97316" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: `${s.color}12`, border: `1px solid ${s.color}33` }}>
+                    <div className="text-[22px] font-black" style={{ color: s.color }}>{s.value}</div>
+                    <div className="text-[10px] font-semibold uppercase" style={{ color: "#6B7280" }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              {!permitRisks.length ? (
+                <p className="text-sm text-center py-8" style={{ color: "#9CA3AF" }}>No at-risk permits detected. All permits appear compliant.</p>
+              ) : (
+                <div className="space-y-3">
+                  {permitRisks.map((r) => {
+                    const color = RC[r.level];
+                    const sc = SC[r.status] ?? "#9CA3AF";
+                    return (
+                      <div key={r.id} className="rounded-xl border p-4" style={{ borderColor: `${color}44`, background: `${color}0D` }}>
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold truncate" style={{ color: "#111827" }}>{r.title}</div>
+                            <div className="mt-0.5 flex items-center gap-1.5">
+                              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold capitalize" style={{ background: `${sc}1A`, color: sc }}>{r.status}</span>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase" style={{ background: `${color}1A`, color }}>{r.level}</span>
+                            <div className="mt-1 text-[16px] font-black" style={{ color }}>{r.confidence}%</div>
+                          </div>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full" style={{ background: "#E5E7EB" }}>
+                          <div className="h-full rounded-full" style={{ width: `${r.confidence}%`, background: color }} />
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {r.reasons.map((reason) => (
+                            <span key={reason} className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: `${color}1A`, color }}>
+                              <AlertTriangle className="h-3 w-3" />{reason}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      </div>
+
     </div>
   );
 }

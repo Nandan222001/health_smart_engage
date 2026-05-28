@@ -15,6 +15,7 @@ class Incident(Base, TenantScopedMixin):
     severity: Mapped[str] = mapped_column(String(64), default="unclassified")
     location_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    injured_persons: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_confidential: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(64), default="reported")
 

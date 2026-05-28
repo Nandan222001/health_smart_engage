@@ -57,6 +57,29 @@ export interface IncidentAnalytics {
   by_status: Record<string, number>;
 }
 
+export interface IncidentReportItem {
+  id: string;
+  ref: string;
+  occurred_at: string;
+  location: string;
+  severity: string;
+  status: string;
+  description: string;
+  injured_persons: string;
+  root_cause: string;
+  corrective_actions: string;
+}
+
+export interface IncidentReportsResponse {
+  total_incidents: number;
+  severity_distribution: Record<string, number>;
+  status_distribution: Record<string, number>;
+  site_distribution: Record<string, number>;
+  dept_distribution: Record<string, number>;
+  investigation_distribution: Record<string, number>;
+  items: IncidentReportItem[];
+}
+
 type ListResponse<T> = T[] | { items: T[]; total?: number };
 
 function toArray<T>(data: ListResponse<T>): T[] {
@@ -200,6 +223,11 @@ export const incidentsApi = baseApi.injectEndpoints({
       query: () => "/incidents/analytics",
       providesTags: ["Incident"],
     }),
+
+    getIncidentReports: builder.query<IncidentReportsResponse, void>({
+      query: () => "/incidents/reports",
+      providesTags: ["Incident", "RCA"],
+    }),
   }),
 });
 
@@ -220,4 +248,5 @@ export const {
   useCreateCorrectiveActionMutation,
   useUpdateCorrectiveActionMutation,
   useGetIncidentAnalyticsQuery,
+  useGetIncidentReportsQuery,
 } = incidentsApi;

@@ -52,6 +52,14 @@ import { DepartmentsPage } from "@/features/admin/pages/DepartmentsPage";
 import { HSEManagersPage } from "@/features/admin/pages/HSEManagersPage";
 import { ManagementReportsPage } from "@/features/admin/pages/ManagementReportsPage";
 import { OrganizationSettingsPage } from "@/features/admin/pages/OrganizationSettingsPage";
+import { SiteSettingsPage } from "@/features/admin/pages/SiteSettingsPage";
+import { WorkflowSettingsPage } from "@/features/admin/pages/WorkflowSettingsPage";
+import { ApprovalMatrixPage } from "@/features/admin/pages/ApprovalMatrixPage";
+import { NotificationSettingsPage } from "@/features/admin/pages/NotificationSettingsPage";
+import { SecuritySettingsPage } from "@/features/admin/pages/SecuritySettingsPage";
+import { ApiSettingsPage } from "@/features/admin/pages/ApiSettingsPage";
+import { AdminDocumentationPage } from "@/features/admin/pages/AdminDocumentationPage";
+import { SupportTicketsPage } from "@/features/admin/pages/SupportTicketsPage";
 // Super Admin
 import { SuperAdminDashboard } from "@/features/superadmin/pages/SuperAdminDashboard";
 import { TenantListPage } from "@/features/superadmin/pages/TenantListPage";
@@ -109,10 +117,11 @@ import { DataManagementPage } from "@/features/data-management/pages/DataManagem
 import { CSVImportPage } from "@/features/data-management/pages/CSVImportPage";
 import { ImportHistoryPage } from "@/features/data-management/pages/ImportHistoryPage";
 import { ValidationLogsPage } from "@/features/data-management/pages/ValidationLogsPage";
-import { SyncStatusPage } from "@/features/data-management/pages/SyncStatusPage";
-import { ApiIntegrationsPage } from "@/features/integrations/pages/ApiIntegrationsPage";
+import { SyncStatusPage }     from "@/features/data-management/pages/SyncStatusPage";
 import { HelpPage } from "@/features/help/pages/HelpPage";
+import { ContactSupportPage } from "@/features/help/pages/ContactSupportPage";
 import { WorkersPage } from "@/features/workers/pages/WorkersPage";
+
 import { SupervisorsPage } from "@/features/supervisors/pages/SupervisorsPage";
 import { HSEManagersScreen } from "@/features/hse-managers/pages/HSEManagersScreen";
 import { AuditorsPage } from "@/features/auditors/pages/AuditorsPage";
@@ -329,6 +338,14 @@ export const router = createBrowserRouter([
       { path: "admin/hse-managers", Component: HSEManagersPage },
       { path: "admin/management-reports", Component: ManagementReportsPage },
       { path: "admin/organization-settings", Component: OrganizationSettingsPage },
+      { path: "admin/site-settings",        Component: SiteSettingsPage },
+      { path: "admin/workflow-settings",   Component: WorkflowSettingsPage },
+      { path: "admin/approval-matrix",        Component: ApprovalMatrixPage },
+      { path: "admin/notification-settings", Component: NotificationSettingsPage },
+      { path: "admin/security-settings", Component: SecuritySettingsPage },
+      { path: "admin/api-settings",      Component: ApiSettingsPage },
+      { path: "admin/documentation",     Component: AdminDocumentationPage },
+      { path: "admin/support-tickets",   Component: SupportTicketsPage },
       { path: "org-setup", Component: OrgSetupWizardPage },
       { path: "overview", Component: OverviewPage },
       { path: "kpis", Component: KPIsPage },
@@ -344,8 +361,9 @@ export const router = createBrowserRouter([
       { path: "import-history",  Component: ImportHistoryPage  },
       { path: "validation-logs", Component: ValidationLogsPage },
       { path: "sync-status",     Component: SyncStatusPage     },
-      { path: "api-integrations", Component: ApiIntegrationsPage },
+      { path: "api-integrations", Component: ApiSettingsPage },
       { path: "help", Component: HelpPage },
+      { path: "contact-support", Component: ContactSupportPage },
       // Super Admin pages
       { path: "superadmin", Component: SuperAdminDashboard },
       { path: "superadmin/tenants", Component: TenantListPage },

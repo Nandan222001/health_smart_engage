@@ -114,6 +114,7 @@ ENDPOINTS = [
     ("GET", "/incidents/corrective-actions", "incident_corrective_actions_list", "List corrective actions"),
     ("POST", "/incidents/corrective-actions", "incident_corrective_actions_create", "Create corrective action"),
     ("GET", "/incidents/analytics", "incidents_analytics_get", "Incident analytics"),
+    ("GET", "/incidents/reports", "incidents_reports_get", "Incident reports for admin"),
     ("POST", "/incidents/{incidentId}/classify", "incidents_classify", "Classify incident"),
     ("POST", "/incidents/{incidentId}/investigations", "incident_investigations_create", "Start investigation"),
     ("PATCH", "/incidents/{incidentId}", "incidents_update", "Update incident"),
