@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     ai_endpoint: str = ""
     ai_api_key_secret_name: str = "ai-api-key"
 
+    # Anthropic Claude (direct or via Azure AI Foundry)
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
+    anthropic_base_url: str = Field(default="", validation_alias="ANTHROPIC_BASE_URL")
+    anthropic_model: str = Field(default="claude-sonnet-4-6", validation_alias="ANTHROPIC_MODEL")
+
     # Azure AI Foundry (Azure OpenAI)
     azure_openai_endpoint: str = Field(default="", validation_alias="AZURE_OPENAI_ENDPOINT")
     azure_openai_api_key: str = Field(default="", validation_alias="AZURE_OPENAI_API_KEY")

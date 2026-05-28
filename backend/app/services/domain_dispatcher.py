@@ -76,7 +76,14 @@ class DomainDispatcher:
         path_params: dict[str, Any],
         db: Session = None
     ) -> dict[str, Any] | None:
-        data = payload.get("data", payload)
+        # If 'data' is empty but we have other root fields (like 'messages'), 
+        # use the whole payload as data. This handles Pydantic's 'extra' allow correctly.
+        data = payload.get("data")
+        if not data and any(k not in ("data", "comment", "idempotency_key") for k in payload):
+            data = payload
+        elif not data:
+            data = {}
+            
         svc = self._get_services(db) if db else {}
 
         # Auth Commands
