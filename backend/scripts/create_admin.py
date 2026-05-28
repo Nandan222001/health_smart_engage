@@ -17,10 +17,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.database import SessionLocal, engine
+from app.core.database import SessionLocal, engine, Base
 from app.models import domain  # noqa: F401 — registers all ORM models
 from app.models.tenant import Tenant
-from app.models.domain import Base, User, Role
+from app.models.domain import User, Role
 from app.services.auth_service import AuthService
 
 
