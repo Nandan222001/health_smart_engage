@@ -290,10 +290,33 @@ export const aiIntelligenceApi = baseApi.injectEndpoints({
     getCorrectiveRecommendations: builder.query<CorrectiveRecommendationsData, void>({
       query: () => "/ai/recommendations",
       providesTags: ["Analytics"],
+      transformResponse: (raw: AIRecommendation[] | CorrectiveRecommendationsData) => {
+        if (Array.isArray(raw)) {
+          return {
+            total: raw.length,
+            unactioned: raw.filter((r: any) => !r.actioned && !r.dismissed).length,
+            recommendations: raw,
+          };
+        }
+        return raw;
+      },
     }),
     getWorkOversight: builder.query<WorkOversightData, void>({
       query: () => "/ai/work-oversight",
       providesTags: ["Analytics"],
+      transformResponse: (raw: any): WorkOversightData => {
+        const alerts: OversightAlert[] = Array.isArray(raw) ? raw : (raw?.alerts ?? []);
+        const violations = alerts.filter((a) => a.type === "violation" && !a.resolved).length;
+        const drift     = alerts.filter((a) => a.type === "drift"     && !a.resolved).length;
+        const unsafe    = alerts.filter((a) => a.type === "unsafe_act"&& !a.resolved).length;
+        return {
+          active_alerts:    alerts.filter((a) => !a.resolved).length,
+          violations_today: raw?.violations_today ?? violations,
+          drift_events:     raw?.drift_events     ?? drift,
+          unsafe_acts:      raw?.unsafe_acts      ?? unsafe,
+          alerts,
+        };
+      },
     }),
     getLeadershipIntelligence: builder.query<LeadershipIntelligenceData, void>({
       query: () => "/ai/leadership-intelligence",
