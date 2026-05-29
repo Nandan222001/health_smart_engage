@@ -357,6 +357,7 @@ export const router = createBrowserRouter([
       { path: "auditors", Component: AuditorsPage },
       { path: "contractors", Component: ContractorsPage },
       { path: "data-management", Component: DataManagementPage },
+      { path: "data-management/documents", Component: DataManagementPage },
       { path: "csv-import",      Component: CSVImportPage      },
       { path: "import-history",  Component: ImportHistoryPage  },
       { path: "validation-logs", Component: ValidationLogsPage },

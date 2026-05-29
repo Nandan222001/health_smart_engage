@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import {
   Upload, FileText, CheckCircle2, XCircle, AlertCircle, RefreshCw,
   Download, Database, Clock, AlertTriangle, FileSpreadsheet,
@@ -1166,8 +1167,8 @@ const DOC_SUB_TABS: { key: DocCategory; label: string; icon: React.ElementType; 
   { key: "ppt",  label: "Presentations",   icon: Presentation, accept: ".ppt,.pptx",  color: "#D97706", bg: "#FFFBEB", ext: "PPTX" },
 ];
 
-function DocumentsTab() {
-  const [subTab, setSubTab] = useState<DocCategory>("pdf");
+function DocumentsTab({ initialSubTab }: { initialSubTab?: DocCategory }) {
+  const [subTab, setSubTab] = useState<DocCategory>(initialSubTab ?? "pdf");
   const [docs, setDocs] = useState<DocRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1372,7 +1373,19 @@ function DocumentsTab() {
 type Tab = "manual" | "excel" | "api" | "documents";
 
 export function DataManagementPage() {
-  const [tab, setTab] = useState<Tab>("excel");
+  const [searchParams] = useSearchParams();
+  const typeParam = searchParams.get("type") as DocCategory | null;
+
+  const [tab, setTab] = useState<Tab>(typeParam ? "documents" : "excel");
+  const [docSubTab, setDocSubTab] = useState<DocCategory>(typeParam ?? "pdf");
+
+  // Sync when user navigates via sidebar to a different doc type
+  useEffect(() => {
+    if (typeParam) {
+      setTab("documents");
+      setDocSubTab(typeParam);
+    }
+  }, [typeParam]);
 
   const TABS: { key: Tab; label: string; icon: React.ElementType; desc: string }[] = [
     { key: "manual",    label: "Manual Entry",       icon: PenLine,        desc: "Enter data directly via form"    },
@@ -1428,7 +1441,7 @@ export function DataManagementPage() {
         {tab === "manual"    && <ManualEntryTab />}
         {tab === "excel"     && <ExcelTab />}
         {tab === "api"       && <ApiIntegrationsTab />}
-        {tab === "documents" && <DocumentsTab />}
+        {tab === "documents" && <DocumentsTab initialSubTab={docSubTab} />}
       </div>
 
       {/* Tip bar */}
