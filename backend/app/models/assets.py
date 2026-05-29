@@ -1,4 +1,4 @@
-from sqlalchemy import Date, Float, ForeignKey, String, Text
+from sqlalchemy import Date, Float, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -24,6 +24,7 @@ class Asset(Base, TenantScopedMixin):
     purchase_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
     last_maintenance_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
     next_maintenance_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
+    extra_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class AssetMaintenanceLog(Base, TenantScopedMixin):

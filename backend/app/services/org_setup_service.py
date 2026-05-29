@@ -11,6 +11,57 @@ from app.repositories.generic_repository import GenericRepository
 
 MODULE = "org_setup"
 
+# Known core columns per module — anything not listed ends up in extra_fields.
+# Keys are lowercased & stripped for matching.
+_KNOWN: dict[str, set[str]] = {
+    "organisation": {
+        "organisation name", "org name", "name", "industry type", "industry",
+        "employee count", "employees", "official email", "email",
+        "contact number", "phone", "contact", "country",
+        "hq address", "address",
+    },
+    "sites": {
+        "site name", "name", "site type", "type", "address", "location",
+        "region", "hazard level", "hazard",
+    },
+    "users": {
+        "full name", "name", "email", "email address",
+        "role", "job title", "position", "department", "dept", "team",
+    },
+    "employees": {
+        "full name", "name", "employee code", "code",
+        "role", "job title", "position", "department", "dept",
+        "contact", "phone", "status",
+    },
+    "departments": {
+        "department name", "name", "manager name", "manager",
+        "number of teams", "teams", "assigned site", "site",
+    },
+    "roles": {
+        "role name", "name", "description", "access level", "level",
+        "module access", "modules",
+    },
+    "vendors": {
+        "company name", "name", "vendor name", "contact", "email",
+        "phone", "trade type", "type", "status", "site", "site location",
+        "total workers", "workers", "contract expiry",
+    },
+    "assets": {
+        "asset code", "code", "name", "asset name", "description",
+        "category", "location", "criticality", "manufacturer",
+        "serial number", "serial", "status", "purchase date",
+        "last maintenance", "next maintenance",
+    },
+    "incidents": {
+        "incident type", "type", "severity", "description",
+        "location", "location / station", "incident date", "date",
+    },
+    "risk": {
+        "hazard description", "hazard", "likelihood (1-5)", "likelihood",
+        "consequence (1-5)", "consequence", "status",
+    },
+}
+
 STEP_RECORD_TYPES = {
     1: "step1_org_details",
     2: "step2_compliance",
@@ -37,6 +88,22 @@ class OrgSetupService:
         self.db = db
 
     # ── helpers ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _split_row(module_key: str, row: dict) -> tuple[dict, dict | None]:
+        """Split a row dict into (core_fields, extra_fields | None).
+        core_fields contains only columns known to the template.
+        extra_fields contains any additional org-specific columns, or None if empty.
+        """
+        known = _KNOWN.get(module_key, set())
+        core: dict = {}
+        extra: dict = {}
+        for k, v in row.items():
+            if k.lower().strip() in known:
+                core[k] = v
+            else:
+                extra[k] = v
+        return core, (extra if extra else None)
 
     def _first(self, tenant_id: str, record_type: str) -> GenericRecord | None:
         stmt = (
@@ -237,7 +304,9 @@ class OrgSetupService:
 
     # ── step 4: users ─────────────────────────────────────────────────────────
 
-    def _sync_user_to_employees(self, tenant_id: str, payload: dict, record_id: str) -> None:
+    def _sync_user_to_employees(
+        self, tenant_id: str, payload: dict, record_id: str, extra_fields: dict | None = None
+    ) -> None:
         """Upsert a step4_user payload into the employees table (keyed by email/contact)."""
         email = payload.get("email", "").strip()
         if not email:
@@ -252,6 +321,8 @@ class OrgSetupService:
             existing.name = payload.get("name", existing.name) or existing.name
             existing.role_name = payload.get("role") or existing.role_name
             existing.department_id = payload.get("department") or existing.department_id
+            if extra_fields:
+                existing.extra_fields = {**(existing.extra_fields or {}), **extra_fields}
             self.db.flush()
         else:
             emp = Employee(
@@ -262,6 +333,7 @@ class OrgSetupService:
                 department_id=payload.get("department"),
                 contact=email,
                 status="active",
+                extra_fields=extra_fields,
             )
             self.db.add(emp)
             self.db.flush()
@@ -397,16 +469,19 @@ class OrgSetupService:
                 name = _v(row, "site name", "name")
                 if not name:
                     continue
+                _, extra = self._split_row("sites", row)
+                core_payload = {
+                    "name":    name,
+                    "type":    _v(row, "site type", "type") or "Site",
+                    "address": _v(row, "address", "location"),
+                    "region":  _v(row, "region"),
+                    "hazard":  _v(row, "hazard level", "hazard"),
+                }
+                if extra:
+                    core_payload["extra_fields"] = extra
                 self.repo.create(
                     tenant_id=tenant_id, module=MODULE, record_type="step3_site",
-                    payload={
-                        "name":    name,
-                        "type":    _v(row, "site type", "type") or "Site",
-                        "address": _v(row, "address", "location"),
-                        "region":  _v(row, "region"),
-                        "hazard":  _v(row, "hazard level", "hazard"),
-                    },
-                    status="active",
+                    payload=core_payload, status="active",
                 )
                 created += 1
             return {"module": module_key, "status": "imported", "count": created}
@@ -417,17 +492,20 @@ class OrgSetupService:
                 email = _v(row, "email", "email address")
                 if not email:
                     continue
+                _, extra = self._split_row("users", row)
                 payload = {
                     "name":       _v(row, "full name", "name"),
                     "email":      email,
                     "role":       _v(row, "role", "job title", "position") or "Worker",
                     "department": _v(row, "department", "dept", "team"),
                 }
+                if extra:
+                    payload["extra_fields"] = extra
                 rec = self.repo.create(
                     tenant_id=tenant_id, module=MODULE, record_type="step4_user",
                     payload=payload, status="pending",
                 )
-                self._sync_user_to_employees(tenant_id, payload, rec.id)
+                self._sync_user_to_employees(tenant_id, payload, rec.id, extra_fields=extra)
                 created += 1
             return {"module": module_key, "status": "imported", "count": created}
 
@@ -437,15 +515,18 @@ class OrgSetupService:
                 name = _v(row, "department name", "name")
                 if not name:
                     continue
+                _, extra = self._split_row("departments", row)
+                core_payload = {
+                    "name":    name,
+                    "manager": _v(row, "manager name", "manager"),
+                    "teams":   _v(row, "number of teams", "teams"),
+                    "site":    _v(row, "assigned site", "site"),
+                }
+                if extra:
+                    core_payload["extra_fields"] = extra
                 self.repo.create(
                     tenant_id=tenant_id, module=MODULE, record_type="org_department",
-                    payload={
-                        "name":    name,
-                        "manager": _v(row, "manager name", "manager"),
-                        "teams":   _v(row, "number of teams", "teams"),
-                        "site":    _v(row, "assigned site", "site"),
-                    },
-                    status="active",
+                    payload=core_payload, status="active",
                 )
                 created += 1
             return {"module": module_key, "status": "imported", "count": created}
@@ -456,15 +537,18 @@ class OrgSetupService:
                 name = _v(row, "role name", "name")
                 if not name:
                     continue
+                _, extra = self._split_row("roles", row)
+                core_payload = {
+                    "name":        name,
+                    "description": _v(row, "description"),
+                    "level":       _v(row, "access level", "level"),
+                    "modules":     _v(row, "module access", "modules"),
+                }
+                if extra:
+                    core_payload["extra_fields"] = extra
                 self.repo.create(
                     tenant_id=tenant_id, module=MODULE, record_type="org_role",
-                    payload={
-                        "name":        name,
-                        "description": _v(row, "description"),
-                        "level":       _v(row, "access level", "level"),
-                        "modules":     _v(row, "module access", "modules"),
-                    },
-                    status="active",
+                    payload=core_payload, status="active",
                 )
                 created += 1
             return {"module": module_key, "status": "imported", "count": created}
@@ -475,23 +559,18 @@ class OrgSetupService:
                 from app.models.incidents import Incident
                 import random as _rand
                 for row in rows:
-                    payload = {
-                        "incident_type": _v(row, "incident type", "type") or "incident_report",
-                        "severity":      _v(row, "severity") or "unclassified",
-                        "description":   _v(row, "description") or "",
-                        "location_id":   _v(row, "location", "location / station"),
-                        "occurred_at":   _v(row, "incident date", "date"),
-                    }
+                    _, extra = self._split_row("incidents", row)
                     inc = Incident(
                         id=str(uuid4()),
                         tenant_id=tenant_id,
                         incident_ref=f"INC-{_rand.randint(10000, 99999)}",
                         reporter_user_id=user.user_id,
-                        incident_type=payload["incident_type"],
-                        severity=payload["severity"],
-                        description=payload["description"],
+                        incident_type=_v(row, "incident type", "type") or "incident_report",
+                        severity=_v(row, "severity") or "unclassified",
+                        description=_v(row, "description") or "",
                         is_confidential=False,
                         status="reported",
+                        extra_fields=extra,
                     )
                     self.db.add(inc)
                     created += 1
@@ -508,6 +587,7 @@ class OrgSetupService:
                     hazard = _v(row, "hazard description", "hazard")
                     if not hazard:
                         continue
+                    _, extra = self._split_row("risk", row)
                     likelihood  = int(_v(row, "likelihood (1-5)", "likelihood") or 1)
                     consequence = int(_v(row, "consequence (1-5)", "consequence") or 1)
                     ra = RiskAssessment(
@@ -519,6 +599,7 @@ class OrgSetupService:
                         consequence=consequence,
                         risk_score=likelihood * consequence,
                         status="draft",
+                        extra_fields=extra,
                     )
                     self.db.add(ra)
                     created += 1
@@ -527,14 +608,76 @@ class OrgSetupService:
                 errors.append(f"Risk domain save failed: {exc}")
             return {"module": module_key, "status": "imported", "count": created, "errors": errors}
 
+        # ── assets → real Asset records ──
+        if module_key == "assets":
+            try:
+                from app.models.assets import Asset
+                for row in rows:
+                    name = _v(row, "asset name", "name")
+                    if not name:
+                        continue
+                    _, extra = self._split_row("assets", row)
+                    asset = Asset(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        asset_code=_v(row, "asset code", "code") or f"AST-{str(uuid4())[:8].upper()}",
+                        name=name,
+                        description=_v(row, "description"),
+                        category=_v(row, "category") or "General",
+                        location=_v(row, "location"),
+                        criticality=_v(row, "criticality") or "medium",
+                        manufacturer=_v(row, "manufacturer"),
+                        serial_number=_v(row, "serial number", "serial"),
+                        status=_v(row, "status") or "Active",
+                        extra_fields=extra,
+                    )
+                    self.db.add(asset)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Asset domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
+        # ── vendors → real Vendor records ──
+        if module_key == "vendors":
+            try:
+                from app.models.vendors import Vendor
+                for row in rows:
+                    name = _v(row, "company name", "vendor name", "name")
+                    if not name:
+                        continue
+                    _, extra = self._split_row("vendors", row)
+                    vendor = Vendor(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        company_name=name,
+                        contact=_v(row, "contact"),
+                        email=_v(row, "email"),
+                        phone=_v(row, "phone"),
+                        trade_type=_v(row, "trade type", "type") or "General",
+                        status=_v(row, "status") or "Pending",
+                        site_location=_v(row, "site", "site location"),
+                        extra_fields=extra,
+                    )
+                    self.db.add(vendor)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Vendor domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
         # ── all other modules → store in generic_records ──
         record_type = f"org_import_{module_key}"
         for row in rows:
             if not any(v for v in row.values()):
                 continue
+            _, extra = self._split_row(module_key, row)
+            payload = dict(row)
+            if extra:
+                payload["extra_fields"] = extra
             self.repo.create(
                 tenant_id=tenant_id, module=MODULE, record_type=record_type,
-                payload=dict(row), status="imported",
+                payload=payload, status="imported",
             )
             created += 1
         return {"module": module_key, "status": "imported", "count": created, "errors": errors}

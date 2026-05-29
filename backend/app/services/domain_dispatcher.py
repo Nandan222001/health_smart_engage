@@ -5,8 +5,14 @@ from app.core.config import settings
 
 
 def _to_dict(obj) -> dict:
-    """Serialize a SQLAlchemy model instance to a plain dict, stripping internal state."""
-    return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
+    """Serialize a SQLAlchemy model instance to a plain dict.
+    extra_fields JSON is merged into the top-level dict so callers see a flat object.
+    """
+    d = {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
+    extras = d.pop("extra_fields", None)
+    if extras and isinstance(extras, dict):
+        d.update(extras)
+    return d
 from app.services.ai_service import AiService
 from app.services.file_storage_service import FileStorageService
 from app.services.mobile_sync_service import MobileSyncService

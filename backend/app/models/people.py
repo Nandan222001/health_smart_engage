@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -15,6 +15,7 @@ class Employee(Base, TenantScopedMixin):
     department_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(64), default="active")
+    extra_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class Certification(Base, TenantScopedMixin):

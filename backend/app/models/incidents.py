@@ -18,6 +18,7 @@ class Incident(Base, TenantScopedMixin):
     injured_persons: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_confidential: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(64), default="reported")
+    extra_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class Investigation(Base, TenantScopedMixin):
