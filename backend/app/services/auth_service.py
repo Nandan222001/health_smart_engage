@@ -84,8 +84,12 @@ class AuthService:
         return _hash_password(password)
 
     def _get_user_by_email(self, email: str):
+        from sqlalchemy import desc
+        # Most-recently created row wins — guards against duplicate rows from re-invitations
         return self.db.scalars(
-            select(User).where(User.email == email.strip().lower())
+            select(User)
+            .where(User.email == email.strip().lower())
+            .order_by(desc(User.created_at))
         ).first()
 
     def _is_org_admin(self, user: User) -> bool:
@@ -141,6 +145,15 @@ class AuthService:
         else:
             roles = []
             permissions = []
+
+        # Fetch allowed_modules from the most recent invitation for this email
+        inv = self.db.scalars(
+            select(OrgInvitation)
+            .where(OrgInvitation.admin_email == user.email)
+            .order_by(OrgInvitation.created_at.desc())
+        ).first()
+        allowed_modules = inv.allowed_modules if inv and inv.allowed_modules else []
+
         return {
             "id": user.id,
             "email": user.email,
@@ -150,4 +163,5 @@ class AuthService:
             "is_superadmin": user.is_superadmin,
             "roles": roles,
             "permissions": permissions,
+            "allowed_modules": allowed_modules,
         }

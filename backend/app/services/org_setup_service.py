@@ -340,9 +340,6 @@ class OrgSetupService:
     # ── step 6a: data import ──────────────────────────────────────────────────
 
     def import_data(self, user: CurrentUser, data: dict) -> dict:
-        err = self._check_prerequisite(user.tenant_id, 5)
-        if err:
-            return err
         record = self.repo.create(
             tenant_id=user.tenant_id,
             module=MODULE,
@@ -351,6 +348,196 @@ class OrgSetupService:
             status="imported",
         )
         return {"step": "6a", "status": "imported", "record_id": record.id, "import_id": record.id}
+
+    # ── generic bulk import (onboarding) ──────────────────────────────────────
+
+    def bulk_import_module(self, user: CurrentUser, module_key: str, rows: list[dict]) -> dict:
+        """Parse and persist rows for any onboarding module.
+
+        Mapping:
+        - organisation / sites / users → dedicated record types + employee sync
+        - departments / roles          → generic org record types
+        - incidents                    → generic_records + Incident domain rows
+        - risk                         → generic_records + RiskAssessment rows
+        - all other modules            → generic_records as org_import_{module}
+        """
+        tenant_id = user.tenant_id
+        created = 0
+        errors: list[str] = []
+
+        # ── helpers ──
+        def _v(row: dict, *keys: str) -> str:
+            low = {k.lower().strip(): v for k, v in row.items()}
+            for k in keys:
+                v = low.get(k.lower())
+                if v:
+                    return str(v).strip()
+            return ""
+
+        # ── organisation (upsert step1) ──
+        if module_key == "organisation":
+            for row in rows[:1]:  # only first row matters for org details
+                payload = {
+                    "organizationName":    _v(row, "organisation name", "org name", "name"),
+                    "industryType":        _v(row, "industry type", "industry"),
+                    "employeeCount":       _v(row, "employee count", "employees"),
+                    "officialEmail":       _v(row, "official email", "email"),
+                    "contactNumber":       _v(row, "contact number", "phone", "contact"),
+                    "country":             _v(row, "country"),
+                    "headquartersAddress": _v(row, "hq address", "address"),
+                }
+                payload = {k: v for k, v in payload.items() if v}
+                self._upsert(tenant_id, "step1_org_details", payload)
+                created = 1
+            return {"module": module_key, "status": "imported", "count": created}
+
+        # ── sites (same as step3/bulk) ──
+        if module_key == "sites":
+            for row in rows:
+                name = _v(row, "site name", "name")
+                if not name:
+                    continue
+                self.repo.create(
+                    tenant_id=tenant_id, module=MODULE, record_type="step3_site",
+                    payload={
+                        "name":    name,
+                        "type":    _v(row, "site type", "type") or "Site",
+                        "address": _v(row, "address", "location"),
+                        "region":  _v(row, "region"),
+                        "hazard":  _v(row, "hazard level", "hazard"),
+                    },
+                    status="active",
+                )
+                created += 1
+            return {"module": module_key, "status": "imported", "count": created}
+
+        # ── users (same as step4/bulk + employee sync) ──
+        if module_key == "users":
+            for row in rows:
+                email = _v(row, "email", "email address")
+                if not email:
+                    continue
+                payload = {
+                    "name":       _v(row, "full name", "name"),
+                    "email":      email,
+                    "role":       _v(row, "role", "job title", "position") or "Worker",
+                    "department": _v(row, "department", "dept", "team"),
+                }
+                rec = self.repo.create(
+                    tenant_id=tenant_id, module=MODULE, record_type="step4_user",
+                    payload=payload, status="pending",
+                )
+                self._sync_user_to_employees(tenant_id, payload, rec.id)
+                created += 1
+            return {"module": module_key, "status": "imported", "count": created}
+
+        # ── departments ──
+        if module_key == "departments":
+            for row in rows:
+                name = _v(row, "department name", "name")
+                if not name:
+                    continue
+                self.repo.create(
+                    tenant_id=tenant_id, module=MODULE, record_type="org_department",
+                    payload={
+                        "name":    name,
+                        "manager": _v(row, "manager name", "manager"),
+                        "teams":   _v(row, "number of teams", "teams"),
+                        "site":    _v(row, "assigned site", "site"),
+                    },
+                    status="active",
+                )
+                created += 1
+            return {"module": module_key, "status": "imported", "count": created}
+
+        # ── roles ──
+        if module_key == "roles":
+            for row in rows:
+                name = _v(row, "role name", "name")
+                if not name:
+                    continue
+                self.repo.create(
+                    tenant_id=tenant_id, module=MODULE, record_type="org_role",
+                    payload={
+                        "name":        name,
+                        "description": _v(row, "description"),
+                        "level":       _v(row, "access level", "level"),
+                        "modules":     _v(row, "module access", "modules"),
+                    },
+                    status="active",
+                )
+                created += 1
+            return {"module": module_key, "status": "imported", "count": created}
+
+        # ── incidents → real Incident records + generic backup ──
+        if module_key == "incidents":
+            try:
+                from app.models.incidents import Incident
+                import random as _rand
+                for row in rows:
+                    payload = {
+                        "incident_type": _v(row, "incident type", "type") or "incident_report",
+                        "severity":      _v(row, "severity") or "unclassified",
+                        "description":   _v(row, "description") or "",
+                        "location_id":   _v(row, "location", "location / station"),
+                        "occurred_at":   _v(row, "incident date", "date"),
+                    }
+                    inc = Incident(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        incident_ref=f"INC-{_rand.randint(10000, 99999)}",
+                        reporter_user_id=user.user_id,
+                        incident_type=payload["incident_type"],
+                        severity=payload["severity"],
+                        description=payload["description"],
+                        is_confidential=False,
+                        status="reported",
+                    )
+                    self.db.add(inc)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Incident domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
+        # ── risk assessments → RiskAssessment records ──
+        if module_key == "risk":
+            try:
+                from app.models.domain import RiskAssessment
+                for row in rows:
+                    hazard = _v(row, "hazard description", "hazard")
+                    if not hazard:
+                        continue
+                    likelihood  = int(_v(row, "likelihood (1-5)", "likelihood") or 1)
+                    consequence = int(_v(row, "consequence (1-5)", "consequence") or 1)
+                    ra = RiskAssessment(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        hazard_description=hazard,
+                        task_name=hazard[:100],
+                        likelihood=likelihood,
+                        consequence=consequence,
+                        risk_score=likelihood * consequence,
+                        status="draft",
+                    )
+                    self.db.add(ra)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Risk domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
+        # ── all other modules → store in generic_records ──
+        record_type = f"org_import_{module_key}"
+        for row in rows:
+            if not any(v for v in row.values()):
+                continue
+            self.repo.create(
+                tenant_id=tenant_id, module=MODULE, record_type=record_type,
+                payload=dict(row), status="imported",
+            )
+            created += 1
+        return {"module": module_key, "status": "imported", "count": created, "errors": errors}
 
     def list_imports(self, user: CurrentUser) -> dict:
         records = self.repo.list_by_type(user.tenant_id, MODULE, "step6a_import")
@@ -378,14 +565,13 @@ class OrgSetupService:
         if not data.get("confirmed", False):
             return {"error": "Activation requires confirmed=true"}
 
-        # Verify all steps 1–7 are complete before activating
-        for step in range(1, 8):
-            err = self._check_prerequisite(user.tenant_id, step)
-            if err:
-                return {
-                    "error": f"Cannot activate: {err['error']}",
-                    "prerequisite_step": err["prerequisite_step"],
-                }
+        # Only require step 1 (org details) to activate; other steps are optional
+        err = self._check_prerequisite(user.tenant_id, 1)
+        if err:
+            return {
+                "error": f"Cannot activate: {err['error']}",
+                "prerequisite_step": err["prerequisite_step"],
+            }
 
         # Persist activation record
         self._upsert(

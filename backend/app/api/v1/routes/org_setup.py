@@ -359,3 +359,129 @@ def download_users_template():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=users_template.csv"},
     )
+
+
+# ── Generic module templates ──────────────────────────────────────────────────
+
+_MODULE_TEMPLATES: dict[str, tuple[str, str]] = {
+    "organisation": (
+        "Organisation Name,Industry Type,Employee Count,Country,Official Email,Contact Number,HQ Address,ISO 45001 Status\n"
+        "WindTech Ltd,Manufacturing,150,United Kingdom,safety@windtech.com,+44 1656 000100,123 Industrial Park,Certified\n",
+        "organisation_template.csv",
+    ),
+    "departments": (
+        "Department Name,Manager Name,Number of Teams,Assigned Site\n"
+        "Heavy Assembly,James Thompson,3,Bridgend Complex\n"
+        "Maintenance,Sarah Lee,2,Bridgend Complex\n",
+        "departments_template.csv",
+    ),
+    "roles": (
+        "Role Name,Description,Access Level,Module Access\n"
+        "HSE Manager,Manages HSE compliance,Manager,Incidents Audits Risk\n"
+        "Site Inspector,Inspects site safety,Supervisor,Audits Inspections\n",
+        "roles_template.csv",
+    ),
+    "incidents": (
+        "Incident Date,Location / Station,Incident Type,Severity,Description,Immediate Cause,Reported By\n"
+        "2024-01-15,Zone 4 - Chemical Handling,Injury,Minor,Worker slipped on wet floor,Wet floor not marked,John Smith\n"
+        "2024-02-10,STN005 - Heavy Assembly,Near-miss,Significant,Tool nearly fell from height,Improper tool storage,Jane Doe\n",
+        "incidents_template.csv",
+    ),
+    "permits": (
+        "Permit Type,Work Location,Start Date,End Date,Assigned To,Description,Hazards\n"
+        "Hot Work,Zone 4 - Welding Bay,2024-03-01,2024-03-01,Tom Baker,Welding repairs on pipe,Fire Chemical\n"
+        "Work at Height,Roof Level B,2024-03-05,2024-03-05,Alice Brown,Roof inspection,Fall from height\n",
+        "permits_template.csv",
+    ),
+    "risk": (
+        "Hazard Description,Location,Risk Level,Likelihood (1-5),Consequence (1-5),Controls,Responsible Person\n"
+        "Machinery Contact/Crushing,STN001 Heavy Assembly,High,4,4,Machine guards fitted safety signs posted,Safety Manager\n"
+        "Chemical Spill,Zone 4 Chemical Store,Critical,3,5,COSHH training spill kits secondary containment,EHS Lead\n",
+        "risk_template.csv",
+    ),
+    "capa": (
+        "Title,Description,Priority,Assigned To,Due Date,Source Type\n"
+        "Replace machine guard,Broken guard on conveyor belt needs urgent replacement,High,john@company.com,2024-02-28,Incident\n"
+        "Update fire drill procedure,Annual review overdue requires updated evacuation maps,Medium,jane@company.com,2024-03-15,Audit\n",
+        "capa_template.csv",
+    ),
+    "training": (
+        "Training Name,Employee,Completed Date,Expiry Date,Trainer / Provider,Result\n"
+        "Fire Safety Training,John Smith,2024-01-10,2025-01-10,Internal HSE Team,Pass\n"
+        "Manual Handling,Jane Doe,2024-01-15,2025-01-15,External Provider,Pass\n",
+        "training_template.csv",
+    ),
+    "audits": (
+        "Audit Title,Audit Type,Standard,Scheduled Date,Lead Auditor,Status,Site\n"
+        "Q1 Fire Safety Audit,Internal,ISO 45001,2024-03-15,Jane Doe,Scheduled,Bridgend Complex\n"
+        "Annual External Audit,External,OSHA,2024-06-01,External Auditor,Scheduled,All Sites\n",
+        "audits_template.csv",
+    ),
+    "kpis": (
+        "KPI Name,Period (Month),Value,Target,Unit,Site\n"
+        "Incident Rate (TRIR),2024-01,2.4,3.0,per 100k hours,All Sites\n"
+        "Near Miss Reports,2024-01,12,10,count,Bridgend Complex\n",
+        "kpis_template.csv",
+    ),
+    "vendors": (
+        "Company Name,Contact Email,Contact Phone,Service Type,HSE Rating,Contract Start,Contract End\n"
+        "SafeWork Contractors Ltd,contact@safework.com,+44 1234 567890,Construction,Approved,2024-01-01,2024-12-31\n"
+        "CleanTech Services,info@cleantech.com,+44 9876 543210,Cleaning,Conditional,2024-02-01,2024-07-31\n",
+        "vendors_template.csv",
+    ),
+}
+
+
+@router.get("/template/{module_key}", summary="Download CSV template for any module")
+def download_module_template(module_key: str):
+    if module_key == "sites":
+        content = (
+            "Name,Type,Address,Region,Hazard Level,Employee Count,Workstations\n"
+            "Head Office,Site,123 Corporate Blvd,London,Low Risk,50,12\n"
+            "Plant A,Plant,456 Industrial Ave,South Wales,High Risk,150,32\n"
+        )
+        filename = "sites_template.csv"
+    elif module_key == "users":
+        content = (
+            "Name,Email,Role,Department,Site,Phone\n"
+            "John Smith,john.smith@company.com,HSE Manager,Safety,Plant A,+44 7700 900001\n"
+            "Jane Doe,jane.doe@company.com,Supervisor,Operations,Head Office,+44 7700 900002\n"
+        )
+        filename = "users_template.csv"
+    else:
+        entry = _MODULE_TEMPLATES.get(module_key)
+        if not entry:
+            content, filename = "Field,Value\n", f"{module_key}_template.csv"
+        else:
+            content, filename = entry
+
+    return StreamingResponse(
+        io.BytesIO(content.encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ── Generic onboarding bulk import ────────────────────────────────────────────
+
+@router.post(
+    "/onboarding-bulk",
+    summary="Bulk import any module during onboarding",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def onboarding_bulk_import(
+    file: UploadFile = File(...),
+    module: str = "incidents",
+    user: Annotated[CurrentUser, Depends(get_current_user)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
+):
+    content = await file.read()
+    try:
+        rows = _parse_file(content, file.filename or "upload.csv")
+    except Exception as exc:
+        return accepted({"count": 0, "error": str(exc)}, "Parse failed")
+
+    svc = OrgSetupService(db)
+    result = svc.bulk_import_module(user, module, rows)
+    db.commit()
+    return accepted(result, f"Imported {result.get('count', 0)} records for {module}")

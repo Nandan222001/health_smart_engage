@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import {
   House, BookOpenText, Users, CircleAlert, Briefcase,
@@ -101,39 +101,51 @@ const SUPERADMIN_NAV: NavGroup[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Org Admin — 13 collapsible groups
+// Org Admin — collapsible groups
 // ---------------------------------------------------------------------------
 
 interface OrgAdminSubItem { name: string; path: string; }
-interface OrgAdminGroup  { icon: LucideIcon; items: OrgAdminSubItem[]; }
+interface OrgAdminGroup  {
+  icon: LucideIcon;
+  items: OrgAdminSubItem[];
+  /** Permission required to see this group. Undefined = always visible. */
+  requiredPermission?: string;
+  /** OrgInvitation module key that enables this group (empty allowed_modules = all visible). */
+  moduleKey?: string;
+}
 
 const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   "Home": {
     icon: House,
+    // always visible — no permission or module required
     items: [
-      { name: "Dashboard",        path: "/" },
-      { name: "Overview",         path: "/overview" },
-      { name: "Real-Time KPIs",   path: "/kpis" },
-      { name: "Notifications",    path: "/notifications" },
-      { name: "Recent Activities",path: "/activities" },
+      { name: "Dashboard",         path: "/" },
+      { name: "Overview",          path: "/overview" },
+      { name: "Real-Time KPIs",    path: "/kpis" },
+      { name: "Notifications",     path: "/notifications" },
+      { name: "Recent Activities", path: "/activities" },
     ],
   },
   "People": {
     icon: Users,
+    requiredPermission: "training:write",
+    moduleKey: "people",
     items: [
-      { name: "Users",                path: "/users" },
-      { name: "Workers",              path: "/workers" },
-      { name: "Supervisors",          path: "/supervisors" },
-      { name: "HSE Managers",         path: "/hse-managers" },
-      { name: "Auditors",             path: "/auditors" },
-      { name: "Contractors",          path: "/contractors" },
-      { name: "Roles & Permissions",  path: "/roles-permissions" },
-      { name: "Training & Competency",path: "/training" },
-      { name: "Shift Management",     path: "/shift-management" },
+      { name: "Users",                 path: "/users" },
+      { name: "Workers",               path: "/workers" },
+      { name: "Supervisors",           path: "/supervisors" },
+      { name: "HSE Managers",          path: "/hse-managers" },
+      { name: "Auditors",              path: "/auditors" },
+      { name: "Contractors",           path: "/contractors" },
+      { name: "Roles & Permissions",   path: "/roles-permissions" },
+      { name: "Training & Competency", path: "/training" },
+      { name: "Shift Management",      path: "/shift-management" },
     ],
   },
   "Vendors": {
     icon: Building2,
+    requiredPermission: "vendors:read",
+    moduleKey: "vendors",
     items: [
       { name: "Vendor List",       path: "/vendors" },
       { name: "Vendor Compliance", path: "/vendor-compliance" },
@@ -143,6 +155,8 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   },
   "Assets": {
     icon: FolderClosed,
+    requiredPermission: "assets:write",
+    moduleKey: "assets",
     items: [
       { name: "Asset Register",        path: "/asset-register" },
       { name: "Asset Categories",      path: "/asset-categories" },
@@ -153,6 +167,8 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   },
   "Compliance": {
     icon: ClipboardCheck,
+    requiredPermission: "audit:write",
+    moduleKey: "compliance",
     items: [
       { name: "Compliance Dashboard", path: "/compliance-dashboard" },
       { name: "Standards & Policies", path: "/standards-policies" },
@@ -165,37 +181,45 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   },
   "Risk": {
     icon: ShieldAlert,
+    requiredPermission: "web:write",
+    moduleKey: "risk",
     items: [
-      { name: "Risk Assessments",   path: "/risk-assessments" },
-      { name: "Hazard Register",    path: "/hazard-list" },
-      { name: "Near Miss Reports",  path: "/near-miss" },
-      { name: "Risk Matrix",        path: "/risk-matrix" },
-      { name: "High-Risk Areas",    path: "/high-risk-areas" },
+      { name: "Risk Assessments",  path: "/risk-assessments" },
+      { name: "Hazard Register",   path: "/hazard-list" },
+      { name: "Near Miss Reports", path: "/near-miss" },
+      { name: "Risk Matrix",       path: "/risk-matrix" },
+      { name: "High-Risk Areas",   path: "/high-risk-areas" },
     ],
   },
   "Work": {
     icon: Briefcase,
+    requiredPermission: "permits:write",
+    moduleKey: "work",
     items: [
-      { name: "Permit To Work (PTW)",path: "/permits" },
-      { name: "Permit Requests",    path: "/permit-requests" },
-      { name: "Approval Queue",     path: "/approval-queue" },
-      { name: "Active Work Permits",path: "/active-work-permits" },
-      { name: "Workflow Management",path: "/workflow-management?tab=config" },
-      { name: "Escalation Rules",   path: "/workflow-management?tab=escalation" },
-      { name: "Site Operations",    path: "/sites-zones" },
+      { name: "Permit To Work (PTW)", path: "/permits" },
+      { name: "Permit Requests",      path: "/permit-requests" },
+      { name: "Approval Queue",       path: "/approval-queue" },
+      { name: "Active Work Permits",  path: "/active-work-permits" },
+      { name: "Workflow Management",  path: "/workflow-management?tab=config" },
+      { name: "Escalation Rules",     path: "/workflow-management?tab=escalation" },
+      { name: "Site Operations",      path: "/sites-zones" },
     ],
   },
   "Incidents": {
     icon: AlertTriangle,
+    requiredPermission: "web:read",
+    moduleKey: "incidents",
     items: [
-      { name: "Incident Management", path: "/incident-management" },
-      { name: "Incident Severity",   path: "/incident-severity" },
-      { name: "Investigation Status",path: "/investigation-status" },
-      { name: "Root Causes",         path: "/root-causes" },
+      { name: "Incident Management",  path: "/incident-management" },
+      { name: "Incident Severity",    path: "/incident-severity" },
+      { name: "Investigation Status", path: "/investigation-status" },
+      { name: "Root Causes",          path: "/root-causes" },
     ],
   },
   "Intelligence": {
     icon: BrainCircuit,
+    requiredPermission: "ai:read",
+    moduleKey: "intelligence",
     items: [
       { name: "AI Dashboard",            path: "/ai-dashboard" },
       { name: "AI Assistant",            path: "/ai-agent" },
@@ -209,36 +233,44 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   },
   "Data Management": {
     icon: Database,
+    requiredPermission: "admin:write",
+    moduleKey: "data",
     items: [
-      { name: "Excel Upload",    path: "/data-management" },
-      { name: "CSV Import",      path: "/csv-import" },
-      { name: "API Integrations",path: "/api-integrations" },
-      { name: "Import History",  path: "/import-history" },
-      { name: "Validation Logs", path: "/validation-logs" },
-      { name: "Sync Status",     path: "/sync-status" },
+      { name: "Excel Upload",     path: "/data-management" },
+      { name: "CSV Import",       path: "/csv-import" },
+      { name: "API Integrations", path: "/api-integrations" },
+      { name: "Import History",   path: "/import-history" },
+      { name: "Validation Logs",  path: "/validation-logs" },
+      { name: "Sync Status",      path: "/sync-status" },
     ],
   },
   "Reports": {
     icon: BarChart3,
+    requiredPermission: "reports:export",
+    moduleKey: "reports",
     items: [
       { name: "KPI Reports",        path: "/kpi-reports" },
       { name: "Incident Reports",   path: "/incident-reports" },
       { name: "Audit Reports",      path: "/audit-reports" },
-      { name: "Compliance Reports",  path: "/compliance-reports" },
-      { name: "Risk Reports",        path: "/risk-reports" },
-      { name: "Workforce Reports",   path: "/workforce-reports" },
-      { name: "Management Reports",  path: "/admin/management-reports" },
+      { name: "Compliance Reports", path: "/compliance-reports" },
+      { name: "Risk Reports",       path: "/risk-reports" },
+      { name: "Workforce Reports",  path: "/workforce-reports" },
+      { name: "Management Reports", path: "/admin/management-reports" },
     ],
   },
   "Knowledge Hub": {
     icon: BookMarked,
+    requiredPermission: "knowledge:write",
+    moduleKey: "knowledge",
     items: [
-      { name: "Documentation",       path: "/admin/documentation" },
-      { name: "Resource Library",   path: "/admin/documentation?tab=library" },
+      { name: "Documentation",    path: "/admin/documentation" },
+      { name: "Resource Library", path: "/admin/documentation?tab=library" },
     ],
   },
   "Settings": {
     icon: Settings,
+    requiredPermission: "admin:write",
+    // always visible for full admins — moduleKey intentionally omitted
     items: [
       { name: "Organization Settings", path: "/admin/organization-settings" },
       { name: "Site Settings",         path: "/admin/site-settings" },
@@ -251,10 +283,11 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   },
   "Help": {
     icon: HelpCircle,
+    // always visible — no permission or module required
     items: [
-      { name: "Help Center",         path: "/help" },
-      { name: "Raise Support Ticket",path: "/admin/support-tickets" },
-      { name: "Contact Support",     path: "/contact-support" },
+      { name: "Help Center",          path: "/help" },
+      { name: "Raise Support Ticket", path: "/admin/support-tickets" },
+      { name: "Contact Support",      path: "/contact-support" },
     ],
   },
 };
@@ -277,6 +310,28 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
 
   const isOrgAdmin = !isSuperAdmin && user?.role === "Admin";
 
+  // Compute visible org admin groups dynamically based on backend permissions + modules
+  const visibleOrgAdminGroups = useMemo(() => {
+    if (!isOrgAdmin) return {};
+    const perms = user?.permissions ?? [];
+    const modules = user?.orgModules ?? [];
+    // No permissions stored yet (e.g. Theta/Firebase login) → show everything
+    const noRestrictions = perms.length === 0 && modules.length === 0;
+    // Super-admin-level permission or write-all → show everything
+    const hasAdminStar = perms.includes("admin:*");
+
+    return Object.fromEntries(
+      Object.entries(ORG_ADMIN_GROUPS).filter(([, group]) => {
+        if (noRestrictions || hasAdminStar) return true;
+        // Check permission gate
+        const permOk = !group.requiredPermission || perms.includes(group.requiredPermission);
+        // Check module gate — if orgModules is non-empty, group's moduleKey must be in it
+        const moduleOk = !group.moduleKey || modules.length === 0 || modules.includes(group.moduleKey);
+        return permOk && moduleOk;
+      })
+    ) as Record<string, OrgAdminGroup>;
+  }, [isOrgAdmin, user?.permissions, user?.orgModules]);
+
   useEffect(() => {
     onCloseMobile?.();
   }, [location.pathname, onCloseMobile]);
@@ -295,7 +350,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   useEffect(() => {
     if (!isOrgAdmin) return;
     const pathname = location.pathname;
-    for (const [groupName, group] of Object.entries(ORG_ADMIN_GROUPS)) {
+    for (const [groupName, group] of Object.entries(visibleOrgAdminGroups)) {
       const match = group.items.some((item) => {
         const base = item.path.split("?")[0];
         return base === "/" ? pathname === "/" : pathname.startsWith(base);
@@ -305,7 +360,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
         break;
       }
     }
-  }, [location.pathname, isOrgAdmin]);
+  }, [location.pathname, isOrgAdmin, visibleOrgAdminGroups]);
 
   const handleLogout = () => {
     logout();
@@ -386,8 +441,8 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
 
-          {/* Org Admin — 13 collapsible groups */}
-          {isOrgAdmin && Object.entries(ORG_ADMIN_GROUPS).map(([groupName, group]) => {
+          {/* Org Admin — collapsible groups (filtered by user permissions + orgModules) */}
+          {isOrgAdmin && Object.entries(visibleOrgAdminGroups).map(([groupName, group]) => {
             const isOpen = !!expandedGroups[groupName];
             const GroupIcon = group.icon;
             const groupHasActive = group.items.some((item) => isSubItemActive(item.path));

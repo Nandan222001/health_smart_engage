@@ -64,28 +64,38 @@ class InvitationService:
         token = secrets.token_urlsafe(32)
         expiry = datetime.now(timezone.utc) + timedelta(days=expiry_days)
 
-        # 2. Create tenant
-        tenant_id = str(uuid.uuid4())
-        tenant = Tenant(
-            id=tenant_id,
-            name=org_name,
-            status="active",
-            org_code=_org_code(org_name),
-            contact_email=admin_email,
-        )
-        self.db.add(tenant)
+        # 2. Reuse existing user/tenant if this email was invited before
+        from sqlalchemy import desc as _desc
+        existing_user = self.db.scalars(
+            select(User).where(User.email == admin_email).order_by(_desc(User.created_at))
+        ).first()
 
-        # 3. Create org admin user with generated password
-        org_user = User(
-            id=str(uuid.uuid4()),
-            email=admin_email,
-            display_name=admin_name,
-            status="invited",
-            tenant_id=tenant_id,
-            password_hash=_hash(password),
-            is_superadmin=False,
-        )
-        self.db.add(org_user)
+        if existing_user:
+            # Reuse the existing tenant, just reset credentials
+            tenant_id = existing_user.tenant_id
+            existing_user.display_name = admin_name
+            existing_user.password_hash = _hash(password)
+            existing_user.status = "invited"
+        else:
+            # Create a fresh tenant and user
+            tenant_id = str(uuid.uuid4())
+            tenant = Tenant(
+                id=tenant_id,
+                name=org_name,
+                status="active",
+                org_code=_org_code(org_name),
+                contact_email=admin_email,
+            )
+            self.db.add(tenant)
+            self.db.add(User(
+                id=str(uuid.uuid4()),
+                email=admin_email,
+                display_name=admin_name,
+                status="invited",
+                tenant_id=tenant_id,
+                password_hash=_hash(password),
+                is_superadmin=False,
+            ))
 
         # 4. Create the invitation record linked to the tenant
         inv = OrgInvitation(
@@ -133,11 +143,13 @@ class InvitationService:
         new_password = _generate_password()
         new_token = secrets.token_urlsafe(32)
 
+        from sqlalchemy import desc as _desc
         org_user = self.db.scalars(
-            select(User).where(User.email == inv.admin_email)
+            select(User).where(User.email == inv.admin_email).order_by(_desc(User.created_at))
         ).first()
         if org_user:
             org_user.password_hash = _hash(new_password)
+            org_user.status = "invited"
         else:
             # User was never created — create tenant if needed, then user
             from app.models.tenant import Tenant as TenantModel

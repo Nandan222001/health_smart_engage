@@ -560,6 +560,10 @@ export interface AuthUser {
   orgCode?: string;
   companyName?: string;
   allowedModules?: UiModuleLabel[];
+  /** Raw permission strings from the backend JWT (e.g. "permits:write", "vendors:read") */
+  permissions?: string[];
+  /** Raw module keys from OrgInvitation.allowed_modules (e.g. ["people","vendors"]) */
+  orgModules?: string[];
   onboardingScoped?: boolean;
   onboardingSetupRequired?: boolean;
   onboardingSetupCompleted?: boolean;
@@ -878,6 +882,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const displayName = u.display_name || u.email || "Admin";
           const initials = displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
           const isFirstLogin = Boolean(tokenData.first_login);
+          const rawOrgModules: string[] = Array.isArray(u.allowed_modules) ? u.allowed_modules : [];
           const userData: AuthUser = {
             name: displayName,
             email: u.email || trimmedEmail,
@@ -885,6 +890,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             initials,
             orgCode: u.tenant_id || undefined,
             allowedModules: ALL_MODULE_LABELS,
+            permissions: Array.isArray(u.permissions) ? u.permissions : [],
+            orgModules: rawOrgModules,
             is_superadmin: Boolean(tokenData.is_superadmin ?? u.is_superadmin),
             ...(isFirstLogin && {
               onboardingSetupRequired: true,
