@@ -20,6 +20,8 @@ class Permit(Base, TenantScopedMixin):
     end_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(64), default="draft", index=True)
     controls: Mapped[dict] = mapped_column(JSON, default=dict)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    extra_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class PermitApproval(Base, TenantScopedMixin):

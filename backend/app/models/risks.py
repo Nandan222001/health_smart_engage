@@ -31,3 +31,4 @@ class HazardObservation(Base, TenantScopedMixin):
     photo_file_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(64), default="logged")
     assigned_to_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    extra_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
