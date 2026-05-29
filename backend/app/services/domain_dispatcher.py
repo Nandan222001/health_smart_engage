@@ -1920,6 +1920,25 @@ class DomainDispatcher:
                 "employeeCount": emp_count,
             }
 
+        if operation == "org_admin_documents_list":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            records = repo.list_by_type(user.tenant_id, "data_management", "document", limit=500)
+            items = [{"created_at": r.created_at.isoformat() if r.created_at else None, **r.payload} for r in records]
+            return {"items": items}
+
+        if operation == "org_admin_documents_delete":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            doc_id = path_params.get("documentId")
+            records = repo.list_by_type(user.tenant_id, "data_management", "document", limit=500)
+            for r in records:
+                if r.payload.get("id") == doc_id:
+                    db.delete(r)
+                    db.flush()
+                    break
+            return {"deleted": True}
+
         if operation == "org_admin_imports_list":
             from app.repositories.generic_repository import GenericRepository
             repo = GenericRepository(db)
