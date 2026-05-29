@@ -169,6 +169,98 @@ const DATA_IMPORT_TYPES = [
   { key: "contractor_records", label: "Contractor Records", icon: Building2 },
 ];
 
+type FieldDef = { label: string; key: string; type: string; placeholder?: string; options?: string[]; required?: boolean };
+
+const IMPORT_FIELDS: Record<string, FieldDef[]> = {
+  incident_records: [
+    { label: "Incident Date",      key: "date",        type: "date",     required: true },
+    { label: "Location / Station", key: "location",    type: "text",     placeholder: "STN001 – Heavy Assembly 1" },
+    { label: "Incident Type",      key: "type",        type: "select",   options: ["Injury","Near-miss","Damage","Environmental","Unsafe Act","Unsafe Condition","Fire","Chemical Spill"] },
+    { label: "Severity",           key: "severity",    type: "select",   options: ["Minor","Significant","Serious","Lost Time","Fatality"] },
+    { label: "Description",        key: "description", type: "textarea", placeholder: "Brief description of what happened…" },
+    { label: "Immediate Cause",    key: "cause",       type: "text",     placeholder: "e.g. Human Error" },
+    { label: "Reported By",        key: "reporter",    type: "text",     placeholder: "Employee ID or name" },
+  ],
+  near_miss: [
+    { label: "Date",                     key: "date",               type: "date",     required: true },
+    { label: "Location",                 key: "location",           type: "text",     placeholder: "Area or station where near miss occurred" },
+    { label: "Description",              key: "description",        type: "textarea", placeholder: "What happened and what could have happened…", required: true },
+    { label: "Potential Severity",       key: "potential_severity", type: "select",   options: ["Minor","Significant","Serious","Fatality"] },
+    { label: "Contributing Factors",     key: "factors",            type: "text",     placeholder: "Environment, equipment, human error…" },
+    { label: "Reported By",              key: "reporter",           type: "text",     placeholder: "Employee name or ID" },
+    { label: "Immediate Action Taken",   key: "action",             type: "text",     placeholder: "What was done immediately" },
+  ],
+  permit_records: [
+    { label: "Permit Type",    key: "type",        type: "select",   options: ["Hot Work","Electrical","Work at Height","Confined Space","Excavation","Cold Work","Chemical Handling"], required: true },
+    { label: "Work Location",  key: "location",    type: "text",     placeholder: "Zone 4 – Chemical Area" },
+    { label: "Start Date",     key: "start_date",  type: "date" },
+    { label: "End Date",       key: "end_date",    type: "date" },
+    { label: "Assigned To",    key: "assignee",    type: "text",     placeholder: "Permit Holder name" },
+    { label: "Description",    key: "description", type: "textarea", placeholder: "Work to be performed…" },
+    { label: "Hazards",        key: "hazards",     type: "text",     placeholder: "List identified hazards" },
+  ],
+  audit_reports: [
+    { label: "Audit Title",    key: "title",    type: "text",   placeholder: "Q1 Fire Safety Audit",  required: true },
+    { label: "Audit Type",     key: "type",     type: "select", options: ["Internal","External","Regulatory","Supplier","HSE Inspection"] },
+    { label: "Standard",       key: "standard", type: "text",   placeholder: "ISO 45001, OSHA…" },
+    { label: "Scheduled Date", key: "date",     type: "date" },
+    { label: "Lead Auditor",   key: "auditor",  type: "text",   placeholder: "Auditor name" },
+    { label: "Status",         key: "status",   type: "select", options: ["Scheduled","In Progress","Completed","Cancelled","Overdue"] },
+    { label: "Site",           key: "site",     type: "text",   placeholder: "Site name" },
+  ],
+  training_records: [
+    { label: "Training Name",      key: "name",     type: "text",   placeholder: "Fire Safety Training", required: true },
+    { label: "Employee",           key: "employee", type: "text",   placeholder: "Employee name or ID" },
+    { label: "Completed Date",     key: "date",     type: "date" },
+    { label: "Expiry Date",        key: "expiry",   type: "date" },
+    { label: "Trainer / Provider", key: "trainer",  type: "text",   placeholder: "Internal / External trainer" },
+    { label: "Result",             key: "result",   type: "select", options: ["Pass","Fail","In Progress","Pending"] },
+  ],
+  sops_policies: [
+    { label: "Document Title",   key: "title",          type: "text",     placeholder: "Fire Emergency SOP",    required: true },
+    { label: "Document Type",    key: "doc_type",        type: "select",   options: ["SOP","Policy","Procedure","Work Instruction","Form","Register"] },
+    { label: "Version",          key: "version",         type: "text",     placeholder: "v1.2" },
+    { label: "Effective Date",   key: "effective_date",  type: "date" },
+    { label: "Review Date",      key: "review_date",     type: "date" },
+    { label: "Owner / Author",   key: "owner",           type: "text",     placeholder: "HSE Manager" },
+    { label: "Description / Scope", key: "description",  type: "textarea", placeholder: "Brief scope of document…" },
+  ],
+  risk_assessments: [
+    { label: "Hazard Description",  key: "hazard",      type: "text",     placeholder: "Machinery Contact / Crushing", required: true },
+    { label: "Location",            key: "location",    type: "text",     placeholder: "STN001, STN005" },
+    { label: "Risk Level",          key: "level",       type: "select",   options: ["Critical","High","Medium","Low"] },
+    { label: "Likelihood (1-5)",    key: "likelihood",  type: "number",   placeholder: "4" },
+    { label: "Consequence (1-5)",   key: "consequence", type: "number",   placeholder: "4" },
+    { label: "Controls",            key: "controls",    type: "textarea", placeholder: "Engineering and administrative controls…" },
+    { label: "Responsible",         key: "responsible", type: "text",     placeholder: "Safety Manager" },
+  ],
+  capa_data: [
+    { label: "Title",        key: "title",       type: "text",     placeholder: "Fix machine guard",              required: true },
+    { label: "Description",  key: "description", type: "textarea", placeholder: "Describe the corrective action…" },
+    { label: "Priority",     key: "priority",    type: "select",   options: ["Critical","High","Medium","Low"] },
+    { label: "Assigned To",  key: "assigned_to", type: "email",    placeholder: "assignee@company.com" },
+    { label: "Due Date",     key: "due_date",    type: "date",     required: true },
+    { label: "Source Type",  key: "source_type", type: "select",   options: ["Audit","Incident","Inspection","Near Miss","Risk Assessment"] },
+  ],
+  hr_shift_data: [
+    { label: "Employee Name / ID", key: "employee",   type: "text",   placeholder: "James Thompson / EMP001", required: true },
+    { label: "Shift Date",         key: "date",        type: "date" },
+    { label: "Shift Type",         key: "shift",       type: "select", options: ["Day","Night","Afternoon","Weekend","Overtime"] },
+    { label: "Hours Worked",       key: "hours",       type: "number", placeholder: "8" },
+    { label: "Site / Location",    key: "site",        type: "text",   placeholder: "Bridgend Complex" },
+    { label: "Department",         key: "department",  type: "text",   placeholder: "Heavy Assembly" },
+  ],
+  contractor_records: [
+    { label: "Company Name",   key: "name",    type: "text",   placeholder: "SafeWork Contractors Ltd", required: true },
+    { label: "Contact Email",  key: "email",   type: "email",  placeholder: "contact@safework.com" },
+    { label: "Contact Phone",  key: "phone",   type: "text",   placeholder: "+44 1234 567890" },
+    { label: "Service Type",   key: "service", type: "select", options: ["Construction","Electrical","Mechanical","IT Services","Cleaning","Security","Transport","Other"] },
+    { label: "HSE Rating",     key: "rating",  type: "select", options: ["Approved","Conditional","Under Review","Suspended","Rejected"] },
+    { label: "Contract Start", key: "start",   type: "date" },
+    { label: "Contract End",   key: "end",     type: "date" },
+  ],
+};
+
 // ── Style helpers ──────────────────────────────────────────────────────────────
 
 const inputCls = "w-full px-3 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-blue-100";
@@ -1332,6 +1424,9 @@ function Step6({
   const [selectedDataType, setSelectedDataType] = useState("");
   const [importMethod, setImportMethod] = useState<"manual" | "bulk" | "api">("bulk");
   const [apiUrl, setApiUrl] = useState("");
+  const [manualFormData, setManualFormData] = useState<Record<string, string>>({});
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualSuccess, setManualSuccess] = useState(false);
 
   const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1481,11 +1576,83 @@ function Step6({
               ))}
             </div>
 
-            {importMethod === "manual" && (
-              <div className="p-4 rounded-xl text-sm" style={{ background: "#F9FAFB", color: "#6B7280" }}>
-                Manual entry mode — data will be entered directly into the system after setup is complete.
-              </div>
-            )}
+            {importMethod === "manual" && (() => {
+              const fields = selectedDataType ? (IMPORT_FIELDS[selectedDataType] ?? []) : [];
+              if (!selectedDataType) {
+                return (
+                  <div className="p-4 rounded-xl text-sm" style={{ background: "#F9FAFB", color: "#6B7280" }}>
+                    Select a data type above to see the entry form.
+                  </div>
+                );
+              }
+              const handleManualSubmit = async () => {
+                const required = fields.filter(f => f.required);
+                const missing = required.filter(f => !manualFormData[f.key]?.trim());
+                if (missing.length) return;
+                setManualSubmitting(true);
+                try {
+                  await importData({ dataType: selectedDataType, method: "manual", ...manualFormData });
+                  setManualFormData({});
+                  setManualSuccess(true);
+                  setTimeout(() => setManualSuccess(false), 3000);
+                  refetchImports();
+                } finally {
+                  setManualSubmitting(false);
+                }
+              };
+              return (
+                <div className="space-y-4">
+                  {manualSuccess && (
+                    <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold" style={{ background: "#D1FAE5", color: "#065F46" }}>
+                      <Check className="w-4 h-4" /> Record saved successfully
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {fields.map((f) => (
+                      <div key={f.key} className={f.type === "textarea" ? "md:col-span-2" : ""}>
+                        <label className={labelCls} style={labelStyle}>
+                          {f.label}{f.required && <span style={{ color: "#EF4444" }}> *</span>}
+                        </label>
+                        {f.type === "select" ? (
+                          <select
+                            className={inputCls} style={inputStyle}
+                            value={manualFormData[f.key] ?? ""}
+                            onChange={e => setManualFormData(d => ({ ...d, [f.key]: e.target.value }))}
+                          >
+                            <option value="">Select…</option>
+                            {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        ) : f.type === "textarea" ? (
+                          <textarea
+                            rows={3}
+                            className={inputCls} style={inputStyle}
+                            placeholder={f.placeholder}
+                            value={manualFormData[f.key] ?? ""}
+                            onChange={e => setManualFormData(d => ({ ...d, [f.key]: e.target.value }))}
+                          />
+                        ) : (
+                          <input
+                            type={f.type}
+                            className={inputCls} style={inputStyle}
+                            placeholder={f.placeholder}
+                            value={manualFormData[f.key] ?? ""}
+                            onChange={e => setManualFormData(d => ({ ...d, [f.key]: e.target.value }))}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    className={primaryBtnCls} style={primaryBtnStyle}
+                    onClick={handleManualSubmit}
+                    disabled={manualSubmitting}
+                  >
+                    {manualSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    Save Record
+                  </button>
+                </div>
+              );
+            })()}
 
             {importMethod === "bulk" && (
               <div className="flex items-center gap-3 flex-wrap">
