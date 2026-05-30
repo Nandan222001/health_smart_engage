@@ -21,8 +21,8 @@ function fmt(d: string | null | undefined) {
   return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function riskLevelStyle(level: string): { bg: string; color: string; border: string; bar: string } {
-  switch (level.toLowerCase()) {
+function riskLevelStyle(level: string | undefined): { bg: string; color: string; border: string; bar: string } {
+  switch ((level || "").toLowerCase()) {
     case "critical": return { bg: "#FEF2F2", color: "#7F1D1D", border: "#FECACA", bar: "#DC2626" };
     case "high":     return { bg: "#FFF1F2", color: "#9F1239", border: "#FECDD3", bar: "#F43F5E" };
     case "medium":   return { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA", bar: "#F97316" };
@@ -30,8 +30,8 @@ function riskLevelStyle(level: string): { bg: string; color: string; border: str
   }
 }
 
-function statusStyle(status: string): { bg: string; color: string; dot: string } {
-  switch (status.toLowerCase()) {
+function statusStyle(status: string | undefined): { bg: string; color: string; dot: string } {
+  switch ((status || "").toLowerCase()) {
     case "active":    return { bg: "#D1FAE5", color: "#065F46", dot: "#16A34A" };
     case "draft":     return { bg: "#DBEAFE", color: "#1E40AF", dot: "#3B82F6" };
     case "archived":  return { bg: "#F3F4F6", color: "#6B7280", dot: "#9CA3AF" };
@@ -42,8 +42,8 @@ function statusStyle(status: string): { bg: string; color: string; dot: string }
   }
 }
 
-function priorityStyle(p: string): { bg: string; color: string; border: string } {
-  const s = p.toLowerCase();
+function priorityStyle(p: string | undefined): { bg: string; color: string; border: string } {
+  const s = (p || "").toLowerCase();
   if (s === "critical" || s === "high") return { bg: "#FEF2F2", color: "#991B1B", border: "#FECACA" };
   if (s === "medium")                   return { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" };
   return                                       { bg: "#F0FDF4", color: "#065F46", border: "#BBF7D0" };
@@ -276,10 +276,10 @@ export function RiskAssessmentsPage() {
   // ── filtered lists ────────────────────────────────────────────────────────
   const filteredRA = useMemo(() => assessments.filter((a) => {
     const q = raSearch.toLowerCase();
-    const mQ = !q || a.title.toLowerCase().includes(q)
+    const mQ = !q || (a.title || "").toLowerCase().includes(q)
       || (a.site_id || "").toLowerCase().includes(q)
       || (a.department || "").toLowerCase().includes(q)
-      || a.assessor.toLowerCase().includes(q);
+      || (a.assessor || "").toLowerCase().includes(q);
     const mS = raStatus === "All" || a.status === raStatus.toLowerCase();
     const mL = raLevel  === "All" || a.risk_level === raLevel.toLowerCase();
     return mQ && mS && mL;
@@ -287,10 +287,10 @@ export function RiskAssessmentsPage() {
 
   const filteredHaz = useMemo(() => hazards.filter((h) => {
     const q = hazSearch.toLowerCase();
-    const mQ = !q || h.title.toLowerCase().includes(q)
+    const mQ = !q || (h.title || "").toLowerCase().includes(q)
       || (h.type || "").toLowerCase().includes(q)
       || (h.site_id || "").toLowerCase().includes(q)
-      || h.reported_by.toLowerCase().includes(q);
+      || (h.reported_by || "").toLowerCase().includes(q);
     const mS = hazStatus === "All"
       || (hazStatus === "Open"      && h.status === "open")
       || (hazStatus === "Mitigated" && h.status === "mitigated")
@@ -316,7 +316,7 @@ export function RiskAssessmentsPage() {
       return mQ && mF;
     });
     const rcaMit = rcaWithActions.filter((r) => {
-      const mQ = !q || r.Root_Causes.toLowerCase().includes(q) || r.Corrective_Actions.toLowerCase().includes(q) || r.Site_ID.toLowerCase().includes(q) || r.Conducted_By.toLowerCase().includes(q);
+      const mQ = !q || (r.Root_Causes || "").toLowerCase().includes(q) || (r.Corrective_Actions || "").toLowerCase().includes(q) || (r.Site_ID || "").toLowerCase().includes(q) || (r.Conducted_By || "").toLowerCase().includes(q);
       const mF = mitFilter === "All" || mitFilter === "RCA";
       return mQ && mF;
     });

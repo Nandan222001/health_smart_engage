@@ -10,7 +10,6 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 VITE_FIREBASE_MEASUREMENT_ID=
 
-# Auth Feature Flags
 # Set VITE_ENABLE_DEV_TEST_ACCOUNTS=true in .env.local for local dev testing only — never in production
 VITE_ENABLE_DEV_TEST_ACCOUNTS=false
 # Comma-separated list of product admin emails that bypass onboarding checks

@@ -2169,18 +2169,30 @@ class DomainDispatcher:
         # ── Risk Module Queries ───────────────────────────────────────────────────────
 
         if operation == "risk_assessments_list":
+            def _risk_level(score: int) -> str:
+                if score >= 12: return "critical"
+                if score >= 6: return "high"
+                if score >= 3: return "medium"
+                return "low"
+
             items = svc["compliance"].list_risk_assessments(user, {})
             return {
                 "items": [
                     {
                         "id": r.id,
-                        "title": r.task_name or f"Assessment {r.id[:8]}",
+                        "title": r.hazard_description or r.task_name or f"Assessment {r.id[:8]}",
+                        "site_id": r.location_id,
+                        "department": (r.extra_fields or {}).get("Department") or (r.extra_fields or {}).get("department"),
+                        "risk_level": _risk_level(r.risk_score or 0),
+                        "assessor": (r.extra_fields or {}).get("Responsible") or (r.extra_fields or {}).get("responsible") or "",
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "reviewed_at": None,
+                        "status": r.status or "draft",
                         "hazard_description": r.hazard_description,
                         "likelihood": r.likelihood,
                         "consequence": r.consequence,
                         "risk_score": r.risk_score,
                         "residual_risk_score": r.residual_risk_score,
-                        "status": r.status,
                         "location_id": r.location_id,
                         "asset_id": r.asset_id,
                     }

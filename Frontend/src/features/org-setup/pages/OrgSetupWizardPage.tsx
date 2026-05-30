@@ -1534,7 +1534,7 @@ function Step6({
                         <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#EEF2FF", color: "#4A57B9" }}>{doc.type}</span>
                       </td>
                       <td className="px-5 py-3" style={{ color: "#6B7280" }}>{doc.size}</td>
-                      <td className="px-5 py-3" style={{ color: "#6B7280" }}>{new Date(doc.uploadedAt).toLocaleDateString()}</td>
+                      <td className="px-5 py-3" style={{ color: "#6B7280" }}>{doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : "—"}</td>
                     </tr>
                   ))}
                 </tbody>

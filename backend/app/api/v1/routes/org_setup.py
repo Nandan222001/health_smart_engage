@@ -44,7 +44,49 @@ register_catalog_routes(router, "org_setup", ENDPOINTS)
 
 # ── File-parsing helper ────────────────────────────────────────────────────────
 
-def _parse_file(content: bytes, filename: str) -> list[dict]:
+_MODULE_PREFERRED_SHEETS: dict[str, list[str]] = {
+    "training":         ["Training Module Library", "Employee Training Records", "Assessment Records"],
+    "training_records": ["Training Module Library", "Employee Training Records", "Assessment Records"],
+    "incidents":        ["Incident Records", "Incidents", "Incident Log"],
+    "audits":           ["Audit Reports", "Audits", "Audit Log"],
+    "risk":             ["Risk Register", "Risk Assessments", "Critical Risks", "High Risks", "Medium Risks", "Low Risks"],
+    "risk_assessments": ["Risk Register", "Risk Assessments", "Critical Risks", "High Risks", "Medium Risks", "Low Risks"],
+    "vendors":          ["Contractor Records", "Vendors", "Contractors"],
+    "assets":           ["Asset Records", "Assets", "Equipment"],
+}
+
+# For these modules, combine all matching sheets into one list of rows
+_MODULE_COMBINE_SHEETS: dict[str, list[str]] = {
+    "risk":             ["Critical Risks", "High Risks", "Medium Risks", "Low Risks"],
+    "risk_assessments": ["Critical Risks", "High Risks", "Medium Risks", "Low Risks"],
+}
+
+
+def _parse_excel_sheet(ws) -> list[dict]:
+    """Parse one openpyxl worksheet into row dicts.
+
+    Scans the first 5 rows to find the real header row — skips leading title/
+    empty rows that are common in client-supplied Excel files.
+    """
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+    # Find the first row with 2+ non-empty cells — that's the header row
+    header_idx = 0
+    for i, row in enumerate(rows[:5]):
+        filled = sum(1 for v in row if v is not None and str(v).strip())
+        if filled >= 2:
+            header_idx = i
+            break
+    headers = [str(h or "").strip() for h in rows[header_idx]]
+    result = []
+    for row in rows[header_idx + 1:]:
+        if any(v is not None and str(v).strip() for v in row):
+            result.append({headers[i]: (str(v) if v is not None else "") for i, v in enumerate(row)})
+    return result
+
+
+def _parse_file(content: bytes, filename: str, module: str = "") -> list[dict]:
     """Parse CSV or Excel bytes into a list of row dicts."""
     name = (filename or "").lower()
     if name.endswith(".csv"):
@@ -55,16 +97,27 @@ def _parse_file(content: bytes, filename: str) -> list[dict]:
     try:
         import openpyxl
         wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
-        ws = wb.active
-        rows = list(ws.iter_rows(values_only=True))
-        if not rows:
-            return []
-        headers = [str(h or "").strip() for h in rows[0]]
-        result = []
-        for row in rows[1:]:
-            if any(v is not None for v in row):
-                result.append({headers[i]: (str(v) if v is not None else "") for i, v in enumerate(row)})
-        return result
+
+        # Modules that split data across multiple sheets — combine them all
+        combine_names = _MODULE_COMBINE_SHEETS.get(module, [])
+        if combine_names:
+            combined: list[dict] = []
+            for sheet_name in combine_names:
+                if sheet_name in wb.sheetnames:
+                    combined.extend(_parse_excel_sheet(wb[sheet_name]))
+            if combined:
+                return combined
+
+        # Try preferred single sheets for the given module
+        preferred = _MODULE_PREFERRED_SHEETS.get(module, [])
+        for sheet_name in preferred:
+            if sheet_name in wb.sheetnames:
+                rows = _parse_excel_sheet(wb[sheet_name])
+                if rows:
+                    return rows
+
+        # Fall back to active sheet
+        return _parse_excel_sheet(wb.active)
     except ImportError:
         raise ValueError("openpyxl not installed – please upload a CSV file instead")
 
@@ -528,7 +581,7 @@ async def onboarding_bulk_import(
 ):
     content = await file.read()
     try:
-        rows = _parse_file(content, file.filename or "upload.csv")
+        rows = _parse_file(content, file.filename or "upload.csv", module=module)
     except Exception as exc:
         return accepted({"count": 0, "error": str(exc)}, "Parse failed")
 

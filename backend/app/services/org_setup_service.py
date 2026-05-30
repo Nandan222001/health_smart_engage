@@ -57,8 +57,22 @@ _KNOWN: dict[str, set[str]] = {
         "location", "location / station", "incident date", "date",
     },
     "risk": {
-        "hazard description", "hazard", "likelihood (1-5)", "likelihood",
-        "consequence (1-5)", "consequence", "status",
+        "risk id", "hazard", "hazard description", "hazard / risk description",
+        "risk description", "location", "location / station",
+        "consequence description", "probability (1-5)", "probability",
+        "likelihood (1-5)", "likelihood", "consequence (1-5)", "consequence",
+        "inherent score", "inherent risk score", "risk score", "initial score",
+        "residual score", "residual risk score", "residual",
+        "status",
+    },
+    "training": {
+        "module code", "module title", "course name", "training name", "name",
+        "duration (hours)", "duration", "trainer required",
+        "assessment type", "competency framework",
+        "role", "target role", "job title",
+        "frequency months", "frequency", "validity period (months)", "validity period",
+        "mandatory", "required", "annual refresher required",
+        "due date", "review date", "next due", "next review date",
     },
 }
 
@@ -405,7 +419,15 @@ class OrgSetupService:
     def list_documents(self, user: CurrentUser) -> dict:
         records = self.repo.list_by_type(user.tenant_id, MODULE, "step6_document")
         return {
-            "items": [{"id": r.id, "status": r.status, **r.payload} for r in records],
+            "items": [
+                {
+                    "id": r.id,
+                    "status": r.status,
+                    "uploadedAt": r.created_at.isoformat() if r.created_at else None,
+                    **r.payload,
+                }
+                for r in records
+            ],
             "total": len(records),
         }
 
@@ -593,26 +615,46 @@ class OrgSetupService:
             return {"module": module_key, "status": "imported", "count": created, "errors": errors}
 
         # ── risk assessments → RiskAssessment records ──
-        if module_key == "risk":
+        if module_key in ("risk", "risk_assessments"):
             try:
                 from app.models.risks import RiskAssessment
                 for row in rows:
-                    hazard = _v(row, "hazard description", "hazard")
+                    hazard = _v(
+                        row,
+                        "hazard", "hazard description", "hazard / risk description",
+                        "risk description", "description",
+                    )
                     if not hazard:
                         continue
                     _, extra = self._split_row("risk", row)
-                    likelihood  = int(_v(row, "likelihood (1-5)", "likelihood") or 1)
-                    consequence = int(_v(row, "consequence (1-5)", "consequence") or 1)
+
+                    # Likelihood / probability
+                    raw_likelihood = _v(row, "probability (1-5)", "likelihood (1-5)", "likelihood", "probability")
+                    likelihood = max(1, min(5, int(float(raw_likelihood or 1))))
+
+                    # Inherent (initial) risk score
+                    raw_inherent = _v(row, "inherent score", "inherent risk score", "risk score", "initial score")
+                    inherent = int(float(raw_inherent)) if raw_inherent else likelihood
+
+                    # Derive consequence: inherent_score / likelihood
+                    consequence = max(1, round(inherent / likelihood)) if likelihood else 1
+
+                    # Residual risk score
+                    raw_residual = _v(row, "residual score", "residual risk score", "residual")
+                    residual = int(float(raw_residual)) if raw_residual else None
+
                     ra = RiskAssessment(
                         id=str(uuid4()),
                         tenant_id=tenant_id,
+                        task_name=_v(row, "risk id", "id", "risk id / hazard") or hazard[:100],
+                        location_id=_v(row, "location", "location / station") or None,
                         hazard_description=hazard,
-                        task_name=hazard[:100],
                         likelihood=likelihood,
                         consequence=consequence,
-                        risk_score=likelihood * consequence,
-                        status="draft",
-                        extra_fields=extra,
+                        risk_score=inherent,
+                        residual_risk_score=residual,
+                        status=_v(row, "status") or "draft",
+                        extra_fields=extra or None,
                     )
                     self.db.add(ra)
                     created += 1
@@ -800,25 +842,37 @@ class OrgSetupService:
         if module_key in ("training", "training_records"):
             try:
                 from app.models.people import TrainingRequirement
-                import datetime as _dt
                 for row in rows:
-                    _, extra = self._split_row("training", row)
-                    raw_due = _v(row, "due date", "review date", "next due")
-                    due_date = None
-                    if raw_due:
+                    training_name = _v(
+                        row,
+                        "module title", "course name", "training name",
+                        "module code", "name",
+                    ) or "Training"
+                    role_name = _v(
+                        row,
+                        "role", "target role", "job title", "competency framework",
+                    ) or "All"
+                    raw_validity = _v(
+                        row,
+                        "validity period (months)", "validity period",
+                        "frequency months", "frequency",
+                    )
+                    validity_days: int | None = None
+                    if raw_validity:
                         try:
-                            due_date = _dt.date.fromisoformat(str(raw_due)[:10])
-                        except Exception:
+                            validity_days = int(float(raw_validity)) * 30
+                        except (ValueError, TypeError):
                             pass
+                    is_mandatory = _v(
+                        row, "mandatory", "required", "annual refresher required",
+                    ).lower() in ("yes", "true", "1", "y")
                     tr = TrainingRequirement(
                         id=str(uuid4()),
                         tenant_id=tenant_id,
-                        course_name=_v(row, "course name", "training name", "name") or "Training",
-                        role_target=_v(row, "role", "target role", "job title") or "All",
-                        frequency_months=int(_v(row, "frequency months", "frequency") or 12),
-                        is_mandatory=(_v(row, "mandatory", "required") or "").lower() in ("yes", "true", "1"),
-                        next_due=due_date,
-                        extra_fields=extra,
+                        training_name=training_name,
+                        role_name=role_name,
+                        validity_days=validity_days,
+                        is_mandatory=is_mandatory,
                     )
                     self.db.add(tr)
                     created += 1
