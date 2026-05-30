@@ -5,8 +5,20 @@ from app.core.security import CurrentUser
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "System Admin": {"admin:*"},
+    # Org-level admin (created by super admin via invitation)
+    "Admin": {
+        "admin:read", "admin:write",
+        "web:read", "web:write", "web:approve",
+        "permits:write", "permits:approve",
+        "audit:write", "capa:write",
+        "reports:export",
+        "vendors:read", "vendors:write",
+        "assets:write", "training:write",
+        "knowledge:write", "incidents:confidential",
+        "ai:read", "ai:write",
+    },
     "IT Admin": {"admin:read", "admin:write", "integrations:write", "shared:read"},
-    "Safety Manager": {"web:write", "mobile:write", "ai:read", "reports:export"},
+    "Safety Manager": {"web:write", "mobile:write", "ai:read", "ai:write", "reports:export"},
     "Compliance Manager": {"web:write", "reports:export", "audit:write", "capa:write"},
     "Plant Manager": {"web:read", "web:approve", "reports:export"},
     "HR Admin": {"people:write", "training:write", "web:read"},
@@ -36,6 +48,8 @@ def permissions_for_user(user: CurrentUser) -> set[str]:
 def infer_required_permission(group: str, operation: str, method: str) -> str:
     if group == "admin":
         return "admin:write" if method != "GET" else "admin:read"
+    if group == "org_setup" or group == "org_admin":
+        return "web:write" if method != "GET" else "web:read"
     if group == "integrations":
         return "integrations:write" if method != "GET" else "integrations:read"
     if group == "ai":

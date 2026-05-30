@@ -1,4 +1,4 @@
-from typing import Any, Type, TypeVar
+from typing import Any, Type, TypeVar, List
 from sqlalchemy import select, update, delete
 from sqlalchemy.orm import Session
 from app.models.domain import (
@@ -59,7 +59,7 @@ class DomainRepository:
         zone_id: str | None,
         asset_id: str | None,
         exclude_permit_id: str | None = None,
-    ) -> list[Permit]:
+    ) -> List[Permit]:
         stmt = select(Permit).where(
             Permit.tenant_id == tenant_id,
             Permit.status.in_(("approved", "active", "extended")),

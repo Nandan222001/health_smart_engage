@@ -5,7 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8-sig",
+        extra="ignore"
+    )
 
     app_name: str = "HSE Safety Compliance Intelligence API"
     app_version: str = "0.1.0"
@@ -14,7 +18,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
 
     database_url: str = Field(
-        default="mysql+pymysql://hse_user:hse_password@localhost:3306/hse",
+        default="mysql+pymysql://root:@localhost:3306/hse",
         validation_alias="DATABASE_URL",
     )
 
@@ -34,6 +38,43 @@ class Settings(BaseSettings):
     azure_email_endpoint: str = ""
     ai_endpoint: str = ""
     ai_api_key_secret_name: str = "ai-api-key"
+
+    # Anthropic Claude (direct or via Azure AI Foundry)
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
+    anthropic_base_url: str = Field(default="", validation_alias="ANTHROPIC_BASE_URL")
+    anthropic_model: str = Field(default="claude-sonnet-4-6", validation_alias="ANTHROPIC_MODEL")
+
+    # Azure AI Foundry (Azure OpenAI)
+    azure_openai_endpoint: str = Field(default="", validation_alias="AZURE_OPENAI_ENDPOINT")
+    azure_openai_api_key: str = Field(default="", validation_alias="AZURE_OPENAI_API_KEY")
+    azure_openai_deployment: str = Field(default="gpt-4o", validation_alias="AZURE_OPENAI_DEPLOYMENT")
+    azure_openai_api_version: str = Field(default="2025-01-01-preview", validation_alias="AZURE_OPENAI_API_VERSION")
+    azure_openai_embeddings_deployment: str = Field(default="text-embedding-3-small", validation_alias="AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT")
+    # Azure AI Search (for knowledge search)
+    azure_search_endpoint: str = Field(default="", validation_alias="AZURE_SEARCH_ENDPOINT")
+    azure_search_api_key: str = Field(default="", validation_alias="AZURE_SEARCH_API_KEY")
+    azure_search_index: str = Field(default="hse-knowledge", validation_alias="AZURE_SEARCH_INDEX")
+
+    # Anthropic settings
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
+    anthropic_base_url: str = Field(default="", validation_alias="ANTHROPIC_BASE_URL")
+    anthropic_model: str = Field(default="claude-3-5-sonnet-20240620", validation_alias="ANTHROPIC_MODEL")
+
+    frontend_base_url: str = Field(default="http://localhost:5173", validation_alias="FRONTEND_BASE_URL")
+
+    # SendGrid (preferred) — set SENDGRID_API_KEY to enable
+    sendgrid_api_key: str = Field(default="", validation_alias="SENDGRID_API_KEY")
+    sendgrid_from_email: str = Field(default="noreply@hse-platform.com", validation_alias="SENDGRID_FROM_EMAIL")
+    sendgrid_from_name: str = Field(default="HSE Platform", validation_alias="SENDGRID_FROM_NAME")
+
+    # SMTP fallback — used when SENDGRID_API_KEY is absent
+    smtp_host: str = Field(default="smtp.gmail.com", validation_alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, validation_alias="SMTP_PORT")
+    smtp_user: str = Field(default="", validation_alias="SMTP_USER")
+    smtp_password: str = Field(default="", validation_alias="SMTP_PASSWORD")
+    smtp_from_email: str = Field(default="", validation_alias="SMTP_FROM_EMAIL")
+    smtp_from_name: str = Field(default="HSE Platform", validation_alias="SMTP_FROM_NAME")
+    smtp_use_tls: bool = Field(default=True, validation_alias="SMTP_USE_TLS")
 
     @field_validator("allowed_origins", mode="before")
     @classmethod

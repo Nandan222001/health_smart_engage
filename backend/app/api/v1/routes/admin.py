@@ -45,6 +45,41 @@ ENDPOINTS = [
     ("GET", "/admin/audit-logs/{eventId}", "admin_audit_logs_get", "Get audit event"),
     ("POST", "/admin/master-data/imports", "admin_master_data_imports_create", "Import master data"),
     ("GET", "/admin/master-data/imports/{importId}", "admin_master_data_imports_get", "Import status"),
+    # Super Admin
+    ("GET",   "/admin/storage/metrics",           "admin_storage_metrics",        "Storage layer metrics"),
+    ("GET",   "/admin/superadmin/dashboard",      "superadmin_dashboard",         "Super admin dashboard"),
+    ("GET",   "/admin/superadmin/tenants",        "superadmin_tenants_list",      "List all tenants"),
+    ("POST",  "/admin/superadmin/tenants",        "superadmin_tenants_create",    "Create tenant"),
+    ("GET",   "/admin/superadmin/tenants/{tenantId}", "superadmin_tenants_get",   "Get tenant"),
+    ("PATCH", "/admin/superadmin/tenants/{tenantId}", "superadmin_tenants_update","Update tenant"),
+    ("GET",   "/admin/superadmin/users",          "superadmin_users_list",        "List all users cross-tenant"),
+    # Invitations
+    ("GET",   "/admin/superadmin/invitations",                       "superadmin_invitations_list",    "List org invitations"),
+    ("POST",  "/admin/superadmin/invitations",                       "superadmin_invitations_create",  "Create org invitation"),
+    ("GET",   "/admin/superadmin/invitations/{invitationId}",        "superadmin_invitations_get",     "Get invitation"),
+    ("PATCH", "/admin/superadmin/invitations/{invitationId}",        "superadmin_invitations_update",  "Update invitation"),
+    ("POST",  "/admin/superadmin/invitations/{invitationId}/resend", "superadmin_invitations_resend",  "Resend invitation"),
+    ("POST",  "/admin/superadmin/invitations/{invitationId}/cancel", "superadmin_invitations_cancel",  "Cancel invitation"),
+    # Subscriptions
+    ("GET",   "/admin/superadmin/subscription-plans",                "superadmin_plans_list",          "List subscription plans"),
+    ("POST",  "/admin/superadmin/subscription-plans",                "superadmin_plans_create",        "Create subscription plan"),
+    ("PATCH", "/admin/superadmin/subscription-plans/{planId}",       "superadmin_plans_update",        "Update subscription plan"),
+    ("POST",  "/admin/superadmin/tenants/{tenantId}/subscription",   "superadmin_tenant_subscription", "Assign subscription to tenant"),
+    # Notification templates
+    ("GET",   "/admin/superadmin/notification-templates",              "superadmin_notif_templates_list",   "List notification templates"),
+    ("POST",  "/admin/superadmin/notification-templates",              "superadmin_notif_templates_create", "Create notification template"),
+    ("PATCH", "/admin/superadmin/notification-templates/{templateId}", "superadmin_notif_templates_update", "Update notification template"),
+    ("DELETE","/admin/superadmin/notification-templates/{templateId}", "superadmin_notif_templates_delete", "Delete notification template"),
+    # Security & system
+    ("GET",   "/admin/superadmin/security-policy",                   "superadmin_security_policy_get",    "Get security policy"),
+    ("PUT",   "/admin/superadmin/security-policy",                   "superadmin_security_policy_update", "Update security policy"),
+    # Compliance config
+    ("GET",   "/admin/superadmin/compliance-config",                 "superadmin_compliance_config_get",   "Get compliance config"),
+    ("PUT",   "/admin/superadmin/compliance-config",                 "superadmin_compliance_config_update","Update compliance config"),
+    # Platform analytics
+    ("GET",   "/admin/superadmin/analytics",                         "superadmin_analytics",              "Platform analytics"),
+    ("GET",   "/admin/superadmin/analytics/incidents",               "superadmin_analytics_incidents",    "Incident trends"),
+    ("GET",   "/admin/superadmin/analytics/compliance",              "superadmin_analytics_compliance",   "Compliance analytics"),
 ]
 
 register_catalog_routes(router, "admin", ENDPOINTS)

@@ -18,6 +18,7 @@ class ErrorResponse(BaseModel):
 
 
 class CommandPayload(BaseModel):
+    model_config = {"extra": "allow"}
     data: dict[str, Any] = Field(default_factory=dict)
     comment: str | None = None
     idempotency_key: str | None = None
