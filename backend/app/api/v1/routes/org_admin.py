@@ -102,6 +102,8 @@ async def upload_document(
 
     repo = GenericRepository(db)
     doc_id = str(uuid.uuid4())
+    title = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
+
     repo.create(
         tenant_id=user.tenant_id,
         module=_MODULE,
@@ -113,8 +115,36 @@ async def upload_document(
             "category":    _EXT_CATEGORY[ext],
             "size":        size_label,
             "uploaded_by": user.email or user.user_id,
+            "title":       title,
+            "indexed":     False,
         },
         status="uploaded",
     )
+
+    # Extract text and index for AI knowledge search
+    chunks_stored = 0
+    try:
+        from app.services.document_extractor import extract_text
+        from app.services.knowledge_indexer import index_document
+        extracted = extract_text(content, filename)
+        if extracted.strip():
+            chunks_stored = index_document(
+                tenant_id=user.tenant_id,
+                doc_id=doc_id,
+                title=title,
+                text=extracted,
+                db=db,
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Knowledge indexing failed for %s: %s", filename, exc)
+
     db.commit()
-    return accepted({"id": doc_id, "file_name": filename, "category": _EXT_CATEGORY[ext], "size": size_label}, "Document uploaded")
+    return accepted({
+        "id": doc_id,
+        "file_name": filename,
+        "category": _EXT_CATEGORY[ext],
+        "size": size_label,
+        "chunks_indexed": chunks_stored,
+        "ai_ready": chunks_stored > 0,
+    }, "Document uploaded and indexed")

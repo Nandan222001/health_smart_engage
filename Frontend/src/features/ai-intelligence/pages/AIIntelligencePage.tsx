@@ -6,7 +6,7 @@ import {
   Minus, AlertTriangle, CheckCircle2, Zap, ArrowUpRight, ArrowDownRight,
   Activity, Cpu, Database, Star, Send, Search, Sparkles, Wifi, WifiOff,
   Bot, MessageSquare, BarChart2, FileSearch,
-  MapPin, User, FileText, Loader2,
+  MapPin, User, FileText, Loader2, Upload, X, BookOpen,
 } from "lucide-react";
 import { useListHazardsQuery } from "@/features/hazards/api/hazardsApi";
 import { useGetViolationsQuery } from "@/features/violations/api/violationsApi";
@@ -30,6 +30,7 @@ import {
   useGetSafetyRecommendationsQuery,
   useGetTrendAnalysisQuery,
   useAiKnowledgeSearchMutation,
+  useUploadKnowledgeDocMutation,
 } from "@/features/ai-intelligence/api/aiIntelligenceApi";
 import type {
   ComplianceBenchmark, RiskScore, KPIIndicator, PIRSEntry,
@@ -275,14 +276,21 @@ function AiDashboardTab() {
 
 // ─── Tab 2: AI Assistant ──────────────────────────────────────────────────
 
+interface MsgWithCitations extends ChatMessage {
+  citations?: { title: string; doc_id: string; score: number }[];
+}
+
 function AiAssistantTab() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "assistant", content: "Hello! I'm your HSE AI Assistant powered by Azure AI Foundry. I can help you with safety queries, compliance questions, risk analysis, and regulatory guidance. How can I help you today?" },
+  const [messages, setMessages] = useState<MsgWithCitations[]>([
+    { role: "assistant", content: "Hello! I'm your HSE AI Assistant. I can answer questions about safety, compliance, and risk — and I'll reference your uploaded policy documents when relevant. How can I help you today?" },
   ]);
   const [input, setInput] = useState("");
   const [sendChat, { isLoading: sending }] = useAiChatMutation();
+  const [uploadDoc, { isLoading: uploading }] = useUploadKnowledgeDocMutation();
   const { data: statusData } = useGetAiStatusQuery();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadResult, setUploadResult] = useState<{ name: string; chunks: number } | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -290,15 +298,33 @@ function AiAssistantTab() {
 
   async function handleSend() {
     if (!input.trim() || sending) return;
-    const userMsg: ChatMessage = { role: "user", content: input.trim() };
+    const userMsg: MsgWithCitations = { role: "user", content: input.trim() };
     const next = [...messages, userMsg];
     setMessages(next);
     setInput("");
     try {
-      const res = await sendChat({ messages: next }).unwrap();
-      setMessages([...next, { role: "assistant", content: res.content }]);
+      const res = await sendChat({ messages: next.map(({ role, content }) => ({ role, content })) }).unwrap();
+      const assistantMsg: MsgWithCitations = {
+        role: "assistant",
+        content: res.content,
+        citations: (res as any).citations ?? [],
+      };
+      setMessages([...next, assistantMsg]);
     } catch {
-      setMessages([...next, { role: "assistant", content: "Sorry, I encountered an error. Please check your Azure AI Foundry configuration." }]);
+      setMessages([...next, { role: "assistant", content: "Sorry, I encountered an error. Please check your AI configuration." }]);
+    }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    try {
+      const res = await uploadDoc(file).unwrap();
+      setUploadResult({ name: res.file_name, chunks: res.chunks_indexed });
+      setTimeout(() => setUploadResult(null), 5000);
+    } catch {
+      setUploadResult(null);
     }
   }
 
@@ -307,12 +333,35 @@ function AiAssistantTab() {
   return (
     <div className="space-y-4">
       {!configured && <AiUnconfiguredBanner />}
+
+      {/* Upload banner */}
+      {uploadResult && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm" style={{ background: "#D1FAE5", color: "#065F46" }}>
+          <BookOpen className="w-4 h-4 flex-shrink-0" />
+          <span><strong>{uploadResult.name}</strong> indexed — {uploadResult.chunks} knowledge chunks ready for AI search.</span>
+          <button type="button" className="ml-auto" onClick={() => setUploadResult(null)}><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+
       <Card className="flex flex-col" style={{ height: "60vh" }}>
         <div className="flex items-center gap-2 pb-3 border-b mb-3" style={{ borderColor: "#E3E9F6" }}>
           <Bot className="w-5 h-5" style={{ color: "#4A57B9" }} />
           <span className="text-sm font-bold" style={{ color: "#111827" }}>HSE AI Assistant</span>
+          {/* Upload document button */}
+          <button
+            type="button"
+            title="Upload a policy PDF or Word doc to teach the AI"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="ml-2 flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border disabled:opacity-50"
+            style={{ borderColor: "#E3E9F6", color: "#4A57B9", background: "#F8FAFF" }}
+          >
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+            {uploading ? "Indexing…" : "Upload Policy"}
+          </button>
+          <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden" onChange={handleFileUpload} />
           <span className="text-xs ml-auto px-2 py-0.5 rounded-full" style={{ background: configured ? "#D1FAE5" : "#FEF3C7", color: configured ? "#065F46" : "#92400E" }}>
-            {configured ? `● ${statusData?.model ?? "gpt-4o"}` : "● Not configured"}
+            {configured ? `● ${statusData?.model ?? "AI"}` : "● Not configured"}
           </span>
         </div>
 
@@ -324,11 +373,25 @@ function AiAssistantTab() {
                 style={{ background: msg.role === "user" ? "linear-gradient(135deg,#4A57B9,#6F80E8)" : "#F3F4F6", color: msg.role === "assistant" ? "#4A57B9" : undefined }}>
                 {msg.role === "user" ? "U" : <Bot className="w-3.5 h-3.5" />}
               </div>
-              <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${msg.role === "user" ? "rounded-tr-sm" : "rounded-tl-sm"}`}
-                style={msg.role === "user"
-                  ? { background: "linear-gradient(135deg,#4A57B9,#6F80E8)", color: "#fff" }
-                  : { background: "#F8FAFF", color: "#374151", border: "1px solid #E3E9F6" }}>
-                {msg.content}
+              <div className="max-w-[75%] space-y-1">
+                <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${msg.role === "user" ? "rounded-tr-sm" : "rounded-tl-sm"}`}
+                  style={msg.role === "user"
+                    ? { background: "linear-gradient(135deg,#4A57B9,#6F80E8)", color: "#fff" }
+                    : { background: "#F8FAFF", color: "#374151", border: "1px solid #E3E9F6" }}>
+                  {msg.content}
+                </div>
+                {/* Citations */}
+                {msg.citations && msg.citations.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pl-1">
+                    {msg.citations.map((c, ci) => (
+                      <span key={ci} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
+                        style={{ background: "#EEF2FF", color: "#4A57B9" }}>
+                        <BookOpen className="w-2.5 h-2.5" />
+                        {c.title}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -350,7 +413,7 @@ function AiAssistantTab() {
           <input
             className="flex-1 text-sm px-4 py-2.5 rounded-xl border outline-none"
             style={{ borderColor: "#E3E9F6", color: "#111827" }}
-            placeholder="Ask about safety, compliance, risk…"
+            placeholder="Ask about safety, compliance, risk, or your uploaded policies…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
@@ -374,6 +437,7 @@ function AiAssistantTab() {
           "What are our top 3 safety risks this week?",
           "How do we compare on ISO 45001 compliance?",
           "Summarise recent incident trends",
+          "What does our confined space policy say?",
           "What corrective actions are overdue?",
         ].map((prompt) => (
           <button
@@ -1258,6 +1322,9 @@ function KnowledgeSearchTab() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [search, { data, isLoading }] = useAiKnowledgeSearchMutation();
+  const [uploadDoc, { isLoading: uploading }] = useUploadKnowledgeDocMutation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadResult, setUploadResult] = useState<{ name: string; chunks: number } | null>(null);
 
   async function handleSearch() {
     if (!query.trim()) return;
@@ -1265,10 +1332,44 @@ function KnowledgeSearchTab() {
     await search({ query: query.trim() });
   }
 
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    try {
+      const res = await uploadDoc(file).unwrap();
+      setUploadResult({ name: res.file_name, chunks: res.chunks_indexed });
+      setTimeout(() => setUploadResult(null), 5000);
+    } catch {
+      setUploadResult(null);
+    }
+  }
+
   return (
     <div className="space-y-5">
+      {uploadResult && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm" style={{ background: "#D1FAE5", color: "#065F46" }}>
+          <BookOpen className="w-4 h-4 flex-shrink-0" />
+          <span><strong>{uploadResult.name}</strong> indexed — {uploadResult.chunks} chunks ready for AI search.</span>
+          <button type="button" className="ml-auto" onClick={() => setUploadResult(null)}><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+
       <Card>
-        <SectionHeader icon={FileSearch} title="AI Knowledge Search" sub="Search your HSE knowledge base with AI-powered semantic search" accent="#4A57B9" />
+        <div className="flex items-start justify-between mb-3">
+          <SectionHeader icon={FileSearch} title="AI Knowledge Search" sub="Search your HSE knowledge base with AI-powered semantic search" accent="#4A57B9" />
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border disabled:opacity-50 flex-shrink-0"
+            style={{ borderColor: "#4A57B9", color: "#4A57B9", background: "#F8FAFF" }}
+          >
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+            {uploading ? "Indexing…" : "Upload Document"}
+          </button>
+          <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden" onChange={handleFileUpload} />
+        </div>
         <div className="flex gap-2">
           <input
             className="flex-1 text-sm px-4 py-2.5 rounded-xl border outline-none"
@@ -1326,20 +1427,25 @@ function KnowledgeSearchTab() {
           {data.results?.length > 0 && (
             <Card>
               <p className="text-sm font-semibold mb-3" style={{ color: "#111827" }}>
-                {data.total} source{data.total !== 1 ? "s" : ""} found
+                {data.total} passage{data.total !== 1 ? "s" : ""} found
               </p>
               <div className="space-y-3">
-                {data.results.map((r, i) => (
-                  <div key={r.id ?? i} className="rounded-xl border p-4" style={{ borderColor: "#E3E9F6" }}>
-                    {r.title && <p className="text-sm font-semibold mb-1" style={{ color: "#111827" }}>{r.title}</p>}
-                    <p className="text-xs leading-relaxed" style={{ color: "#6B7280" }}>{r.content}</p>
-                    {r.source && <p className="text-xs mt-2 font-medium" style={{ color: "#9CA3AF" }}>Source: {r.source}</p>}
+                {data.results.map((r: any, i: number) => (
+                  <div key={(r.doc_id ?? r.id) + i} className="rounded-xl border p-4" style={{ borderColor: "#E3E9F6" }}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <BookOpen className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#4A57B9" }} />
+                      <p className="text-sm font-semibold" style={{ color: "#111827" }}>{r.title ?? r.doc_id ?? "Document"}</p>
+                      {r.chunk_index != null && (
+                        <span className="text-xs ml-auto" style={{ color: "#9CA3AF" }}>§{r.chunk_index + 1}</span>
+                      )}
+                    </div>
+                    <p className="text-xs leading-relaxed" style={{ color: "#6B7280" }}>{r.text ?? r.content}</p>
                     {r.score != null && (
                       <div className="flex items-center gap-1.5 mt-2">
                         <div className="h-1 flex-1 rounded-full overflow-hidden" style={{ background: "#E5E7EB" }}>
-                          <div className="h-full rounded-full" style={{ width: `${Math.round(r.score * 100)}%`, background: "#4A57B9" }} />
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.round(r.score * 1000))}%`, background: "#4A57B9" }} />
                         </div>
-                        <span className="text-xs" style={{ color: "#9CA3AF" }}>{Math.round(r.score * 100)}% match</span>
+                        <span className="text-xs" style={{ color: "#9CA3AF" }}>relevance {(r.score * 100).toFixed(1)}%</span>
                       </div>
                     )}
                   </div>
@@ -1351,9 +1457,9 @@ function KnowledgeSearchTab() {
           {data.results?.length === 0 && (
             <Card>
               <div className="text-center py-6">
-                <Search className="w-8 h-8 mx-auto mb-2" style={{ color: "#D1D5DB" }} />
+                <Upload className="w-8 h-8 mx-auto mb-2" style={{ color: "#D1D5DB" }} />
                 <p className="text-sm font-medium" style={{ color: "#9CA3AF" }}>No results found for "{submitted}"</p>
-                <p className="text-xs mt-1" style={{ color: "#D1D5DB" }}>Try indexing knowledge documents first via the Knowledge Sources section.</p>
+                <p className="text-xs mt-1" style={{ color: "#D1D5DB" }}>Upload a PDF or Word policy document using the button above to enable AI-powered search.</p>
               </div>
             </Card>
           )}
