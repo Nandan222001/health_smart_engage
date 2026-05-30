@@ -501,6 +501,26 @@ class DomainDispatcher:
             result = self.ai.chat(messages, extra_context=extra_context)
             if citations:
                 result["citations"] = citations
+
+            # Persist the conversation to ai_conversations table
+            try:
+                from app.models.ai import AiConversation as _AiConv
+                import uuid as _uuid
+                last_q = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+                conv = _AiConv(
+                    id=str(_uuid.uuid4()),
+                    tenant_id=user.tenant_id,
+                    user_id=user.user_id,
+                    question=last_q,
+                    answer=result.get("content") or result.get("answer") or "",
+                    source_citations={"citations": citations} if citations else {},
+                )
+                db.add(conv)
+                db.flush()
+            except Exception as _exc:
+                import logging
+                logging.getLogger(__name__).warning("Failed to save AI conversation: %s", _exc)
+
             return result
 
         if operation == "ai_knowledge_search":
