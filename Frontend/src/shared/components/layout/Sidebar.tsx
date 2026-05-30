@@ -242,6 +242,9 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
       { name: "Import History",   path: "/import-history" },
       { name: "Validation Logs",  path: "/validation-logs" },
       { name: "Sync Status",      path: "/sync-status" },
+      { name: "PDF Documents",    path: "/data-management/documents?type=pdf" },
+      { name: "Word Docs",        path: "/data-management/documents?type=docs" },
+      { name: "Presentations",    path: "/data-management/documents?type=ppt" },
     ],
   },
   "Reports": {

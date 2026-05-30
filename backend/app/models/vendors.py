@@ -1,5 +1,5 @@
 from datetime import date
-from sqlalchemy import Date, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -24,6 +24,7 @@ class Vendor(Base, TenantScopedMixin):
     incident_count: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     contract_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)
     active_since: Mapped[date | None] = mapped_column(Date, nullable=True)
+    extra_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class VendorDocument(Base, TenantScopedMixin):

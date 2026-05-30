@@ -22,12 +22,12 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PermitRecord   { id: string; status: string; site_id?: string; location?: string; }
-interface CapaRecord     { id: string; status: string; }
+interface CapaRecord     { id: string; status: string; title?: string; due_date?: string; days_left?: number; severity?: string; overdue?: boolean; }
 interface IncidentRecord { id: string; status: string; severity?: string; description?: string; incident_type?: string; created_at?: string; location_id?: string; site_id?: string; }
 interface HazardRecord   { id: string; status: string; description?: string; severity?: string; }
-interface AuditRecord    { id: string; status: string; title?: string; name?: string; }
+interface AuditRecord    { id: string; status: string; title?: string; name?: string; scheduled_date?: string; completed_date?: string; audit_type?: string; result?: string; issues_found?: string; }
 interface VendorRecord   { id: string; status?: string; name?: string; }
-interface RiskRecord     { id: string; risk_score?: number; task_name?: string; hazard_description?: string; }
+interface RiskRecord     { id: string; risk_score?: number; task_name?: string; hazard_description?: string; status?: string; }
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -550,86 +550,167 @@ export function OrgAdminDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      {/* ── Risk Overview + Compliance Overview ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-        {/* Risk Heatmap placeholder */}
-        <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[15px] font-bold text-gray-900">Risk Heatmap</h2>
-            <Flame className="w-4 h-4 text-orange-500" />
-          </div>
-          {opsLoading ? (
-            <div className="flex items-center justify-center h-[180px]">
-              <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+        {/* Risk Overview */}
+        <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
+          <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "#F1F5F9" }}>
+            <div className="flex items-center gap-2">
+              <Flame className="w-4 h-4 text-orange-500" />
+              <h2 className="text-[15px] font-bold text-gray-900">Risk Overview</h2>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {riskAssessments.slice(0, 4).length > 0 ? (
-                riskAssessments
-                  .sort((a, b) => (b.risk_score ?? 0) - (a.risk_score ?? 0))
-                  .slice(0, 4)
-                  .map((r, i) => {
+            <button onClick={() => navigate("/risks")} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: "#4A57B9" }}>
+              View All <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          {opsLoading ? (
+            <div className="flex items-center justify-center h-[240px]"><Loader2 className="w-5 h-5 animate-spin text-slate-300" /></div>
+          ) : riskAssessments.length === 0 ? (
+            <div className="flex items-center justify-center h-[240px] text-gray-400 text-xs">No risk assessments yet</div>
+          ) : (() => {
+            const high   = riskAssessments.filter(r => (r.risk_score ?? 0) >= 15);
+            const medium = riskAssessments.filter(r => (r.risk_score ?? 0) >= 8 && (r.risk_score ?? 0) < 15);
+            const low    = riskAssessments.filter(r => (r.risk_score ?? 0) < 8);
+            const sorted = [...riskAssessments].sort((a, b) => (b.risk_score ?? 0) - (a.risk_score ?? 0));
+            return (
+              <div className="p-5 space-y-4">
+                {/* Level summary */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "High Risk", count: high.length,   color: "#DC2626", bg: "#FEF2F2" },
+                    { label: "Medium",    count: medium.length, color: "#F59E0B", bg: "#FFFBEB" },
+                    { label: "Low Risk",  count: low.length,    color: "#059669", bg: "#F0FDF4" },
+                  ].map(l => (
+                    <div key={l.label} className="rounded-xl p-3 text-center" style={{ background: l.bg }}>
+                      <div className="text-[22px] font-extrabold" style={{ color: l.color }}>{l.count}</div>
+                      <div className="text-[11px] font-semibold mt-0.5" style={{ color: l.color }}>{l.label}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Top risks */}
+                <div className="space-y-2.5">
+                  {sorted.slice(0, 5).map((r, i) => {
                     const score = r.risk_score ?? 0;
-                    const color = score >= 20 ? "#DC2626" : score >= 12 ? "#F59E0B" : "#059669";
+                    const color = score >= 15 ? "#DC2626" : score >= 8 ? "#F59E0B" : "#059669";
+                    const level = score >= 15 ? "HIGH" : score >= 8 ? "MED" : "LOW";
                     return (
                       <div key={r.id || i} className="flex items-center gap-3">
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                        <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md w-9 text-center flex-shrink-0"
+                          style={{ background: `${color}18`, color }}>
+                          {level}
+                        </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-center mb-0.5">
                             <span className="text-[12px] font-semibold text-gray-700 truncate">
-                              {(r.task_name || r.hazard_description || "Risk area").slice(0, 40)}
+                              {(r.task_name || r.hazard_description || "Risk").slice(0, 42)}
                             </span>
-                            <span className="text-[11px] font-bold ml-2" style={{ color }}>Score: {score}</span>
+                            <span className="text-[11px] font-bold ml-2 flex-shrink-0" style={{ color }}>
+                              {score}/25
+                            </span>
                           </div>
                           <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${Math.min(100, score * 4)}%`, background: color }} />
+                            <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, score * 4)}%`, background: color }} />
                           </div>
                         </div>
                       </div>
                     );
-                  })
-              ) : (
-                <div className="h-[160px] rounded-xl bg-slate-50 flex items-center justify-center border border-dashed border-slate-200">
-                  <p className="text-[12px] text-slate-400">No risk assessments recorded yet</p>
+                  })}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            );
+          })()}
         </div>
 
-        {/* Department Safety Ranking — derived from real site data */}
-        <div className="bg-white rounded-2xl border p-5" style={{ borderColor: "#E3E9F6" }}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[15px] font-bold text-gray-900">Site Safety Ranking</h2>
-            <Users2 className="w-4 h-4 text-blue-500" />
-          </div>
-          {sitesLoading ? (
-            <div className="flex items-center justify-center h-[160px]">
-              <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+        {/* Compliance Overview */}
+        <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
+          <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "#F1F5F9" }}>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-blue-500" />
+              <h2 className="text-[15px] font-bold text-gray-900">Compliance Overview</h2>
             </div>
-          ) : deptRanking.length === 0 ? (
-            <div className="flex items-center justify-center h-[160px] text-gray-400 text-xs">No sites configured yet</div>
-          ) : (
-            <div className="space-y-3">
-              {deptRanking.map((dept, idx) => (
-                <div key={dept.name} className="flex items-center gap-3">
-                  <span className="text-[13px] font-bold text-slate-300 w-4">#{idx + 1}</span>
-                  <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-[13px] font-semibold text-gray-700 truncate">{dept.name}</span>
-                      <span className="text-[12px] font-bold text-gray-500">{dept.score}%</span>
+            <button onClick={() => navigate("/compliance")} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: "#4A57B9" }}>
+              View All <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          {opsLoading ? (
+            <div className="flex items-center justify-center h-[240px]"><Loader2 className="w-5 h-5 animate-spin text-slate-300" /></div>
+          ) : (() => {
+            const totalAudits   = audits.length;
+            const passedAudits  = audits.filter(a => a.result === "pass" || a.status === "completed").length;
+            const openCapas     = capas.filter(c => c.status === "open" || c.status === "in_progress").length;
+            const overdueCapas  = capas.filter(c => c.overdue || (c.days_left !== undefined && c.days_left < 0 && c.status !== "closed")).length;
+            const complianceRate = totalAudits > 0 ? Math.round((passedAudits / totalAudits) * 100) : 0;
+            const recentAudits  = [...audits]
+              .filter(a => a.scheduled_date)
+              .sort((a, b) => (b.scheduled_date ?? "") > (a.scheduled_date ?? "") ? 1 : -1)
+              .slice(0, 5);
+
+            return (
+              <div className="p-5 space-y-4">
+                {/* Stats row */}
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { label: "Total Audits",  value: totalAudits,     color: "#4A57B9", bg: "#EEF2FF" },
+                    { label: "Passed",        value: passedAudits,    color: "#059669", bg: "#F0FDF4" },
+                    { label: "Open CAPAs",    value: openCapas,       color: "#D97706", bg: "#FFFBEB" },
+                    { label: "Overdue",       value: overdueCapas,    color: "#DC2626", bg: "#FEF2F2" },
+                  ].map(s => (
+                    <div key={s.label} className="rounded-xl p-2.5 text-center" style={{ background: s.bg }}>
+                      <div className="text-[18px] font-extrabold" style={{ color: s.color }}>{s.value}</div>
+                      <div className="text-[10px] font-semibold mt-0.5 leading-tight" style={{ color: s.color }}>{s.label}</div>
                     </div>
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${dept.score > 95 ? "bg-emerald-500" : dept.score > 85 ? "bg-blue-500" : "bg-amber-500"}`}
-                        style={{ width: `${dept.score}%` }}
-                      />
-                    </div>
+                  ))}
+                </div>
+
+                {/* Compliance rate bar */}
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-[12px] font-semibold text-gray-600">Audit Pass Rate</span>
+                    <span className="text-[14px] font-extrabold" style={{ color: complianceRate >= 80 ? "#059669" : complianceRate >= 60 ? "#F59E0B" : "#DC2626" }}>
+                      {complianceRate}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${complianceRate}%`,
+                        background: complianceRate >= 80 ? "#059669" : complianceRate >= 60 ? "#F59E0B" : "#DC2626"
+                      }} />
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Recent audits */}
+                <div>
+                  <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Recent Audits</div>
+                  <div className="space-y-1.5">
+                    {recentAudits.length === 0 ? (
+                      <div className="text-[12px] text-gray-400">No audits recorded</div>
+                    ) : recentAudits.map(a => {
+                      const pass = a.result === "pass";
+                      const fail = a.result === "fail";
+                      return (
+                        <div key={a.id} className="flex items-center gap-2.5 py-1.5 border-b last:border-0" style={{ borderColor: "#F8FAFC" }}>
+                          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${pass ? "bg-emerald-500" : fail ? "bg-red-400" : "bg-blue-400"}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-semibold text-gray-700 truncate">{a.title || "Safety Inspection"}</div>
+                            <div className="text-[10px] text-gray-400 mt-0.5">{a.audit_type || "Audit"} · {a.scheduled_date ?? "–"}</div>
+                          </div>
+                          {a.result && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${pass ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`}>
+                              {a.result.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

@@ -21,7 +21,7 @@ class AuditExecution(Base, TenantScopedMixin):
     __tablename__ = "audit_executions"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    checklist_id: Mapped[str] = mapped_column(String(64), ForeignKey("audit_checklists.id"))
+    checklist_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("audit_checklists.id"), nullable=True)
     site_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     auditor_user_id: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(64), default="scheduled")
@@ -30,6 +30,7 @@ class AuditExecution(Base, TenantScopedMixin):
     audit_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     scheduled_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
     completed_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
+    extra_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class Finding(Base, TenantScopedMixin):
@@ -60,6 +61,7 @@ class Capa(Base, TenantScopedMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     root_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
     corrective_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extra_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class ComplianceStandard(Base, TenantScopedMixin):

@@ -373,6 +373,14 @@ export const aiIntelligenceApi = baseApi.injectEndpoints({
     aiKnowledgeSearch: builder.mutation<AiKnowledgeSearchResponse, { query: string }>({
       query: (body) => ({ url: "/ai/knowledge/search", method: "POST", body }),
     }),
+    uploadKnowledgeDoc: builder.mutation<{ id: string; file_name: string; chunks_indexed: number; ai_ready: boolean }, File>({
+      query: (file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return { url: "/org-admin/data-management/documents/upload", method: "POST", body: fd };
+      },
+      invalidatesTags: ["Analytics"],
+    }),
   }),
 });
 
@@ -397,4 +405,5 @@ export const {
   useGetSafetyRecommendationsQuery,
   useGetTrendAnalysisQuery,
   useAiKnowledgeSearchMutation,
+  useUploadKnowledgeDocMutation,
 } = aiIntelligenceApi;

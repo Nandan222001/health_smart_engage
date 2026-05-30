@@ -5,8 +5,14 @@ from app.core.config import settings
 
 
 def _to_dict(obj) -> dict:
-    """Serialize a SQLAlchemy model instance to a plain dict, stripping internal state."""
-    return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
+    """Serialize a SQLAlchemy model instance to a plain dict.
+    extra_fields JSON is merged into the top-level dict so callers see a flat object.
+    """
+    d = {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
+    extras = d.pop("extra_fields", None)
+    if extras and isinstance(extras, dict):
+        d.update(extras)
+    return d
 from app.services.ai_service import AiService
 from app.services.file_storage_service import FileStorageService
 from app.services.mobile_sync_service import MobileSyncService
@@ -403,12 +409,14 @@ class DomainDispatcher:
             messages = data.get("messages", [])
             if not messages and data.get("message"):
                 messages = [{"role": "user", "content": data["message"]}]
-            # Optionally enrich with live platform data
+
+            # Build extra context: live platform stats + RAG knowledge base
             extra_context = ""
+            citations: list[dict] = []
             try:
                 from sqlalchemy import select as _sel, func as _func
                 from app.models.incidents import Incident as _Inc
-                from app.models.domain import Permit, RiskAssessment, HazardObservation
+                from app.models.domain import Permit, RiskAssessment
                 inc_count = db.scalar(_sel(_func.count(_Inc.id)).where(_Inc.tenant_id == user.tenant_id)) or 0
                 open_inc = db.scalar(_sel(_func.count(_Inc.id)).where(_Inc.tenant_id == user.tenant_id, _Inc.status == "reported")) or 0
                 permit_count = db.scalar(_sel(_func.count(Permit.id)).where(Permit.tenant_id == user.tenant_id, Permit.status == "active")) or 0
@@ -420,24 +428,63 @@ class DomainDispatcher:
                 )
             except Exception:
                 pass
-            return self.ai.chat(messages, extra_context=extra_context)
+
+            # RAG: search indexed knowledge documents for the last user message
+            try:
+                from app.services.knowledge_indexer import search_knowledge
+                last_user_msg = next(
+                    (m["content"] for m in reversed(messages) if m.get("role") == "user"),
+                    None,
+                )
+                if last_user_msg:
+                    chunks = search_knowledge(last_user_msg, user.tenant_id, db, top_k=5)
+                    if chunks:
+                        passages = "\n\n".join(
+                            f"[{c['title']} §{c['chunk_index']}]\n{c['text'][:500]}"
+                            for c in chunks
+                        )
+                        extra_context += f"\n\nRelevant policy/procedure excerpts from your uploaded documents:\n{passages}"
+                        citations = [
+                            {"title": c["title"], "doc_id": c["doc_id"], "score": c["score"]}
+                            for c in chunks
+                        ]
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning("RAG search failed: %s", exc)
+
+            result = self.ai.chat(messages, extra_context=extra_context)
+            if citations:
+                result["citations"] = citations
+            return result
 
         if operation == "ai_knowledge_search":
             query = data.get("query", data.get("q", ""))
-            # Try Azure AI Search if configured; fall back to keyword search over GenericRecord knowledge docs
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            docs_recs = repo.list_by_type(user.tenant_id, "knowledge", "document", limit=200)
-            docs = [{"id": r.id, "title": r.payload.get("title", ""), "content": r.payload.get("content", r.payload.get("text", "")), "source": r.payload.get("source", "")} for r in docs_recs]
-            results = self.ai.knowledge_search(query, docs)
-            # If Azure AI is configured, also ask it to synthesize an answer
+            # TF-IDF search over indexed knowledge chunks
             answer = None
+            chunks: list[dict] = []
+            try:
+                from app.services.knowledge_indexer import search_knowledge
+                chunks = search_knowledge(query, user.tenant_id, db, top_k=8)
+            except Exception:
+                pass
+
+            # Fall back to keyword search over GenericRecord knowledge docs if no chunks
+            if not chunks:
+                from app.repositories.generic_repository import GenericRepository
+                repo = GenericRepository(db)
+                docs_recs = repo.list_by_type(user.tenant_id, "knowledge", "document", limit=200)
+                docs = [{"id": r.id, "title": r.payload.get("title", ""), "content": r.payload.get("content", r.payload.get("text", "")), "source": r.payload.get("source", "")} for r in docs_recs]
+                chunks = self.ai.knowledge_search(query, docs)
+
             if self.ai.is_configured and query:
-                ctx = "\n".join(f"- {r.get('title','')}: {str(r.get('content',''))[:300]}" for r in results[:5])
+                ctx = "\n\n".join(
+                    f"[{r.get('title','Doc')}]\n{str(r.get('text', r.get('content', '')))[:400]}"
+                    for r in chunks[:5]
+                )
                 answer = self.ai.analyze(
                     f"Answer this HSE question using only the provided knowledge base excerpts: '{query}'\n\nRelevant passages:\n{ctx or 'No documents found.'}",
                 )
-            return {"query": query, "results": results, "answer": answer, "total": len(results)}
+            return {"query": query, "results": chunks, "answer": answer, "total": len(chunks)}
 
         # ── AI Intelligence Commands ──────────────────────────────────────────
         if operation == "ai_intelligence_models_retrain":
@@ -1913,6 +1960,25 @@ class DomainDispatcher:
                 "topRecognitions": top_recognitions,
                 "employeeCount": emp_count,
             }
+
+        if operation == "org_admin_documents_list":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            records = repo.list_by_type(user.tenant_id, "data_management", "document", limit=500)
+            items = [{"created_at": r.created_at.isoformat() if r.created_at else None, **r.payload} for r in records]
+            return {"items": items}
+
+        if operation == "org_admin_documents_delete":
+            from app.repositories.generic_repository import GenericRepository
+            repo = GenericRepository(db)
+            doc_id = path_params.get("documentId")
+            records = repo.list_by_type(user.tenant_id, "data_management", "document", limit=500)
+            for r in records:
+                if r.payload.get("id") == doc_id:
+                    db.delete(r)
+                    db.flush()
+                    break
+            return {"deleted": True}
 
         if operation == "org_admin_imports_list":
             from app.repositories.generic_repository import GenericRepository

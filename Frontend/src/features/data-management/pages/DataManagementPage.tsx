@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import {
   Upload, FileText, CheckCircle2, XCircle, AlertCircle, RefreshCw,
   Download, Database, Clock, AlertTriangle, FileSpreadsheet,
@@ -6,7 +7,7 @@ import {
   Shield, Copy, Layers, Info, Zap, Eye,
   PenLine, Plug, Server, UserCheck, Timer, Wifi, Building2,
   Code2, Plus, Trash2, ChevronRight, CheckSquare, Save,
-  RotateCcw, Link, X,
+  RotateCcw, Link, X, FolderOpen, Presentation, BookMarked,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -1146,17 +1147,251 @@ function ExcelTab() {
   );
 }
 
+// ── DOCUMENTS TAB ─────────────────────────────────────────────────────────────
+
+type DocCategory = "pdf" | "docs" | "ppt";
+
+interface DocRecord {
+  id: string;
+  file_name: string;
+  file_type: string;
+  category: DocCategory;
+  size: string;
+  uploaded_by: string;
+  created_at?: string;
+}
+
+const DOC_SUB_TABS: { key: DocCategory; label: string; icon: React.ElementType; accept: string; color: string; bg: string; ext: string }[] = [
+  { key: "pdf",  label: "PDF Documents",   icon: FileText,     accept: ".pdf",        color: "#EF4444", bg: "#FEF2F2", ext: "PDF"  },
+  { key: "docs", label: "Word Documents",  icon: BookMarked,   accept: ".doc,.docx",  color: "#2563EB", bg: "#EFF6FF", ext: "DOCX" },
+  { key: "ppt",  label: "Presentations",   icon: Presentation, accept: ".ppt,.pptx",  color: "#D97706", bg: "#FFFBEB", ext: "PPTX" },
+];
+
+function DocumentsTab({ initialSubTab }: { initialSubTab?: DocCategory }) {
+  const [subTab, setSubTab] = useState<DocCategory>(initialSubTab ?? "pdf");
+  const [docs, setDocs] = useState<DocRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [fetchedOnce, setFetchedOnce] = useState(false);
+  const fileInputRefs = useRef<Record<DocCategory, HTMLInputElement | null>>({ pdf: null, docs: null, ppt: null });
+
+  const API_BASE_DOCS = (import.meta.env.VITE_API_URL as string || "/api/v1").replace(/\/$/, "");
+
+  function getHeaders(): Record<string, string> {
+    const h: Record<string, string> = {};
+    const jwt = localStorage.getItem("hse_jwt");
+    if (jwt) h["Authorization"] = `Bearer ${jwt}`;
+    try {
+      const u = JSON.parse(localStorage.getItem("hse_user") || "{}");
+      if (u?.email)   h["X-User-Email"] = u.email;
+      if (u?.role)    h["X-User-Role"]  = u.role;
+      if (u?.orgCode) h["X-Tenant-Id"]  = u.orgCode;
+    } catch { /**/ }
+    return h;
+  }
+
+  const fetchDocs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API_BASE_DOCS}/org-admin/data-management/documents`, { headers: getHeaders() });
+      const json = await res.json().catch(() => ({}));
+      setDocs((json?.data?.items ?? json?.items ?? []) as DocRecord[]);
+    } finally {
+      setLoading(false);
+      setFetchedOnce(true);
+    }
+  }, [API_BASE_DOCS]);
+
+  // Fetch on first render
+  if (!fetchedOnce && !loading) fetchDocs();
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res  = await fetch(`${API_BASE_DOCS}/org-admin/data-management/documents/upload`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: form,
+      });
+      const json = await res.json().catch(() => ({}));
+      const data = json?.data ?? json;
+      if (res.ok && data?.id) {
+        await fetchDocs();
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (docId: string) => {
+    await fetch(`${API_BASE_DOCS}/org-admin/data-management/documents/${docId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    setDocs(d => d.filter(x => x.id !== docId));
+  };
+
+  const filtered = docs.filter(d => d.category === subTab);
+  const current  = DOC_SUB_TABS.find(t => t.key === subTab)!;
+
+  return (
+    <div className="space-y-5">
+      {/* Sub-tab pills */}
+      <div className="flex gap-2 flex-wrap">
+        {DOC_SUB_TABS.map(t => {
+          const Icon   = t.icon;
+          const active = subTab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setSubTab(t.key)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all"
+              style={{
+                background:  active ? t.bg : "#fff",
+                borderColor: active ? t.color : "#E3E9F6",
+                color:       active ? t.color : "#6B7280",
+              }}
+            >
+              <Icon className="w-4 h-4" />
+              {t.label}
+              {docs.filter(d => d.category === t.key).length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+                  style={{ background: t.color, color: "#fff" }}>
+                  {docs.filter(d => d.category === t.key).length}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Upload zone */}
+      <div className="rounded-2xl border-2 border-dashed p-8 text-center transition-colors"
+        style={{ borderColor: current.color + "55", background: current.bg }}>
+        <current.icon className="w-10 h-10 mx-auto mb-3" style={{ color: current.color }} />
+        <p className="text-sm font-semibold mb-1" style={{ color: current.color }}>
+          Upload {current.label}
+        </p>
+        <p className="text-xs mb-4" style={{ color: "#9CA3AF" }}>
+          Accepted: {current.accept.replace(/\./g, "").toUpperCase().replace(/,/g, ", ")} — Max 50 MB per file
+        </p>
+        <label
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-opacity"
+          style={{ background: current.color, color: "#fff", opacity: uploading ? 0.6 : 1 }}
+        >
+          {uploading
+            ? <><RefreshCw className="w-4 h-4 animate-spin" /> Uploading…</>
+            : <><Upload className="w-4 h-4" /> Choose File</>
+          }
+          <input
+            ref={el => { fileInputRefs.current[current.key] = el; }}
+            type="file"
+            accept={current.accept}
+            className="hidden"
+            disabled={uploading}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); if (e.target) e.target.value = ""; }}
+          />
+        </label>
+      </div>
+
+      {/* File list */}
+      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: "#E3E9F6" }}>
+        <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: "#E3E9F6", background: "#F9FAFB" }}>
+          <h3 className="text-sm font-bold" style={{ color: "#111827" }}>
+            {current.label} ({filtered.length})
+          </h3>
+          <button onClick={fetchDocs} className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#4A57B9" }}>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <RefreshCw className="w-6 h-6 animate-spin" style={{ color: "#4A57B9" }} />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12 space-y-2">
+            <FolderOpen className="w-10 h-10 mx-auto" style={{ color: "#D1D5DB" }} />
+            <p className="text-sm" style={{ color: "#9CA3AF" }}>No {current.ext} files uploaded yet</p>
+            <p className="text-xs" style={{ color: "#D1D5DB" }}>Use the upload zone above to add files</p>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: "#F9FAFB" }}>
+                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>File Name</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Type</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Size</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Uploaded By</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Date</th>
+                <th className="px-5 py-3 text-xs font-semibold" style={{ color: "#6B7280" }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(doc => (
+                <tr key={doc.id} className="border-t hover:bg-gray-50" style={{ borderColor: "#F3F4F6" }}>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <current.icon className="w-4 h-4 flex-shrink-0" style={{ color: current.color }} />
+                      <span className="font-medium truncate max-w-[240px]" style={{ color: "#111827" }}>{doc.file_name}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold uppercase"
+                      style={{ background: current.bg, color: current.color }}>
+                      {doc.file_type}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-xs" style={{ color: "#6B7280" }}>{doc.size}</td>
+                  <td className="px-5 py-3 text-xs" style={{ color: "#6B7280" }}>{doc.uploaded_by}</td>
+                  <td className="px-5 py-3 text-xs" style={{ color: "#6B7280" }}>
+                    {doc.created_at ? new Date(doc.created_at).toLocaleDateString() : "—"}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <button
+                      onClick={() => handleDelete(doc.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" style={{ color: "#EF4444" }} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 
-type Tab = "manual" | "excel" | "api";
+type Tab = "manual" | "excel" | "api" | "documents";
 
 export function DataManagementPage() {
-  const [tab, setTab] = useState<Tab>("excel");
+  const [searchParams] = useSearchParams();
+  const typeParam = searchParams.get("type") as DocCategory | null;
+
+  const [tab, setTab] = useState<Tab>(typeParam ? "documents" : "excel");
+  const [docSubTab, setDocSubTab] = useState<DocCategory>(typeParam ?? "pdf");
+
+  // Sync when user navigates via sidebar to a different doc type
+  useEffect(() => {
+    if (typeParam) {
+      setTab("documents");
+      setDocSubTab(typeParam);
+    }
+  }, [typeParam]);
 
   const TABS: { key: Tab; label: string; icon: React.ElementType; desc: string }[] = [
-    { key: "manual", label: "Manual Entry",       icon: PenLine,        desc: "Enter data directly via form"    },
-    { key: "excel",  label: "Excel / CSV Upload", icon: FileSpreadsheet,desc: "Bulk import spreadsheet files"   },
-    { key: "api",    label: "API & Integrations", icon: Plug,           desc: "Connect external systems"        },
+    { key: "manual",    label: "Manual Entry",       icon: PenLine,        desc: "Enter data directly via form"    },
+    { key: "excel",     label: "Excel / CSV Upload", icon: FileSpreadsheet,desc: "Bulk import spreadsheet files"   },
+    { key: "api",       label: "API & Integrations", icon: Plug,           desc: "Connect external systems"        },
+    { key: "documents", label: "Documents",          icon: FolderOpen,     desc: "Upload PDF, DOCX & PPTX files"   },
   ];
 
   return (
@@ -1171,7 +1406,7 @@ export function DataManagementPage() {
       </div>
 
       {/* Method selector */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {TABS.map(t => {
           const Icon   = t.icon;
           const active = tab === t.key;
@@ -1203,9 +1438,10 @@ export function DataManagementPage() {
       {/* Tab content */}
       <div className={`${tab !== "api" ? "bg-white rounded-2xl border p-6" : ""}`}
         style={{ borderColor: "#E3E9F6" }}>
-        {tab === "manual" && <ManualEntryTab />}
-        {tab === "excel"  && <ExcelTab />}
-        {tab === "api"    && <ApiIntegrationsTab />}
+        {tab === "manual"    && <ManualEntryTab />}
+        {tab === "excel"     && <ExcelTab />}
+        {tab === "api"       && <ApiIntegrationsTab />}
+        {tab === "documents" && <DocumentsTab initialSubTab={docSubTab} />}
       </div>
 
       {/* Tip bar */}
