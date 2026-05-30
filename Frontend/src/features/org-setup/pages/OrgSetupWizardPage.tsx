@@ -39,6 +39,7 @@ import {
   useSaveOrgSetupStep5Mutation,
   useUploadOrgSetupKnowledgeMutation,
   useImportOrgSetupDataMutation,
+  useBulkImportModuleMutation,
   useSaveOrgSetupStep7Mutation,
   useActivateOrganizationMutation,
   useHrmsImportMutation,
@@ -1415,7 +1416,9 @@ function Step6({
   const { data: documents = [], isLoading: docsLoading, refetch: refetchDocs } = useGetOrgSetupStep6DocumentsQuery();
   const { data: imports = [], isLoading: importsLoading, refetch: refetchImports } = useGetOrgSetupStep6aImportsQuery();
   const [uploadKnowledge, { isLoading: uploading }] = useUploadOrgSetupKnowledgeMutation();
-  const [importData, { isLoading: importing }] = useImportOrgSetupDataMutation();
+  const [importData, { isLoading: importingLegacy }] = useImportOrgSetupDataMutation();
+  const [bulkImportModule, { isLoading: importingBulk }] = useBulkImportModuleMutation();
+  const importing = importingLegacy || importingBulk;
 
   const docFileRef = useRef<HTMLInputElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -1427,6 +1430,7 @@ function Step6({
   const [manualFormData, setManualFormData] = useState<Record<string, string>>({});
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualSuccess, setManualSuccess] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ count: number; errors?: string[] } | null>(null);
 
   const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1444,6 +1448,7 @@ function Step6({
   };
 
   const handleImport = async (e?: React.ChangeEvent<HTMLInputElement>) => {
+    setBulkResult(null);
     if (importMethod === "api") {
       await importData({ dataType: selectedDataType, method: "api", url: apiUrl });
       refetchImports();
@@ -1451,7 +1456,10 @@ function Step6({
     }
     const file = e?.target.files?.[0];
     if (!file) return;
-    await importData({ dataType: selectedDataType, method: importMethod, fileName: file.name });
+    const result = await bulkImportModule({ module: selectedDataType, file });
+    if ("data" in result && result.data) {
+      setBulkResult(result.data);
+    }
     refetchImports();
     if (importFileRef.current) importFileRef.current.value = "";
   };
@@ -1655,26 +1663,43 @@ function Step6({
             })()}
 
             {importMethod === "bulk" && (
-              <div className="flex items-center gap-3 flex-wrap">
-                <label
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-colors"
-                  style={{ borderColor: "#E3E9F6", color: "#4A57B9" }}
-                >
-                  <Upload className="w-4 h-4" />
-                  {importing ? "Importing…" : "Upload File"}
-                  <input
-                    ref={importFileRef}
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    className="hidden"
-                    onChange={handleImport}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-colors"
+                    style={{ borderColor: "#E3E9F6", color: "#4A57B9", opacity: (!selectedDataType || importing) ? 0.6 : 1 }}
+                  >
+                    {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {importing ? "Importing…" : "Upload File (.xlsx / .csv)"}
+                    <input
+                      ref={importFileRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                      onChange={handleImport}
+                      disabled={!selectedDataType || importing}
+                    />
+                  </label>
+                  <button
+                    className={secondaryBtnCls}
+                    style={{ ...secondaryBtnStyle, opacity: selectedDataType ? 1 : 0.5 }}
                     disabled={!selectedDataType}
-                  />
-                </label>
-                <button className={secondaryBtnCls} style={secondaryBtnStyle}>
-                  <Download className="w-4 h-4" /> Download Template
-                </button>
-                {!selectedDataType && <span className="text-xs" style={{ color: "#F59E0B" }}>Select a data type above first</span>}
+                    onClick={() => selectedDataType && downloadTemplate(`/v1/org-setup/template/${selectedDataType}`, `${selectedDataType}_template.csv`)}
+                  >
+                    <Download className="w-4 h-4" /> Download Template
+                  </button>
+                  {!selectedDataType && <span className="text-xs" style={{ color: "#F59E0B" }}>Select a data type above first</span>}
+                </div>
+                {bulkResult && (
+                  <div
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
+                    style={{ background: (bulkResult.errors?.length ?? 0) > 0 ? "#FEF3C7" : "#D1FAE5", color: (bulkResult.errors?.length ?? 0) > 0 ? "#92400E" : "#065F46" }}
+                  >
+                    <Check className="w-4 h-4" />
+                    {bulkResult.count} records imported successfully
+                    {(bulkResult.errors?.length ?? 0) > 0 && ` (${bulkResult.errors!.length} warnings)`}
+                  </div>
+                )}
               </div>
             )}
 

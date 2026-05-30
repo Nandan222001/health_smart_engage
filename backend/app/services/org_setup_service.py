@@ -433,6 +433,19 @@ class OrgSetupService:
         - risk                         → generic_records + RiskAssessment rows
         - all other modules            → generic_records as org_import_{module}
         """
+        # normalise Step-6 UI keys to canonical handler keys
+        _ALIASES = {
+            "incident_records": "incidents",
+            "permit_records": "permits",
+            "audit_reports": "audits",
+            "training_records": "training",
+            "sops_policies": "compliance",
+            "risk_assessments": "risk",
+            "capa_data": "capa",
+            "contractor_records": "vendors",
+        }
+        module_key = _ALIASES.get(module_key, module_key)
+
         tenant_id = user.tenant_id
         created = 0
         errors: list[str] = []
@@ -582,7 +595,7 @@ class OrgSetupService:
         # ── risk assessments → RiskAssessment records ──
         if module_key == "risk":
             try:
-                from app.models.domain import RiskAssessment
+                from app.models.risks import RiskAssessment
                 for row in rows:
                     hazard = _v(row, "hazard description", "hazard")
                     if not hazard:
@@ -664,6 +677,177 @@ class OrgSetupService:
                 self.db.flush()
             except Exception as exc:
                 errors.append(f"Vendor domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
+        # ── permits → real Permit records ──
+        if module_key in ("permits", "permit_records"):
+            try:
+                from app.models.permits import Permit
+                import random as _rand
+                for row in rows:
+                    ptype = _v(row, "permit type", "type") or "General"
+                    _, extra = self._split_row("permits", row)
+                    permit = Permit(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        permit_ref=_v(row, "permit ref", "permit id", "ref") or f"PTW-{_rand.randint(10000, 99999)}",
+                        permit_type=ptype,
+                        title=_v(row, "title", "description", "work description") or ptype,
+                        requester_user_id=user.user_id,
+                        status=_v(row, "status") or "closed",
+                        extra_fields=extra,
+                    )
+                    self.db.add(permit)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Permit domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
+        # ── near_miss → Incident with type=near_miss ──
+        if module_key == "near_miss":
+            try:
+                from app.models.incidents import Incident
+                import random as _rand
+                for row in rows:
+                    _, extra = self._split_row("incidents", row)
+                    inc = Incident(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        incident_ref=_v(row, "ref", "near miss id", "id") or f"NM-{_rand.randint(10000, 99999)}",
+                        reporter_user_id=user.user_id,
+                        incident_type="near_miss",
+                        severity=_v(row, "severity") or "unclassified",
+                        description=_v(row, "description", "summary") or "",
+                        is_confidential=False,
+                        status="reported",
+                        extra_fields=extra,
+                    )
+                    self.db.add(inc)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Near miss domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
+        # ── capa → real Capa records ──
+        if module_key in ("capa", "capa_data"):
+            try:
+                from app.models.compliance import Capa
+                for row in rows:
+                    _, extra = self._split_row("capa", row)
+                    import datetime as _dt
+                    raw_due = _v(row, "due date", "due")
+                    due_date = None
+                    if raw_due:
+                        try:
+                            due_date = _dt.date.fromisoformat(str(raw_due)[:10])
+                        except Exception:
+                            pass
+                    capa = Capa(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        source_type=_v(row, "source type", "source") or "import",
+                        owner_user_id=user.user_id,
+                        title=_v(row, "title", "action", "description"),
+                        description=_v(row, "description"),
+                        root_cause=_v(row, "root cause"),
+                        corrective_action=_v(row, "corrective action", "action"),
+                        due_date=due_date,
+                        status=_v(row, "status") or "open",
+                        extra_fields=extra,
+                    )
+                    self.db.add(capa)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"CAPA domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
+        # ── audits → real AuditExecution records ──
+        if module_key in ("audits", "audit_reports"):
+            try:
+                from app.models.compliance import AuditExecution
+                import datetime as _dt
+                for row in rows:
+                    _, extra = self._split_row("audits", row)
+                    raw_date = _v(row, "audit date", "date", "scheduled date")
+                    sched_date = None
+                    if raw_date:
+                        try:
+                            sched_date = _dt.date.fromisoformat(str(raw_date)[:10])
+                        except Exception:
+                            pass
+                    audit = AuditExecution(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        auditor_user_id=user.user_id,
+                        title=_v(row, "title", "audit name", "description"),
+                        audit_type=_v(row, "audit type", "type") or "General Audit",
+                        status=_v(row, "status") or "completed",
+                        scheduled_date=sched_date,
+                        completed_date=sched_date,
+                        extra_fields=extra,
+                    )
+                    self.db.add(audit)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Audit domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
+        # ── training → TrainingRequirement records ──
+        if module_key in ("training", "training_records"):
+            try:
+                from app.models.people import TrainingRequirement
+                import datetime as _dt
+                for row in rows:
+                    _, extra = self._split_row("training", row)
+                    raw_due = _v(row, "due date", "review date", "next due")
+                    due_date = None
+                    if raw_due:
+                        try:
+                            due_date = _dt.date.fromisoformat(str(raw_due)[:10])
+                        except Exception:
+                            pass
+                    tr = TrainingRequirement(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        course_name=_v(row, "course name", "training name", "name") or "Training",
+                        role_target=_v(row, "role", "target role", "job title") or "All",
+                        frequency_months=int(_v(row, "frequency months", "frequency") or 12),
+                        is_mandatory=(_v(row, "mandatory", "required") or "").lower() in ("yes", "true", "1"),
+                        next_due=due_date,
+                        extra_fields=extra,
+                    )
+                    self.db.add(tr)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Training domain save failed: {exc}")
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors}
+
+        # ── compliance documents / SOPs / policies ──
+        if module_key in ("compliance", "sops_policies"):
+            try:
+                from app.models.compliance import ComplianceDocument
+                for row in rows:
+                    _, extra = self._split_row("compliance", row)
+                    doc = ComplianceDocument(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        title=_v(row, "title", "document name", "name") or "Policy",
+                        document_type=_v(row, "document type", "type") or "Policy",
+                        version=_v(row, "version") or "1.0",
+                        status=_v(row, "status") or "Active",
+                        description=_v(row, "description", "summary"),
+                        created_by=user.user_id,
+                    )
+                    self.db.add(doc)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Compliance document save failed: {exc}")
             return {"module": module_key, "status": "imported", "count": created, "errors": errors}
 
         # ── all other modules → store in generic_records ──

@@ -286,6 +286,14 @@ export const orgSetupApi = baseApi.injectEndpoints({
       query: (data) => ({ url: "/org-setup/step6a/import", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
     }),
+    bulkImportModule: builder.mutation<{ count: number; errors?: string[] }, { module: string; file: File }>({
+      query: ({ module, file }) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return { url: `/org-setup/onboarding-bulk?module=${encodeURIComponent(module)}`, method: "POST", body: fd };
+      },
+      invalidatesTags: ["OrgSetup"],
+    }),
     saveOrgSetupStep7: builder.mutation<void, Partial<Step7Data>>({
       query: (data) => ({ url: "/org-setup/step7", method: "POST", body: cmd(data) }),
       invalidatesTags: ["OrgSetup"],
@@ -331,6 +339,7 @@ export const {
   useSaveOrgSetupStep5Mutation,
   useUploadOrgSetupKnowledgeMutation,
   useImportOrgSetupDataMutation,
+  useBulkImportModuleMutation,
   useSaveOrgSetupStep7Mutation,
   useActivateOrganizationMutation,
   useHrmsImportMutation,

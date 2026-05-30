@@ -429,6 +429,57 @@ _MODULE_TEMPLATES: dict[str, tuple[str, str]] = {
         "CleanTech Services,info@cleantech.com,+44 9876 543210,Cleaning,Conditional,2024-02-01,2024-07-31\n",
         "vendors_template.csv",
     ),
+    # Step-6 aliases
+    "incident_records": (
+        "Incident Date,Location / Station,Incident Type,Severity,Description,Immediate Cause,Reported By\n"
+        "2024-01-15,Zone 4,Injury,Minor,Worker slipped on wet floor,Wet floor not marked,John Smith\n",
+        "incident_records_template.csv",
+    ),
+    "near_miss": (
+        "Date,Location,Severity,Description,Contributing Factors,Reported By\n"
+        "2024-02-10,STN005,Moderate,Tool nearly fell from height,Improper tool storage,Jane Doe\n",
+        "near_miss_template.csv",
+    ),
+    "permit_records": (
+        "Permit Type,Work Location,Start Date,End Date,Assigned To,Description,Hazards,Status\n"
+        "Hot Work,Zone 4 - Welding Bay,2024-03-01,2024-03-01,Tom Baker,Welding repairs,Fire,Closed\n",
+        "permit_records_template.csv",
+    ),
+    "audit_reports": (
+        "Audit Title,Audit Type,Scheduled Date,Lead Auditor,Status\n"
+        "Q1 Fire Safety Audit,Internal,2024-03-15,Jane Doe,Completed\n",
+        "audit_reports_template.csv",
+    ),
+    "training_records": (
+        "Course Name,Role,Mandatory,Frequency Months,Due Date\n"
+        "Fire Safety Training,All Staff,Yes,12,2025-01-10\n",
+        "training_records_template.csv",
+    ),
+    "sops_policies": (
+        "Title,Document Type,Version,Status,Description\n"
+        "Fire Safety Policy,Policy,2.1,Active,Annual review of fire safety procedures\n",
+        "sops_policies_template.csv",
+    ),
+    "risk_assessments": (
+        "Hazard Description,Location,Risk Level,Likelihood (1-5),Consequence (1-5),Controls,Responsible Person\n"
+        "Machinery Contact,STN001,High,4,4,Machine guards fitted,Safety Manager\n",
+        "risk_assessments_template.csv",
+    ),
+    "capa_data": (
+        "Title,Description,Priority,Assigned To,Due Date,Source Type\n"
+        "Replace machine guard,Broken guard on conveyor belt,High,john@company.com,2024-02-28,Incident\n",
+        "capa_data_template.csv",
+    ),
+    "hr_shift_data": (
+        "Employee ID,Employee Name,Shift Date,Shift Type,Start Time,End Time,Hours Worked,Station\n"
+        "EMP001,John Smith,2024-01-15,Day,08:00,16:00,8,STN001\n",
+        "hr_shift_data_template.csv",
+    ),
+    "contractor_records": (
+        "Company Name,Contact Email,Contact Phone,Service Type,HSE Rating,Contract Start,Contract End\n"
+        "SafeWork Contractors Ltd,contact@safework.com,+44 1234 567890,Construction,Approved,2024-01-01,2024-12-31\n",
+        "contractor_records_template.csv",
+    ),
 }
 
 
