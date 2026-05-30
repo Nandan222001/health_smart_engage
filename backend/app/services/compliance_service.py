@@ -139,6 +139,7 @@ class ComplianceService:
         items = []
         for a in audits:
             cl = checklists.get(a.checklist_id)
+            ef = a.extra_fields or {}
             items.append({
                 "id": a.id,
                 "title": a.title or (cl.name if cl else f"Audit {a.id[:8]}"),
@@ -150,6 +151,9 @@ class ComplianceService:
                 "status": a.status,
                 "scheduled_date": str(a.scheduled_date) if a.scheduled_date else None,
                 "completed_date": str(a.completed_date) if a.completed_date else None,
+                "result": ef.get("result"),
+                "issues_found": ef.get("issues_found"),
+                "inspector": ef.get("inspector"),
             })
         items.sort(key=lambda x: x["scheduled_date"] or "", reverse=True)
         return {"items": items}
