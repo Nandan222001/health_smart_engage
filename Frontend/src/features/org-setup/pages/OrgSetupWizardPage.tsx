@@ -454,8 +454,8 @@ function Step1({
     const fd = new FormData();
     fd.append("file", file);
     const result = await parseExcel(fd);
-    // baseApi unwraps the envelope: result.data is already the org fields dict directly
-    const parsed = "data" in result ? (result.data as Record<string, string>) : {};
+    const rawBody = "data" in result ? (result.data as { success?: boolean; data?: Record<string, string> }) : null;
+    const parsed = rawBody?.data ?? {};
     const backendError = parsed._error as string | undefined;
     const fieldCount = Object.keys(parsed).filter((k) => parsed[k] && k !== "_error").length;
     if (fieldCount > 0) {
@@ -476,7 +476,8 @@ function Step1({
     setApiStatus("idle");
     const result = await connectApi({ url: apiUrl.trim(), api_key: apiKey.trim(), token: apiToken.trim() });
     if ("data" in result && result.data) {
-      const d = result.data as Record<string, string>;
+      const envelope = result.data as { success?: boolean; data?: Record<string, string> };
+      const d = envelope.data ?? {};
       const fieldCount = Object.keys(d).filter((k) => d[k]).length;
       if (fieldCount > 0) {
         setForm((f) => ({ ...f, ...d }));

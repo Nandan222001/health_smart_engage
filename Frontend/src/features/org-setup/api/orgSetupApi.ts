@@ -227,10 +227,14 @@ export const orgSetupApi = baseApi.injectEndpoints({
     getOrgSetupStep3Sites: builder.query<Site[], void>({
       query: () => "/org-setup/step3/sites",
       providesTags: ["OrgSetup"],
+      transformResponse: (raw: { items?: Site[] } | Site[]) =>
+        Array.isArray(raw) ? raw : (raw?.items ?? []),
     }),
     getOrgSetupStep4Users: builder.query<OrgUser[], void>({
       query: () => "/org-setup/step4/users",
       providesTags: ["OrgSetup"],
+      transformResponse: (raw: { items?: OrgUser[] } | OrgUser[]) =>
+        Array.isArray(raw) ? raw : (raw?.items ?? []),
     }),
     getOrgSetupStep5: builder.query<Partial<Step5Data>, void>({
       query: () => "/org-setup/step5",
@@ -239,10 +243,14 @@ export const orgSetupApi = baseApi.injectEndpoints({
     getOrgSetupStep6Documents: builder.query<KnowledgeDocument[], void>({
       query: () => "/org-setup/step6/documents",
       providesTags: ["OrgSetup"],
+      transformResponse: (raw: { items?: KnowledgeDocument[] } | KnowledgeDocument[]) =>
+        Array.isArray(raw) ? raw : (raw?.items ?? []),
     }),
     getOrgSetupStep6aImports: builder.query<DataImport[], void>({
       query: () => "/org-setup/step6a/imports",
       providesTags: ["OrgSetup"],
+      transformResponse: (raw: { items?: DataImport[] } | DataImport[]) =>
+        Array.isArray(raw) ? raw : (raw?.items ?? []),
     }),
     getOrgSetupStep7: builder.query<Partial<Step7Data>, void>({
       query: () => "/org-setup/step7",

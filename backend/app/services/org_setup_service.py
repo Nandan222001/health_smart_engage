@@ -186,8 +186,8 @@ class OrgSetupService:
             3: has_sites,
             4: has_users,
             5: workflow is not None,
-            6: has_docs,
-            7: has_imports,
+            6: has_docs or has_imports,
+            7: ai_cfg is not None,
             8: activation is not None,
         }
 
@@ -503,23 +503,49 @@ class OrgSetupService:
     def list_documents(self, user: CurrentUser) -> dict:
         docs = self.db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.tenant_id == user.tenant_id).order_by(KnowledgeDocument.created_at.desc())).all()
         return {
-            "items": [{"id": d.id, "title": d.title, "document_type": d.document_type, "file_name": d.file_name, "file_type": d.file_type, "category": d.category, "size": d.size, "status": d.status, "uploadedAt": d.created_at.isoformat() if d.created_at else None} for d in docs],
+            "items": [
+                {
+                    "id": d.id,
+                    # Frontend KnowledgeDocument type uses `name` and `type`
+                    "name": d.title,
+                    "type": d.document_type,
+                    # Also expose canonical names for other consumers
+                    "title": d.title,
+                    "document_type": d.document_type,
+                    "file_name": d.file_name,
+                    "file_type": d.file_type,
+                    "category": d.category,
+                    "size": d.size,
+                    "status": d.status,
+                    "uploadedAt": d.created_at.isoformat() if d.created_at else None,
+                }
+                for d in docs
+            ],
             "total": len(docs),
         }
 
     # ── step 6a: data import ──────────────────────────────────────────────────
 
     def import_data(self, user: CurrentUser, data: dict) -> dict:
+        module = data.get("module") or data.get("dataType", "general")
+        method = data.get("method", "api")
         imp = OrgImportRecord(
             id=str(uuid4()), tenant_id=user.tenant_id,
-            module=data.get("module", "general"),
+            module=module,
             file_name=data.get("file_name"),
-            record_count=int(data.get("count", 0) or 0),
+            record_count=int(data.get("count", data.get("records", 0)) or 0),
             status="imported",
-            extra_fields={k: v for k, v in data.items() if k not in ("module","file_name","count")} or None,
+            extra_fields={k: v for k, v in data.items() if k not in ("module","dataType","file_name","count","records","method")} or {"method": method},
         )
         self.db.add(imp); self.db.flush()
-        return {"step": "6a", "status": "imported", "record_id": imp.id, "import_id": imp.id}
+        return {
+            "step": "6a", "status": "imported", "record_id": imp.id, "import_id": imp.id,
+            "id": imp.id,
+            "dataType": module,
+            "method": method,
+            "records": imp.record_count,
+            "importedAt": imp.created_at.isoformat() if imp.created_at else None,
+        }
 
     # ── generic bulk import (onboarding) ──────────────────────────────────────
 
@@ -575,7 +601,7 @@ class OrgSetupService:
                     "headquartersAddress": _v(row, "hq address", "address"),
                 }
                 payload = {k: v for k, v in payload.items() if v}
-                self._upsert(tenant_id, "step1_org_details", payload)
+                self.save_step1(user, payload)
                 created = 1
             return {"module": module_key, "status": "imported", "count": created}
 
@@ -1008,7 +1034,22 @@ class OrgSetupService:
 
     def list_imports(self, user: CurrentUser) -> dict:
         records = self.db.scalars(select(OrgImportRecord).where(OrgImportRecord.tenant_id == user.tenant_id)).all()
-        return {"items": [{"id": r.id, "module": r.module, "file_name": r.file_name, "record_count": r.record_count, "status": r.status, "created_at": r.created_at.isoformat() if r.created_at else None} for r in records], "total": len(records)}
+        return {
+            "items": [
+                {
+                    "id": r.id,
+                    "dataType": r.module,
+                    "method": (r.extra_fields or {}).get("method", "bulk"),
+                    "records": r.record_count,
+                    "importedAt": r.created_at.isoformat() if r.created_at else None,
+                    "module": r.module,
+                    "file_name": r.file_name,
+                    "status": r.status,
+                }
+                for r in records
+            ],
+            "total": len(records),
+        }
 
     # ── step 7: ai config ─────────────────────────────────────────────────────
 
@@ -1042,7 +1083,7 @@ class OrgSetupService:
         if not data.get("confirmed", False):
             return {"error": "Activation requires confirmed=true"}
 
-        for required in [1, 2, 3, 4, 5]:
+        for required in [1, 2, 3, 4, 5, 6, 7]:
             err = self._check_prerequisite(user.tenant_id, required)
             if err:
                 return {"error": f"Cannot activate: complete step {required} first", "prerequisite_step": required}
