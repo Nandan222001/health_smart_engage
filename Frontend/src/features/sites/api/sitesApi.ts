@@ -39,16 +39,18 @@ export const sitesApi = baseApi.injectEndpoints({
     }),
     listZones: builder.query<ZoneRecord[], string | void>({
       query: (siteId) => `/zones${siteId ? `?site_id=${siteId}` : ""}`,
-      transformResponse: (raw: { items?: ZoneRecord[] } | ZoneRecord[]) =>
-        Array.isArray(raw) ? raw : (raw?.items ?? []),
+      transformResponse: (raw: { items?: (ZoneRecord & { zone_type?: string })[] } | (ZoneRecord & { zone_type?: string })[]) => {
+        const arr = Array.isArray(raw) ? raw : (raw?.items ?? []);
+        return arr.map((z) => ({ ...z, type: z.type ?? z.zone_type })) as ZoneRecord[];
+      },
       providesTags: ["Zone"],
     }),
     createZone: builder.mutation<ZoneRecord, Partial<ZoneRecord>>({
-      query: (body) => ({ url: "/zones", method: "POST", body }),
+      query: (body) => ({ url: "/zones", method: "POST", body: { ...body, zone_type: body.type ?? body.zone_type } }),
       invalidatesTags: ["Zone"],
     }),
     updateZone: builder.mutation<ZoneRecord, { zoneId: string; body: Partial<ZoneRecord> }>({
-      query: ({ zoneId, body }) => ({ url: `/zones/${zoneId}`, method: "PATCH", body }),
+      query: ({ zoneId, body }) => ({ url: `/zones/${zoneId}`, method: "PATCH", body: { ...body, zone_type: body.type ?? body.zone_type } }),
       invalidatesTags: ["Zone"],
     }),
     deleteZone: builder.mutation<{ deleted: boolean }, string>({
