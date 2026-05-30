@@ -54,7 +54,9 @@ export async function sendChatMessage(messages: ChatMessage[]): Promise<string> 
     body: JSON.stringify({ messages }),
   });
 
-  const data = (await response.json().catch(() => ({}))) as AiChatResponse;
+  const raw = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  // Unwrap the standard API envelope {success, data} if present
+  const data = (raw.data ?? raw) as AiChatResponse;
 
   if (!response.ok) {
     const reason = data.error || response.statusText || 'AI request failed';

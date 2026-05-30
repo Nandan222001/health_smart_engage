@@ -218,8 +218,6 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   },
   "Intelligence": {
     icon: BrainCircuit,
-    requiredPermission: "ai:read",
-    moduleKey: "intelligence",
     items: [
       { name: "AI Dashboard",            path: "/ai-dashboard" },
       { name: "AI Assistant",            path: "/ai-agent" },
