@@ -144,6 +144,15 @@ ENDPOINTS = [
     ("POST",   "/escalation-rules",            "escalation_rules_create",  "Create escalation rule"),
     ("PATCH",  "/escalation-rules/{ruleId}",   "escalation_rules_update",  "Update escalation rule"),
     ("DELETE", "/escalation-rules/{ruleId}",   "escalation_rules_delete",  "Delete escalation rule"),
+    # IoT / Cameras / Devices (Safety monitoring hardware)
+    ("GET", "/cameras",      "cameras_list",      "List connected cameras"),
+    ("GET", "/rfid-readers", "rfid_readers_list", "List RFID readers"),
+    ("GET", "/edge-devices", "edge_devices_list", "List edge devices"),
+    # Workers (alias for employees — used by some pages)
+    ("GET", "/workers",      "workers_list",      "List workers"),
+    # Analytics
+    ("GET", "/analytics/ppe-compliance", "analytics_ppe_compliance", "PPE compliance analytics"),
+    ("GET", "/analytics/zone-risk",      "analytics_zone_risk",      "Zone risk analytics"),
 ]
 
 register_catalog_routes(router, "web", ENDPOINTS)

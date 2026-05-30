@@ -17,7 +17,6 @@ export const foundationApi = baseApi.injectEndpoints({
         const qs = params?.type ? `?type=${params.type}` : "";
         return `/foundation/org-nodes${qs}`;
       },
-      transformResponse: (response: { data: { items: OrganisationNode[] } }) => response.data.items,
       providesTags: ["OrgSetup"],
     }),
     createOrganisationNode: builder.mutation<OrganisationNode, Partial<OrganisationNode>>({

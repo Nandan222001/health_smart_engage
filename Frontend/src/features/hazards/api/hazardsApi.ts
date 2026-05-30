@@ -99,7 +99,7 @@ export const hazardsApi = baseApi.injectEndpoints({
       query: (body) => ({ url: "/risks/assessments", method: "POST", body }),
       invalidatesTags: ["Risk"],
     }),
-    listNearMiss: builder.query<{ items: NearMiss[]; total: number }, void>({
+    listNearMiss: builder.query<NearMiss[], void>({
       query: () => "/near-miss",
       providesTags: ["Risk"],
     }),
@@ -111,7 +111,7 @@ export const hazardsApi = baseApi.injectEndpoints({
       query: () => "/risks/matrix",
       providesTags: ["Risk"],
     }),
-    getHighRiskAreas: builder.query<{ items: HighRiskArea[]; total: number }, void>({
+    getHighRiskAreas: builder.query<HighRiskArea[], void>({
       query: () => "/risks/high-risk-areas",
       providesTags: ["Risk"],
     }),
