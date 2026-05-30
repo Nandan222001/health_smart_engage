@@ -1,4 +1,5 @@
 from app.models.audit_log import AuditLog
+from app.models.sites import Site
 from app.models.domain import (
     AiConversation,
     AIRecommendation,
@@ -90,4 +91,5 @@ __all__ = [
     "WorkflowCase",
     "WorkflowResolution",
     "WorkflowStageEvent",
+    "Site",
 ]

@@ -1,4 +1,4 @@
-"""Chunk, store, and TF-IDF-search knowledge documents in generic_records."""
+"""Chunk, store, and TF-IDF-search knowledge documents using the knowledge_chunks table."""
 from __future__ import annotations
 
 import logging
@@ -12,9 +12,6 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
-
-_CHUNK_RECORD_TYPE = "knowledge_chunk"
-_CHUNK_MODULE = "knowledge"
 
 
 # ── Text chunking ────────────────────────────────────────────────────────────
@@ -44,26 +41,19 @@ def index_document(
     text: str,
     db: "Session",
 ) -> int:
-    """Store all text chunks for *doc_id* in generic_records.
+    """Store all text chunks for *doc_id* in knowledge_chunks table.
 
     Returns the number of chunks stored.
     """
-    from app.repositories.generic_repository import GenericRepository
-
-    repo = GenericRepository(db)
+    from app.models.knowledge import KnowledgeChunk
+    from sqlalchemy import delete
 
     # Delete old chunks for this document first (re-indexing case)
     try:
-        from sqlalchemy import delete
-        from app.models.generic_record import GenericRecord
-        from sqlalchemy.dialects.mysql import JSON as MYSQL_JSON
-        # Use JSON extract to filter by doc_id in payload
         db.execute(
-            delete(GenericRecord).where(
-                GenericRecord.tenant_id == tenant_id,
-                GenericRecord.module == _CHUNK_MODULE,
-                GenericRecord.record_type == _CHUNK_RECORD_TYPE,
-                GenericRecord.payload["doc_id"].as_string() == doc_id,
+            delete(KnowledgeChunk).where(
+                KnowledgeChunk.tenant_id == tenant_id,
+                KnowledgeChunk.doc_id == doc_id,
             )
         )
     except Exception as exc:
@@ -74,20 +64,18 @@ def index_document(
         return 0
 
     for idx, chunk in enumerate(chunks):
-        repo.create(
+        kc = KnowledgeChunk(
+            id=str(uuid.uuid4()),
             tenant_id=tenant_id,
-            module=_CHUNK_MODULE,
-            record_type=_CHUNK_RECORD_TYPE,
-            payload={
-                "doc_id": doc_id,
-                "title": title,
-                "chunk_index": idx,
-                "text": chunk,
-                "tokens": _tokenize(chunk),
-            },
-            status="active",
+            doc_id=doc_id,
+            title=title,
+            chunk_index=idx,
+            text=chunk,
+            tokens=_tokenize(chunk),
         )
+        db.add(kc)
 
+    db.flush()
     log.info("Indexed %d chunks for doc %s (tenant %s)", len(chunks), doc_id, tenant_id)
     return len(chunks)
 
@@ -100,19 +88,13 @@ def search_knowledge(
     db: "Session",
     top_k: int = 5,
 ) -> list[dict]:
-    """Return *top_k* most relevant knowledge chunks for *query*.
-
-    Falls back to empty list if no chunks are indexed.
-    """
-    from app.models.generic_record import GenericRecord
+    """Return *top_k* most relevant knowledge chunks for *query*."""
+    from app.models.knowledge import KnowledgeChunk
     from sqlalchemy import select
 
     rows = db.scalars(
-        select(GenericRecord).where(
-            GenericRecord.tenant_id == tenant_id,
-            GenericRecord.module == _CHUNK_MODULE,
-            GenericRecord.record_type == _CHUNK_RECORD_TYPE,
-            GenericRecord.status == "active",
+        select(KnowledgeChunk).where(
+            KnowledgeChunk.tenant_id == tenant_id,
         ).limit(2000)
     ).all()
 
@@ -123,21 +105,21 @@ def search_knowledge(
     if not q_tokens:
         return []
 
-    # Build corpus from stored token lists (payload["tokens"]) for IDF
+    # Build corpus from stored token lists for IDF
     corpus: list[list[str]] = []
     for row in rows:
-        tok = row.payload.get("tokens")
+        tok = row.tokens
         if isinstance(tok, list):
             corpus.append(tok)
         else:
-            corpus.append(_tokenize(row.payload.get("text", "")))
+            corpus.append(_tokenize(row.text or ""))
 
     idf = _compute_idf(corpus)
 
     q_tf = _term_freq(q_tokens)
     q_vec = {t: q_tf[t] * idf.get(t, 0.0) for t in q_tf}
 
-    scored: list[tuple[float, GenericRecord]] = []
+    scored: list[tuple[float, KnowledgeChunk]] = []
     for row, doc_tokens in zip(rows, corpus):
         d_tf = _term_freq(doc_tokens)
         d_vec = {t: d_tf[t] * idf.get(t, 0.0) for t in d_tf}
@@ -149,12 +131,11 @@ def search_knowledge(
 
     results = []
     for score, row in scored[:top_k]:
-        doc_id = row.payload.get("doc_id", row.id)
         results.append({
-            "doc_id": doc_id,
-            "title": row.payload.get("title", "Unknown"),
-            "text": row.payload.get("text", ""),
-            "chunk_index": row.payload.get("chunk_index", 0),
+            "doc_id": row.doc_id,
+            "title": row.title or "Unknown",
+            "text": row.text or "",
+            "chunk_index": row.chunk_index,
             "score": round(score, 4),
         })
 

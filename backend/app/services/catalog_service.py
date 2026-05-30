@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -5,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.core.security import CurrentUser
 from app.core.rbac import enforce_permission, infer_required_permission
 from app.helpers.pagination import PaginationParams
-from app.repositories.generic_repository import GenericRepository
 from app.services.audit_service import AuditService
 from app.services.business_rules import BusinessRuleService
 from app.services.domain_dispatcher import DomainDispatcher
@@ -15,7 +15,6 @@ class CatalogEndpointService:
     """Dispatches catalog-defined routes through RBAC, business rules, domain actions, and audit."""
 
     def __init__(self, db: Session):
-        self.records = GenericRepository(db)
         self.audit = AuditService(db)
         self.rules = BusinessRuleService(db)
         self.dispatcher = DomainDispatcher()
@@ -63,30 +62,22 @@ class CatalogEndpointService:
         enforce_permission(user, infer_required_permission(group, operation, method))
         self.rules.validate_command(user, operation, payload, path_params)
         special = self.dispatcher.execute_special_command(user, operation, payload, path_params, db=self.db)
-        record = self.records.create(
-            tenant_id=user.tenant_id,
-            module=group,
-            record_type=operation,
-            payload={"payload": payload, "pathParams": path_params},
-            status="accepted",
-        )
+        record_id = (special or {}).get("id") or str(uuid.uuid4())
         self.audit.record_action(
             user=user,
             action=f"{group}.{operation}.command",
             resource_type=operation,
-            resource_id=record.id,
+            resource_id=record_id,
             details={"pathParams": path_params},
         )
         self.db.commit()
         if special is not None:
-            special["recordId"] = record.id
-            # Don't overwrite domain-level status (e.g. invitation.status = "pending")
-            if "status" not in special:
-                special["status"] = record.status
+            special.setdefault("recordId", record_id)
+            special.setdefault("status", "accepted")
             return special
         return {
             "operation": operation,
             "group": group,
-            "recordId": record.id,
-            "status": record.status,
+            "recordId": record_id,
+            "status": "accepted",
         }

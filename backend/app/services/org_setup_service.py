@@ -4,10 +4,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import CurrentUser
-from app.models.generic_record import GenericRecord
 from app.models.people import Employee
+from app.models.sites import Site
 from app.models.tenant import Tenant
-from app.repositories.generic_repository import GenericRepository
+from app.models.knowledge import KnowledgeDocument
+from app.models.org_setup_data import (
+    OrgProfile, OrgComplianceSetup, OrgWorkflowConfig, OrgAIConfig,
+    OrgActivation, Department, OrgCustomRole, OrgUserRecord, OrgImportRecord,
+)
 
 MODULE = "org_setup"
 
@@ -104,17 +108,12 @@ MODULES_ENABLED = [
 
 class OrgSetupService:
     def __init__(self, db: Session):
-        self.repo = GenericRepository(db)
         self.db = db
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
     def _split_row(module_key: str, row: dict) -> tuple[dict, dict | None]:
-        """Split a row dict into (core_fields, extra_fields | None).
-        core_fields contains only columns known to the template.
-        extra_fields contains any additional org-specific columns, or None if empty.
-        """
         known = _KNOWN.get(module_key, set())
         core: dict = {}
         extra: dict = {}
@@ -125,83 +124,41 @@ class OrgSetupService:
                 extra[k] = v
         return core, (extra if extra else None)
 
-    def _first(self, tenant_id: str, record_type: str) -> GenericRecord | None:
-        stmt = (
-            select(GenericRecord)
-            .where(GenericRecord.tenant_id == tenant_id)
-            .where(GenericRecord.module == MODULE)
-            .where(GenericRecord.record_type == record_type)
-            .order_by(GenericRecord.created_at.desc())
-            .limit(1)
-        )
-        return self.db.scalars(stmt).first()
+    def _get_org_profile(self, tenant_id: str) -> OrgProfile | None:
+        return self.db.scalars(select(OrgProfile).where(OrgProfile.tenant_id == tenant_id).limit(1)).first()
 
-    def _upsert(self, tenant_id: str, record_type: str, payload: dict, status: str = "saved") -> GenericRecord:
-        existing = self._first(tenant_id, record_type)
-        if existing:
-            existing.payload = payload
-            existing.status = status
-            self.db.flush()
-            return existing
-        return self.repo.create(
-            tenant_id=tenant_id,
-            module=MODULE,
-            record_type=record_type,
-            payload=payload,
-            status=status,
-        )
+    def _get_compliance_setup(self, tenant_id: str) -> OrgComplianceSetup | None:
+        return self.db.scalars(select(OrgComplianceSetup).where(OrgComplianceSetup.tenant_id == tenant_id).limit(1)).first()
 
-    def _step_number_from_record_type(self, rt: str) -> int | None:
-        mapping = {
-            "step1_org_details": 1,
-            "step2_compliance": 2,
-            "step3_site": 3,
-            "step4_user": 4,
-            "step5_workflow_config": 5,
-            "step6_document": 6,
-            "step6a_import": 7,  # step 6a counts as step 7 in 8-step model
-            "step7_ai_config": 7,
-            "activation": 8,
-        }
-        return mapping.get(rt)
+    def _get_workflow_config(self, tenant_id: str) -> OrgWorkflowConfig | None:
+        return self.db.scalars(select(OrgWorkflowConfig).where(OrgWorkflowConfig.tenant_id == tenant_id).limit(1)).first()
+
+    def _get_ai_config(self, tenant_id: str) -> OrgAIConfig | None:
+        return self.db.scalars(select(OrgAIConfig).where(OrgAIConfig.tenant_id == tenant_id).limit(1)).first()
+
+    def _get_activation(self, tenant_id: str) -> OrgActivation | None:
+        return self.db.scalars(select(OrgActivation).where(OrgActivation.tenant_id == tenant_id).limit(1)).first()
 
     def _check_prerequisite(self, tenant_id: str, required_step: int) -> dict | None:
-        """Return error dict if `required_step` is not yet complete, else None."""
-        step_names = {
-            1: "Organization Details",
-            2: "Compliance Setup",
-            3: "Sites Setup",
-            4: "Users Setup",
-            5: "Workflow Configuration",
-            6: "Knowledge & Data Import",
-            7: "AI Configuration",
-        }
+        step_names = {1: "Organization Details", 2: "Compliance Setup", 3: "Sites Setup",
+                      4: "Users Setup", 5: "Workflow Configuration", 6: "Knowledge & Data Import", 7: "AI Configuration"}
 
         def _is_complete(step: int) -> bool:
-            if step == 1:
-                return self._first(tenant_id, "step1_org_details") is not None
-            if step == 2:
-                return self._first(tenant_id, "step2_compliance") is not None
-            if step == 3:
-                return len(self.repo.list_by_type(tenant_id, MODULE, "step3_site", limit=1)) > 0
-            if step == 4:
-                return len(self.repo.list_by_type(tenant_id, MODULE, "step4_user", limit=1)) > 0
-            if step == 5:
-                return self._first(tenant_id, "step5_workflow_config") is not None
+            if step == 1: return self._get_org_profile(tenant_id) is not None
+            if step == 2: return self._get_compliance_setup(tenant_id) is not None
+            if step == 3: return self.db.scalars(select(Site).where(Site.tenant_id == tenant_id).limit(1)).first() is not None
+            if step == 4: return self.db.scalars(select(OrgUserRecord).where(OrgUserRecord.tenant_id == tenant_id).limit(1)).first() is not None
+            if step == 5: return self._get_workflow_config(tenant_id) is not None
             if step == 6:
-                has_doc = len(self.repo.list_by_type(tenant_id, MODULE, "step6_document", limit=1)) > 0
-                has_import = len(self.repo.list_by_type(tenant_id, MODULE, "step6a_import", limit=1)) > 0
+                has_doc = self.db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.tenant_id == tenant_id).limit(1)).first() is not None
+                has_import = self.db.scalars(select(OrgImportRecord).where(OrgImportRecord.tenant_id == tenant_id).limit(1)).first() is not None
                 return has_doc or has_import
-            if step == 7:
-                return self._first(tenant_id, "step7_ai_config") is not None
+            if step == 7: return self._get_ai_config(tenant_id) is not None
             return False
 
         if not _is_complete(required_step):
             name = step_names.get(required_step, f"Step {required_step}")
-            return {
-                "error": f"Step {required_step} ({name}) must be completed before proceeding.",
-                "prerequisite_step": required_step,
-            }
+            return {"error": f"Step {required_step} ({name}) must be completed before proceeding.", "prerequisite_step": required_step}
         return None
 
     # ── progress ─────────────────────────────────────────────────────────────
@@ -209,117 +166,187 @@ class OrgSetupService:
     def get_progress(self, user: CurrentUser) -> dict:
         tenant_id = user.tenant_id
 
-        step1_rec = self._first(tenant_id, "step1_org_details")
-        step2_rec = self._first(tenant_id, "step2_compliance")
-        step5_rec = self._first(tenant_id, "step5_workflow_config")
-        step7_rec = self._first(tenant_id, "step7_ai_config")
-        activation_rec = self._first(tenant_id, "activation")
+        org_profile = self._get_org_profile(tenant_id)
+        compliance = self._get_compliance_setup(tenant_id)
+        workflow = self._get_workflow_config(tenant_id)
+        ai_cfg = self._get_ai_config(tenant_id)
+        activation = self._get_activation(tenant_id)
 
-        sites = self.repo.list_by_type(tenant_id, MODULE, "step3_site", limit=1)
-        users = self.repo.list_by_type(tenant_id, MODULE, "step4_user", limit=1)
-        docs = self.repo.list_by_type(tenant_id, MODULE, "step6_document", limit=1)
-        imports = self.repo.list_by_type(tenant_id, MODULE, "step6a_import", limit=1)
+        has_sites = self.db.scalars(select(Site).where(Site.tenant_id == tenant_id).limit(1)).first() is not None
+        has_users = self.db.scalars(select(OrgUserRecord).where(OrgUserRecord.tenant_id == tenant_id).limit(1)).first() is not None
+        has_docs = self.db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.tenant_id == tenant_id).limit(1)).first() is not None
+        has_imports = self.db.scalars(select(OrgImportRecord).where(OrgImportRecord.tenant_id == tenant_id).limit(1)).first() is not None
 
         step_status = {
-            1: step1_rec is not None,
-            2: step2_rec is not None,
-            3: len(sites) > 0,
-            4: len(users) > 0,
-            5: step5_rec is not None,
-            6: len(docs) > 0,
-            7: len(imports) > 0,
-            8: activation_rec is not None,
+            1: org_profile is not None,
+            2: compliance is not None,
+            3: has_sites,
+            4: has_users,
+            5: workflow is not None,
+            6: has_docs,
+            7: has_imports,
+            8: activation is not None,
         }
 
         steps_completed = [s for s, done in step_status.items() if done]
-        activated = activation_rec is not None and activation_rec.payload.get("confirmed", False)
+        activated = activation is not None and activation.confirmed
 
-        def _step_detail(step: int, rec: GenericRecord | None) -> dict:
-            return {"completed": rec is not None, "data": rec.payload if rec else {}}
-
-        def _list_step_detail(step: int, has_records: bool) -> dict:
-            return {"completed": has_records, "data": {}}
+        def _profile_data(p: OrgProfile | None) -> dict:
+            if not p: return {}
+            return {"organizationName": p.organization_name, "industryType": p.industry_type, "employeeCount": p.employee_count, "officialEmail": p.official_email, "contactNumber": p.contact_number, "country": p.country, "headquartersAddress": p.headquarters_address}
 
         step_details = {
-            "step1": _step_detail(1, step1_rec),
-            "step2": _step_detail(2, step2_rec),
-            "step3": _list_step_detail(3, len(sites) > 0),
-            "step4": _list_step_detail(4, len(users) > 0),
-            "step5": _step_detail(5, step5_rec),
-            "step6": _list_step_detail(6, len(docs) > 0),
-            "step6a": _list_step_detail(7, len(imports) > 0),
-            "step7": _step_detail(7, step7_rec),
+            "step1": {"completed": org_profile is not None, "data": _profile_data(org_profile)},
+            "step2": {"completed": compliance is not None, "data": {"standards": (compliance.standards or {}), "modules": (compliance.modules_enabled or {})} if compliance else {}},
+            "step3": {"completed": has_sites, "data": {}},
+            "step4": {"completed": has_users, "data": {}},
+            "step5": {"completed": workflow is not None, "data": {}},
+            "step6": {"completed": has_docs, "data": {}},
+            "step6a": {"completed": has_imports, "data": {}},
+            "step7": {"completed": ai_cfg is not None, "data": {}},
             "step8": {"completed": activated, "data": {}},
         }
 
         total = len(ALL_STEPS)
         percent = round(len(steps_completed) / total * 100)
 
-        return {
-            "steps_completed": steps_completed,
-            "steps_total": total,
-            "percent": percent,
-            "activated": activated,
-            "step_details": step_details,
-        }
+        return {"steps_completed": steps_completed, "steps_total": total, "percent": percent, "activated": activated, "step_details": step_details}
 
     # ── step 1: org details ───────────────────────────────────────────────────
 
     def save_step1(self, user: CurrentUser, data: dict) -> dict:
-        record = self._upsert(user.tenant_id, "step1_org_details", data)
-        return {"step": 1, "status": "saved", "record_id": record.id}
+        existing = self._get_org_profile(user.tenant_id)
+        if existing:
+            existing.organization_name = data.get("organizationName", data.get("organization_name", existing.organization_name))
+            existing.industry_type = data.get("industryType", data.get("industry_type", existing.industry_type))
+            existing.employee_count = data.get("employeeCount", data.get("employee_count", existing.employee_count))
+            existing.official_email = data.get("officialEmail", data.get("official_email", existing.official_email))
+            existing.contact_number = data.get("contactNumber", data.get("contact_number", existing.contact_number))
+            existing.country = data.get("country", existing.country)
+            existing.headquarters_address = data.get("headquartersAddress", data.get("headquarters_address", existing.headquarters_address))
+            existing.extra_fields = {k: v for k, v in data.items() if k not in ("organizationName","organization_name","industryType","industry_type","employeeCount","employee_count","officialEmail","official_email","contactNumber","contact_number","country","headquartersAddress","headquarters_address")} or None
+            self.db.flush()
+            return {"step": 1, "status": "saved", "record_id": existing.id}
+        profile = OrgProfile(
+            id=str(uuid4()), tenant_id=user.tenant_id,
+            organization_name=data.get("organizationName", data.get("organization_name")),
+            industry_type=data.get("industryType", data.get("industry_type")),
+            employee_count=str(data["employeeCount"]) if data.get("employeeCount") else (str(data["employee_count"]) if data.get("employee_count") else None),
+            official_email=data.get("officialEmail", data.get("official_email")),
+            contact_number=data.get("contactNumber", data.get("contact_number")),
+            country=data.get("country"),
+            headquarters_address=data.get("headquartersAddress", data.get("headquarters_address")),
+            extra_fields={k: v for k, v in data.items() if k not in ("organizationName","organization_name","industryType","industry_type","employeeCount","employee_count","officialEmail","official_email","contactNumber","contact_number","country","headquartersAddress","headquarters_address")} or None,
+        )
+        self.db.add(profile)
+        self.db.flush()
+        return {"step": 1, "status": "saved", "record_id": profile.id}
 
     def get_step1(self, user: CurrentUser) -> dict:
-        record = self._first(user.tenant_id, "step1_org_details")
-        return record.payload if record else {}
+        p = self._get_org_profile(user.tenant_id)
+        if not p: return {}
+        return {"organizationName": p.organization_name, "industryType": p.industry_type, "employeeCount": p.employee_count, "officialEmail": p.official_email, "contactNumber": p.contact_number, "country": p.country, "headquartersAddress": p.headquarters_address}
 
     # ── step 2: compliance ────────────────────────────────────────────────────
 
     def save_step2(self, user: CurrentUser, data: dict) -> dict:
         err = self._check_prerequisite(user.tenant_id, 1)
-        if err:
-            return err
-        record = self._upsert(user.tenant_id, "step2_compliance", data)
-        return {"step": 2, "status": "saved", "record_id": record.id}
+        if err: return err
+        existing = self._get_compliance_setup(user.tenant_id)
+        if existing:
+            existing.standards = data.get("standards", existing.standards)
+            existing.modules_enabled = data.get("modules_enabled", data.get("modulesEnabled", existing.modules_enabled))
+            existing.extra_fields = {k: v for k, v in data.items() if k not in ("standards","modules_enabled","modulesEnabled")} or None
+            self.db.flush()
+            return {"step": 2, "status": "saved", "record_id": existing.id}
+        rec = OrgComplianceSetup(
+            id=str(uuid4()), tenant_id=user.tenant_id,
+            standards=data.get("standards"),
+            modules_enabled=data.get("modules_enabled", data.get("modulesEnabled")),
+            extra_fields={k: v for k, v in data.items() if k not in ("standards","modules_enabled","modulesEnabled")} or None,
+        )
+        self.db.add(rec); self.db.flush()
+        return {"step": 2, "status": "saved", "record_id": rec.id}
 
     def get_step2(self, user: CurrentUser) -> dict:
-        record = self._first(user.tenant_id, "step2_compliance")
-        return record.payload if record else {}
+        c = self._get_compliance_setup(user.tenant_id)
+        if not c: return {}
+        return {"standards": c.standards or {}, "modulesEnabled": c.modules_enabled or {}}
 
     # ── step 3: sites ─────────────────────────────────────────────────────────
+
+    def _site_to_dict(self, s: Site) -> dict:
+        return {
+            "id": s.id,
+            "name": s.name,
+            "type": s.site_type,
+            "site_type": s.site_type,
+            "address": s.address,
+            "city": s.city,
+            "postcode": s.postcode,
+            "region": s.region,
+            "status": s.status,
+            "capacity": s.capacity,
+            "hazard_level": s.hazard_level,
+            "extra_fields": s.extra_fields,
+            "created_at": str(s.created_at) if s.created_at else None,
+        }
 
     def create_site(self, user: CurrentUser, data: dict) -> dict:
         err = self._check_prerequisite(user.tenant_id, 2)
         if err:
             return err
-        record = self.repo.create(
+        site = Site(
+            id=str(uuid4()),
             tenant_id=user.tenant_id,
-            module=MODULE,
-            record_type="step3_site",
-            payload=data,
-            status="active",
+            name=data.get("name", data.get("site_name", "Unnamed Site")),
+            site_type=data.get("type", data.get("site_type", "Site")),
+            address=data.get("address"),
+            city=data.get("city"),
+            postcode=data.get("postcode"),
+            region=data.get("region"),
+            status=data.get("status", "Active"),
+            capacity=int(data["capacity"]) if data.get("capacity") else None,
+            hazard_level=data.get("hazard_level", data.get("hazard")),
+            extra_fields={k: v for k, v in data.items()
+                          if k not in ("name", "site_name", "type", "site_type", "address",
+                                       "city", "postcode", "region", "status", "capacity",
+                                       "hazard_level", "hazard")} or None,
         )
-        return {"step": 3, "status": "created", "record_id": record.id, "site_id": record.id}
+        self.db.add(site)
+        self.db.flush()
+        return {"step": 3, "status": "created", "record_id": site.id, "site_id": site.id}
 
     def bulk_upload_sites(self, user: CurrentUser, data: dict) -> dict:
-        sites = data.get("sites", [])
+        sites_data = data.get("sites", [])
         created_ids = []
-        for site in sites:
-            rec = self.repo.create(
+        for s in sites_data:
+            site = Site(
+                id=str(uuid4()),
                 tenant_id=user.tenant_id,
-                module=MODULE,
-                record_type="step3_site",
-                payload=site,
-                status="active",
+                name=s.get("name", s.get("site_name", "Unnamed Site")),
+                site_type=s.get("type", s.get("site_type", "Site")),
+                address=s.get("address"),
+                city=s.get("city"),
+                postcode=s.get("postcode"),
+                region=s.get("region"),
+                status=s.get("status", "Active"),
+                capacity=int(s["capacity"]) if s.get("capacity") else None,
+                hazard_level=s.get("hazard_level", s.get("hazard")),
             )
-            created_ids.append(rec.id)
+            self.db.add(site)
+            created_ids.append(site.id)
+        self.db.flush()
         return {"step": 3, "status": "bulk_uploaded", "count": len(created_ids), "record_ids": created_ids}
 
     def list_sites(self, user: CurrentUser) -> dict:
-        records = self.repo.list_by_type(user.tenant_id, MODULE, "step3_site")
+        from sqlalchemy import select as _sel
+        sites = self.db.scalars(
+            _sel(Site).where(Site.tenant_id == user.tenant_id).order_by(Site.name)
+        ).all()
         return {
-            "items": [{"id": r.id, "status": r.status, **r.payload} for r in records],
-            "total": len(records),
+            "items": [self._site_to_dict(s) for s in sites],
+            "total": len(sites),
         }
 
     # ── step 4: users ─────────────────────────────────────────────────────────
@@ -360,94 +387,105 @@ class OrgSetupService:
 
     def create_user(self, user: CurrentUser, data: dict) -> dict:
         err = self._check_prerequisite(user.tenant_id, 3)
-        if err:
-            return err
-        record = self.repo.create(
-            tenant_id=user.tenant_id,
-            module=MODULE,
-            record_type="step4_user",
-            payload=data,
+        if err: return err
+        our = OrgUserRecord(
+            id=str(uuid4()), tenant_id=user.tenant_id,
+            name=data.get("name"), email=data.get("email", ""),
+            role=data.get("role"), department=data.get("department"),
             status="pending",
+            extra_fields={k: v for k, v in data.items() if k not in ("name","email","role","department","status")} or None,
         )
-        self._sync_user_to_employees(user.tenant_id, data, record.id)
-        return {"step": 4, "status": "created", "record_id": record.id, "user_id": record.id}
+        self.db.add(our); self.db.flush()
+        self._sync_user_to_employees(user.tenant_id, data, our.id)
+        return {"step": 4, "status": "created", "record_id": our.id, "user_id": our.id}
 
     def bulk_upload_users(self, user: CurrentUser, data: dict) -> dict:
         users = data.get("users", [])
         created_ids = []
         for u in users:
-            rec = self.repo.create(
-                tenant_id=user.tenant_id,
-                module=MODULE,
-                record_type="step4_user",
-                payload=u,
+            our = OrgUserRecord(
+                id=str(uuid4()), tenant_id=user.tenant_id,
+                name=u.get("name"), email=u.get("email", ""),
+                role=u.get("role"), department=u.get("department"),
                 status="pending",
+                extra_fields={k: v for k, v in u.items() if k not in ("name","email","role","department","status")} or None,
             )
-            self._sync_user_to_employees(user.tenant_id, u, rec.id)
-            created_ids.append(rec.id)
+            self.db.add(our)
+            self._sync_user_to_employees(user.tenant_id, u, our.id)
+            created_ids.append(our.id)
+        self.db.flush()
         return {"step": 4, "status": "bulk_uploaded", "count": len(created_ids), "record_ids": created_ids}
 
     def list_users(self, user: CurrentUser) -> dict:
-        records = self.repo.list_by_type(user.tenant_id, MODULE, "step4_user")
-        return {
-            "items": [{"id": r.id, "status": r.status, **r.payload} for r in records],
-            "total": len(records),
-        }
+        records = self.db.scalars(select(OrgUserRecord).where(OrgUserRecord.tenant_id == user.tenant_id)).all()
+        return {"items": [{"id": r.id, "name": r.name, "email": r.email, "role": r.role, "department": r.department, "status": r.status} for r in records], "total": len(records)}
 
     # ── step 5: workflow config ───────────────────────────────────────────────
 
     def save_step5(self, user: CurrentUser, data: dict) -> dict:
         err = self._check_prerequisite(user.tenant_id, 4)
-        if err:
-            return err
-        record = self._upsert(user.tenant_id, "step5_workflow_config", data)
-        return {"step": 5, "status": "saved", "record_id": record.id}
+        if err: return err
+        existing = self._get_workflow_config(user.tenant_id)
+        if existing:
+            existing.approval_levels = data.get("approval_levels", existing.approval_levels)
+            existing.escalation_rules = data.get("escalation_rules", existing.escalation_rules)
+            existing.notification_settings = data.get("notification_settings", existing.notification_settings)
+            existing.extra_fields = {k: v for k, v in data.items() if k not in ("approval_levels","escalation_rules","notification_settings")} or None
+            self.db.flush()
+            return {"step": 5, "status": "saved", "record_id": existing.id}
+        cfg = OrgWorkflowConfig(
+            id=str(uuid4()), tenant_id=user.tenant_id,
+            approval_levels=data.get("approval_levels"),
+            escalation_rules=data.get("escalation_rules"),
+            notification_settings=data.get("notification_settings"),
+            extra_fields={k: v for k, v in data.items() if k not in ("approval_levels","escalation_rules","notification_settings")} or None,
+        )
+        self.db.add(cfg); self.db.flush()
+        return {"step": 5, "status": "saved", "record_id": cfg.id}
 
     def get_step5(self, user: CurrentUser) -> dict:
-        record = self._first(user.tenant_id, "step5_workflow_config")
-        return record.payload if record else {}
+        w = self._get_workflow_config(user.tenant_id)
+        if not w: return {}
+        return {"approval_levels": w.approval_levels or {}, "escalation_rules": w.escalation_rules or {}, "notification_settings": w.notification_settings or {}}
 
     # ── step 6: knowledge upload ──────────────────────────────────────────────
 
     def upload_document(self, user: CurrentUser, data: dict) -> dict:
         err = self._check_prerequisite(user.tenant_id, 5)
-        if err:
-            return err
-        record = self.repo.create(
-            tenant_id=user.tenant_id,
-            module=MODULE,
-            record_type="step6_document",
-            payload=data,
-            status="uploaded",
+        if err: return err
+        doc = KnowledgeDocument(
+            id=str(uuid4()), tenant_id=user.tenant_id,
+            title=data.get("title", data.get("file_name", "Document")),
+            document_type=data.get("document_type", data.get("file_type", "Document")),
+            version=data.get("version", "1.0"),
+            file_name=data.get("file_name"), file_type=data.get("file_type"),
+            category=data.get("category"), size=data.get("size"),
+            uploaded_by=data.get("uploaded_by"), indexed=False, status="uploaded",
+            extra_fields={k: v for k, v in data.items() if k not in ("title","document_type","file_type","version","file_name","category","size","uploaded_by")} or None,
         )
-        return {"step": 6, "status": "uploaded", "record_id": record.id, "document_id": record.id}
+        self.db.add(doc); self.db.flush()
+        return {"step": 6, "status": "uploaded", "record_id": doc.id, "document_id": doc.id}
 
     def list_documents(self, user: CurrentUser) -> dict:
-        records = self.repo.list_by_type(user.tenant_id, MODULE, "step6_document")
+        docs = self.db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.tenant_id == user.tenant_id).order_by(KnowledgeDocument.created_at.desc())).all()
         return {
-            "items": [
-                {
-                    "id": r.id,
-                    "status": r.status,
-                    "uploadedAt": r.created_at.isoformat() if r.created_at else None,
-                    **r.payload,
-                }
-                for r in records
-            ],
-            "total": len(records),
+            "items": [{"id": d.id, "title": d.title, "document_type": d.document_type, "file_name": d.file_name, "file_type": d.file_type, "category": d.category, "size": d.size, "status": d.status, "uploadedAt": d.created_at.isoformat() if d.created_at else None} for d in docs],
+            "total": len(docs),
         }
 
     # ── step 6a: data import ──────────────────────────────────────────────────
 
     def import_data(self, user: CurrentUser, data: dict) -> dict:
-        record = self.repo.create(
-            tenant_id=user.tenant_id,
-            module=MODULE,
-            record_type="step6a_import",
-            payload=data,
+        imp = OrgImportRecord(
+            id=str(uuid4()), tenant_id=user.tenant_id,
+            module=data.get("module", "general"),
+            file_name=data.get("file_name"),
+            record_count=int(data.get("count", 0) or 0),
             status="imported",
+            extra_fields={k: v for k, v in data.items() if k not in ("module","file_name","count")} or None,
         )
-        return {"step": "6a", "status": "imported", "record_id": record.id, "import_id": record.id}
+        self.db.add(imp); self.db.flush()
+        return {"step": "6a", "status": "imported", "record_id": imp.id, "import_id": imp.id}
 
     # ── generic bulk import (onboarding) ──────────────────────────────────────
 
@@ -455,11 +493,14 @@ class OrgSetupService:
         """Parse and persist rows for any onboarding module.
 
         Mapping:
-        - organisation / sites / users → dedicated record types + employee sync
-        - departments / roles          → generic org record types
-        - incidents                    → generic_records + Incident domain rows
-        - risk                         → generic_records + RiskAssessment rows
-        - all other modules            → generic_records as org_import_{module}
+        - organisation → OrgProfile
+        - sites → Site records
+        - users → OrgUserRecord + Employee sync
+        - departments → Department records
+        - roles → OrgCustomRole records
+        - incidents → Incident domain rows
+        - risk → RiskAssessment rows
+        - all other modules → OrgImportRecord
         """
         # normalise Step-6 UI keys to canonical handler keys
         _ALIASES = {
@@ -504,108 +545,103 @@ class OrgSetupService:
                 created = 1
             return {"module": module_key, "status": "imported", "count": created}
 
-        # ── sites (same as step3/bulk) ──
+        # ── sites → real Site records ──
         if module_key == "sites":
             if not rows:
                 return {"module": module_key, "status": "imported", "count": 0,
                         "errors": ["No rows found in file. Check that the file has data and a valid header row."]}
-            for row in rows:
-                name = _v(row, "site name", "name", "site_name", "sitename",
-                          "facility name", "facility", "site")
-                if not name:
-                    errors.append(f"Skipped row (no site name found). Columns detected: {list(row.keys())[:5]}")
-                    continue
-                _, extra = self._split_row("sites", row)
-                site_id = _v(row, "site id", "site_id", "id", "siteid")
-                core_payload = {
-                    "name":    name,
-                    "type":    _v(row, "site type", "type", "operational status",
-                                  "operational_status", "category") or "Site",
-                    "address": _v(row, "address", "location"),
-                    "city":    _v(row, "city", "town"),
-                    "postcode": _v(row, "postcode", "post code", "zip", "postal code"),
-                    "region":  _v(row, "region", "city", "area"),
-                    "status":  _v(row, "operational status", "operational_status", "status") or "Active",
-                    "capacity": _v(row, "capacity", "number_of_working_stations", "stations"),
-                    "hazard":  _v(row, "hazard classification", "hazard_classification",
-                                  "hazard level", "hazard"),
-                }
-                if site_id:
-                    core_payload["site_id"] = site_id
-                if extra:
-                    core_payload["extra_fields"] = extra
-                self.repo.create(
-                    tenant_id=tenant_id, module=MODULE, record_type="step3_site",
-                    payload=core_payload, status="active",
-                )
-                created += 1
+            try:
+                for row in rows:
+                    name = _v(row, "site name", "name", "site_name", "sitename",
+                              "facility name", "facility", "site")
+                    if not name:
+                        errors.append(f"Skipped row (no site name found). Columns detected: {list(row.keys())[:5]}")
+                        continue
+                    _, extra = self._split_row("sites", row)
+                    raw_cap = _v(row, "capacity", "number_of_working_stations", "stations")
+                    capacity: int | None = None
+                    if raw_cap:
+                        try:
+                            capacity = int(float(raw_cap))
+                        except (ValueError, TypeError):
+                            pass
+                    site = Site(
+                        id=str(uuid4()),
+                        tenant_id=tenant_id,
+                        name=name,
+                        site_type=_v(row, "site type", "type", "operational status",
+                                     "operational_status", "category") or "Site",
+                        address=_v(row, "address", "location") or None,
+                        city=_v(row, "city", "town") or None,
+                        postcode=_v(row, "postcode", "post code", "zip", "postal code") or None,
+                        region=_v(row, "region", "area") or None,
+                        status=_v(row, "operational status", "operational_status", "status") or "Active",
+                        capacity=capacity,
+                        hazard_level=_v(row, "hazard classification", "hazard_classification",
+                                        "hazard level", "hazard") or None,
+                        extra_fields=extra or None,
+                    )
+                    self.db.add(site)
+                    created += 1
+                self.db.flush()
+            except Exception as exc:
+                errors.append(f"Site domain save failed: {exc}")
             return {"module": module_key, "status": "imported", "count": created, "errors": errors[:5]}
 
         # ── users (same as step4/bulk + employee sync) ──
         if module_key == "users":
             for row in rows:
                 email = _v(row, "email", "email address")
-                if not email:
-                    continue
+                if not email: continue
                 _, extra = self._split_row("users", row)
-                payload = {
-                    "name":       _v(row, "full name", "name"),
-                    "email":      email,
-                    "role":       _v(row, "role", "job title", "position") or "Worker",
-                    "department": _v(row, "department", "dept", "team"),
-                }
-                if extra:
-                    payload["extra_fields"] = extra
-                rec = self.repo.create(
-                    tenant_id=tenant_id, module=MODULE, record_type="step4_user",
-                    payload=payload, status="pending",
+                our = OrgUserRecord(
+                    id=str(uuid4()), tenant_id=tenant_id,
+                    name=_v(row, "full name", "name"),
+                    email=email,
+                    role=_v(row, "role", "job title", "position") or "Worker",
+                    department=_v(row, "department", "dept", "team"),
+                    status="pending", extra_fields=extra or None,
                 )
-                self._sync_user_to_employees(tenant_id, payload, rec.id, extra_fields=extra)
+                self.db.add(our)
+                self._sync_user_to_employees(tenant_id, {"name": our.name, "email": email, "role": our.role, "department": our.department}, our.id, extra_fields=extra)
                 created += 1
+            self.db.flush()
             return {"module": module_key, "status": "imported", "count": created}
 
         # ── departments ──
         if module_key == "departments":
             for row in rows:
                 name = _v(row, "department name", "name")
-                if not name:
-                    continue
+                if not name: continue
                 _, extra = self._split_row("departments", row)
-                core_payload = {
-                    "name":    name,
-                    "manager": _v(row, "manager name", "manager"),
-                    "teams":   _v(row, "number of teams", "teams"),
-                    "site":    _v(row, "assigned site", "site"),
-                }
-                if extra:
-                    core_payload["extra_fields"] = extra
-                self.repo.create(
-                    tenant_id=tenant_id, module=MODULE, record_type="org_department",
-                    payload=core_payload, status="active",
+                dept = Department(
+                    id=str(uuid4()), tenant_id=tenant_id, name=name,
+                    manager=_v(row, "manager name", "manager"),
+                    teams=_v(row, "number of teams", "teams"),
+                    site=_v(row, "assigned site", "site"),
+                    extra_fields=extra or None,
                 )
+                self.db.add(dept)
                 created += 1
+            self.db.flush()
             return {"module": module_key, "status": "imported", "count": created}
 
         # ── roles ──
         if module_key == "roles":
             for row in rows:
                 name = _v(row, "role name", "name")
-                if not name:
-                    continue
+                if not name: continue
                 _, extra = self._split_row("roles", row)
-                core_payload = {
-                    "name":        name,
-                    "description": _v(row, "description"),
-                    "level":       _v(row, "access level", "level"),
-                    "modules":     _v(row, "module access", "modules"),
-                }
-                if extra:
-                    core_payload["extra_fields"] = extra
-                self.repo.create(
-                    tenant_id=tenant_id, module=MODULE, record_type="org_role",
-                    payload=core_payload, status="active",
+                role = OrgCustomRole(
+                    id=str(uuid4()), tenant_id=tenant_id, name=name,
+                    description=_v(row, "description"),
+                    level=_v(row, "access level", "level"),
+                    modules=_v(row, "module access", "modules"),
+                    extra_fields=extra or None,
                 )
+                self.db.add(role)
                 created += 1
+            self.db.flush()
             return {"module": module_key, "status": "imported", "count": created}
 
         # ── incidents → real Incident records + generic backup ──
@@ -924,41 +960,47 @@ class OrgSetupService:
                 errors.append(f"Compliance document save failed: {exc}")
             return {"module": module_key, "status": "imported", "count": created, "errors": errors}
 
-        # ── all other modules → store in generic_records ──
-        record_type = f"org_import_{module_key}"
-        for row in rows:
-            if not any(v for v in row.values()):
-                continue
-            _, extra = self._split_row(module_key, row)
-            payload = dict(row)
-            if extra:
-                payload["extra_fields"] = extra
-            self.repo.create(
-                tenant_id=tenant_id, module=MODULE, record_type=record_type,
-                payload=payload, status="imported",
+        # ── all other modules → log as OrgImportRecord ──
+        if rows:
+            imp = OrgImportRecord(
+                id=str(uuid4()), tenant_id=tenant_id,
+                module=module_key, record_count=len(rows), status="imported",
+                extra_fields={"rows_sample": rows[:3]},
             )
-            created += 1
+            self.db.add(imp)
+            created = len(rows)
+            self.db.flush()
         return {"module": module_key, "status": "imported", "count": created, "errors": errors}
 
     def list_imports(self, user: CurrentUser) -> dict:
-        records = self.repo.list_by_type(user.tenant_id, MODULE, "step6a_import")
-        return {
-            "items": [{"id": r.id, "status": r.status, **r.payload} for r in records],
-            "total": len(records),
-        }
+        records = self.db.scalars(select(OrgImportRecord).where(OrgImportRecord.tenant_id == user.tenant_id)).all()
+        return {"items": [{"id": r.id, "module": r.module, "file_name": r.file_name, "record_count": r.record_count, "status": r.status, "created_at": r.created_at.isoformat() if r.created_at else None} for r in records], "total": len(records)}
 
     # ── step 7: ai config ─────────────────────────────────────────────────────
 
     def save_step7(self, user: CurrentUser, data: dict) -> dict:
         err = self._check_prerequisite(user.tenant_id, 6)
-        if err:
-            return err
-        record = self._upsert(user.tenant_id, "step7_ai_config", data)
-        return {"step": 7, "status": "saved", "record_id": record.id}
+        if err: return err
+        existing = self._get_ai_config(user.tenant_id)
+        if existing:
+            existing.ai_enabled = data.get("ai_enabled", data.get("aiEnabled", existing.ai_enabled))
+            existing.ai_features = data.get("ai_features", data.get("aiFeatures", existing.ai_features))
+            existing.extra_fields = {k: v for k, v in data.items() if k not in ("ai_enabled","aiEnabled","ai_features","aiFeatures")} or None
+            self.db.flush()
+            return {"step": 7, "status": "saved", "record_id": existing.id}
+        cfg = OrgAIConfig(
+            id=str(uuid4()), tenant_id=user.tenant_id,
+            ai_enabled=data.get("ai_enabled", data.get("aiEnabled")),
+            ai_features=data.get("ai_features", data.get("aiFeatures")),
+            extra_fields={k: v for k, v in data.items() if k not in ("ai_enabled","aiEnabled","ai_features","aiFeatures")} or None,
+        )
+        self.db.add(cfg); self.db.flush()
+        return {"step": 7, "status": "saved", "record_id": cfg.id}
 
     def get_step7(self, user: CurrentUser) -> dict:
-        record = self._first(user.tenant_id, "step7_ai_config")
-        return record.payload if record else {}
+        a = self._get_ai_config(user.tenant_id)
+        if not a: return {}
+        return {"ai_enabled": a.ai_enabled, "ai_features": a.ai_features or {}}
 
     # ── activate (step 8) ─────────────────────────────────────────────────────
 
@@ -966,21 +1008,17 @@ class OrgSetupService:
         if not data.get("confirmed", False):
             return {"error": "Activation requires confirmed=true"}
 
-        # Only require step 1 (org details) to activate; other steps are optional
         err = self._check_prerequisite(user.tenant_id, 1)
         if err:
-            return {
-                "error": f"Cannot activate: {err['error']}",
-                "prerequisite_step": err["prerequisite_step"],
-            }
+            return {"error": f"Cannot activate: {err['error']}", "prerequisite_step": err["prerequisite_step"]}
 
-        # Persist activation record
-        self._upsert(
-            user.tenant_id,
-            "activation",
-            {"confirmed": True, "activated_by": user.user_id},
-            status="activated",
-        )
+        existing_act = self._get_activation(user.tenant_id)
+        if existing_act:
+            existing_act.confirmed = True
+            self.db.flush()
+        else:
+            act = OrgActivation(id=str(uuid4()), tenant_id=user.tenant_id, confirmed=True)
+            self.db.add(act); self.db.flush()
 
         # Attempt to update tenant status to active
         tenant = self.db.get(Tenant, user.tenant_id)
@@ -988,10 +1026,10 @@ class OrgSetupService:
             tenant.status = "active"
             self.db.flush()
 
-        # Sync all step4_user records into employees table (idempotent)
-        step4_records = self.repo.list_by_type(user.tenant_id, MODULE, "step4_user", limit=500)
-        for rec in step4_records:
-            self._sync_user_to_employees(user.tenant_id, rec.payload, rec.id)
+        # Sync all OrgUserRecord entries into employees table (idempotent)
+        our_records = self.db.scalars(select(OrgUserRecord).where(OrgUserRecord.tenant_id == user.tenant_id).limit(500)).all()
+        for rec in our_records:
+            self._sync_user_to_employees(user.tenant_id, {"name": rec.name, "email": rec.email, "role": rec.role, "department": rec.department}, rec.id)
 
         return {
             "status": "activated",

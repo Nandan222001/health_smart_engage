@@ -34,6 +34,17 @@ from app.models.learning import MLModel, MLModelVersion, DetectedPattern, Operat
 from app.models.sync import MobileSyncItem  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.generic_record import GenericRecord  # noqa: F401
+from app.models.sites import Site  # noqa: F401
+from app.models.org_setup_data import (  # noqa: F401
+    OrgProfile, OrgComplianceSetup, OrgWorkflowConfig, OrgAIConfig,
+    OrgActivation, Department, OrgCustomRole, OrgUserRecord, OrgImportRecord,
+)
+from app.models.operations import (  # noqa: F401
+    Shift, HelpTicket, DataImport, ValidationLog, ApiIntegration,
+    SyncIntegration, Zone, EscalationRule, GeneratedReport,
+)
+from app.models.knowledge import KnowledgeChunk  # noqa: F401
+from app.models.incidents import IncidentRCA, CorrectiveAction  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

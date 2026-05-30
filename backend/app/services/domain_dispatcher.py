@@ -201,69 +201,106 @@ class DomainDispatcher:
 
         # Sites & Zones Commands
         if operation == "sites_create":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            rec = repo.create(user.tenant_id, "sites", "site", data, status="active")
-            return {"id": rec.id, **rec.payload}
+            from app.models.sites import Site as _Site
+            import uuid as _uuid
+            site = _Site(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                name=data.get("name", data.get("site_name", "Unnamed")),
+                site_type=data.get("type", data.get("site_type", "Site")),
+                address=data.get("address"), city=data.get("city"),
+                postcode=data.get("postcode"), region=data.get("region"),
+                status=data.get("status", "active"),
+                capacity=int(data["capacity"]) if data.get("capacity") else None,
+                hazard_level=data.get("hazard_level"),
+                extra_fields={k: v for k, v in data.items() if k not in (
+                    "name","site_name","type","site_type","address","city",
+                    "postcode","region","status","capacity","hazard_level")} or None,
+            )
+            db.add(site); db.flush()
+            return {"id": site.id, "name": site.name, "status": site.status}
         if operation == "sites_update":
-            from app.models.generic_record import GenericRecord
+            from app.models.sites import Site as _Site
             from sqlalchemy import select as sa_select
             site_id = path_params.get("siteId")
-            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == site_id, GenericRecord.tenant_id == user.tenant_id)).first()
-            if rec:
-                rec.payload = {**rec.payload, **data}
-            return {"id": site_id, **(rec.payload if rec else {})}
+            site = db.scalars(sa_select(_Site).where(_Site.id == site_id, _Site.tenant_id == user.tenant_id)).first()
+            if site:
+                for k, v in data.items():
+                    if hasattr(site, k): setattr(site, k, v)
+                    else: site.extra_fields = {**(site.extra_fields or {}), k: v}
+                db.flush()
+            return {"id": site_id}
         if operation == "sites_delete":
-            from app.models.generic_record import GenericRecord
+            from app.models.sites import Site as _Site
             from sqlalchemy import select as sa_select
             site_id = path_params.get("siteId")
-            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == site_id, GenericRecord.tenant_id == user.tenant_id)).first()
-            if rec:
-                db.delete(rec)
+            site = db.scalars(sa_select(_Site).where(_Site.id == site_id, _Site.tenant_id == user.tenant_id)).first()
+            if site: db.delete(site)
             return {"deleted": True, "id": site_id}
+
         if operation == "zones_create":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            rec = repo.create(user.tenant_id, "sites", "zone", data, status="active")
-            return {"id": rec.id, **rec.payload}
+            from app.models.operations import Zone as _Zone
+            import uuid as _uuid
+            zone = _Zone(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                name=data.get("name", "Unnamed Zone"),
+                site_id=data.get("site_id"), zone_type=data.get("zone_type"),
+                status=data.get("status", "active"),
+                extra_fields={k: v for k, v in data.items() if k not in (
+                    "name","site_id","zone_type","status")} or None,
+            )
+            db.add(zone); db.flush()
+            return {"id": zone.id, "name": zone.name}
         if operation == "zones_update":
-            from app.models.generic_record import GenericRecord
+            from app.models.operations import Zone as _Zone
             from sqlalchemy import select as sa_select
             zone_id = path_params.get("zoneId")
-            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == zone_id, GenericRecord.tenant_id == user.tenant_id)).first()
-            if rec:
-                rec.payload = {**rec.payload, **data}
-            return {"id": zone_id, **(rec.payload if rec else {})}
+            zone = db.scalars(sa_select(_Zone).where(_Zone.id == zone_id, _Zone.tenant_id == user.tenant_id)).first()
+            if zone:
+                for k, v in data.items():
+                    if hasattr(zone, k): setattr(zone, k, v)
+                    else: zone.extra_fields = {**(zone.extra_fields or {}), k: v}
+                db.flush()
+            return {"id": zone_id}
         if operation == "zones_delete":
-            from app.models.generic_record import GenericRecord
+            from app.models.operations import Zone as _Zone
             from sqlalchemy import select as sa_select
             zone_id = path_params.get("zoneId")
-            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == zone_id, GenericRecord.tenant_id == user.tenant_id)).first()
-            if rec:
-                db.delete(rec)
+            zone = db.scalars(sa_select(_Zone).where(_Zone.id == zone_id, _Zone.tenant_id == user.tenant_id)).first()
+            if zone: db.delete(zone)
             return {"deleted": True, "id": zone_id}
 
         # Escalation Rules Commands
         if operation == "escalation_rules_create":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            rec = repo.create(user.tenant_id, "workflow", "escalation_rule", data, status="active")
-            return {"id": rec.id, **rec.payload}
+            from app.models.operations import EscalationRule as _ERule
+            import uuid as _uuid
+            rule = _ERule(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                name=data.get("name"),
+                trigger_condition=data.get("trigger_condition"),
+                escalate_to=data.get("escalate_to"),
+                time_limit_hours=data.get("time_limit_hours"),
+                status=data.get("status", "active"),
+                extra_fields={k: v for k, v in data.items() if k not in (
+                    "name","trigger_condition","escalate_to","time_limit_hours","status")} or None,
+            )
+            db.add(rule); db.flush()
+            return {"id": rule.id}
         if operation == "escalation_rules_update":
-            from app.models.generic_record import GenericRecord
+            from app.models.operations import EscalationRule as _ERule
             from sqlalchemy import select as sa_select
             rule_id = path_params.get("ruleId")
-            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == rule_id, GenericRecord.tenant_id == user.tenant_id)).first()
-            if rec:
-                rec.payload = {**rec.payload, **data}
-            return {"id": rule_id, **(rec.payload if rec else {})}
+            rule = db.scalars(sa_select(_ERule).where(_ERule.id == rule_id, _ERule.tenant_id == user.tenant_id)).first()
+            if rule:
+                for k, v in data.items():
+                    if hasattr(rule, k): setattr(rule, k, v)
+                db.flush()
+            return {"id": rule_id}
         if operation == "escalation_rules_delete":
-            from app.models.generic_record import GenericRecord
+            from app.models.operations import EscalationRule as _ERule
             from sqlalchemy import select as sa_select
             rule_id = path_params.get("ruleId")
-            rec = db.scalars(sa_select(GenericRecord).where(GenericRecord.id == rule_id, GenericRecord.tenant_id == user.tenant_id)).first()
-            if rec:
-                db.delete(rec)
+            rule = db.scalars(sa_select(_ERule).where(_ERule.id == rule_id, _ERule.tenant_id == user.tenant_id)).first()
+            if rule: db.delete(rule)
             return {"deleted": True, "id": rule_id}
 
         # Permit Commands
@@ -337,13 +374,22 @@ class DomainDispatcher:
             res = svc["compliance"].approve_capa_closure(user, path_params.get("capaId"), data)
             return {"id": res.id, "status": res.status}
         if operation == "hazards_create":
-            import uuid
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            hazard_id = str(uuid.uuid4())
-            payload = {**data, "id": hazard_id, "status": data.get("status", "open"), "reported_by": user.user_id}
-            repo.create(tenant_id=user.tenant_id, module="hazards", record_type="hazard", payload=payload, status="active")
-            return {"id": hazard_id, "status": "accepted"}
+            from app.models.risks import HazardObservation
+            obs = HazardObservation(
+                id=str(__import__("uuid").uuid4()),
+                tenant_id=user.tenant_id,
+                severity=data.get("severity", "medium"),
+                description=data.get("description", data.get("title", "")),
+                location_id=data.get("location_id") or None,
+                assigned_to_user_id=data.get("assigned_to") or None,
+                status=data.get("status", "open"),
+                extra_fields={k: v for k, v in data.items()
+                              if k not in ("severity", "description", "title",
+                                           "location_id", "assigned_to", "status")} or None,
+            )
+            db.add(obs)
+            db.flush()
+            return {"id": obs.id, "status": obs.status}
 
         if operation == "incidents_create":
             res = svc["compliance"].create_incident(user, data)
@@ -468,12 +514,12 @@ class DomainDispatcher:
             except Exception:
                 pass
 
-            # Fall back to keyword search over GenericRecord knowledge docs if no chunks
+            # Fall back to keyword search over KnowledgeDocument titles if no chunks indexed
             if not chunks:
-                from app.repositories.generic_repository import GenericRepository
-                repo = GenericRepository(db)
-                docs_recs = repo.list_by_type(user.tenant_id, "knowledge", "document", limit=200)
-                docs = [{"id": r.id, "title": r.payload.get("title", ""), "content": r.payload.get("content", r.payload.get("text", "")), "source": r.payload.get("source", "")} for r in docs_recs]
+                from app.models.knowledge import KnowledgeDocument as _KD
+                from sqlalchemy import select as _ksel
+                docs_recs = db.scalars(_ksel(_KD).where(_KD.tenant_id == user.tenant_id).limit(200)).all()
+                docs = [{"id": d.id, "title": d.title, "content": "", "source": d.file_name or ""} for d in docs_recs]
                 chunks = self.ai.knowledge_search(query, docs)
 
             if self.ai.is_configured and query:
@@ -564,136 +610,131 @@ class DomainDispatcher:
 
         # ── Org Admin Commands ────────────────────────────────────────────────
         if operation == "org_admin_shifts_create":
-            from app.repositories.generic_repository import GenericRepository
-            import uuid
-            repo = GenericRepository(db)
-            payload = {**data, "id": str(uuid.uuid4()), "status": "active"}
-            repo.create(tenant_id=user.tenant_id, module="org_admin", record_type="shift", payload=payload, status="active")
-            return {"status": "created", "id": payload["id"]}
+            from app.models.operations import Shift as _Shift
+            import uuid as _uuid
+            shift = _Shift(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                name=data.get("name", "Unnamed Shift"),
+                start_time=data.get("start_time"), end_time=data.get("end_time"),
+                days=data.get("days"), status="active",
+                extra_fields={k: v for k, v in data.items() if k not in (
+                    "name","start_time","end_time","days","status")} or None,
+            )
+            db.add(shift); db.flush()
+            return {"status": "created", "id": shift.id}
 
         if operation == "org_admin_shifts_update":
-            from app.repositories.generic_repository import GenericRepository
+            from app.models.operations import Shift as _Shift
+            from sqlalchemy import select as sa_select
             shift_id = path_params.get("shiftId")
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "org_admin", "shift", limit=500)
-            target = next((r for r in records if r.payload.get("id") == shift_id), None)
-            if target:
-                target.payload = {**target.payload, **data, "id": shift_id}
+            shift = db.scalars(sa_select(_Shift).where(_Shift.id == shift_id, _Shift.tenant_id == user.tenant_id)).first()
+            if shift:
+                for k, v in data.items():
+                    if hasattr(shift, k): setattr(shift, k, v)
                 db.flush()
             return {"status": "updated", "id": shift_id}
 
         if operation == "org_admin_shifts_delete":
-            from app.repositories.generic_repository import GenericRepository
+            from app.models.operations import Shift as _Shift
+            from sqlalchemy import select as sa_select
             shift_id = path_params.get("shiftId")
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "org_admin", "shift", limit=500)
-            for r in records:
-                if r.payload.get("id") == shift_id:
-                    db.delete(r)
-                    break
-            db.flush()
+            shift = db.scalars(sa_select(_Shift).where(_Shift.id == shift_id, _Shift.tenant_id == user.tenant_id)).first()
+            if shift: db.delete(shift); db.flush()
             return {"status": "deleted", "id": shift_id}
 
         if operation == "org_admin_import_create":
-            from app.repositories.generic_repository import GenericRepository
-            import uuid
-            from datetime import datetime
-            repo = GenericRepository(db)
-            import_id = str(uuid.uuid4())
-            now = datetime.utcnow().isoformat()
-            records_total = data.get("records_estimated", 0)
-            payload = {
-                "id": import_id,
-                "file_name": data.get("file_name", "unknown"),
-                "import_type": data.get("import_type", "excel"),
-                "data_type": data.get("data_type", "Unknown"),
-                "records_total": records_total,
-                "records_success": records_total,
-                "records_failed": 0,
-                "status": "success",
-                "uploaded_by": user.user_id or "System",
-                "created_at": now,
-            }
-            repo.create(tenant_id=user.tenant_id, module="data_management", record_type="import", payload=payload, status="success")
-            log_payload = {
-                "id": str(uuid.uuid4()),
-                "import_id": import_id,
-                "file_name": data.get("file_name", "unknown"),
-                "rule": "Required fields check",
-                "status": "pass",
-                "records_affected": records_total,
-                "message": "All required fields validated successfully",
-                "timestamp": datetime.utcnow().strftime("%d %b %Y, %H:%M"),
-            }
-            repo.create(tenant_id=user.tenant_id, module="data_management", record_type="validation_log", payload=log_payload, status="pass")
-            return {"status": "success", "id": import_id, "message": f"Successfully queued {records_total} records for import"}
+            from app.models.operations import DataImport as _DI, ValidationLog as _VL
+            import uuid as _uuid
+            from datetime import datetime as _dt
+            records_total = int(data.get("records_estimated", 0) or 0)
+            import_status = "success" if records_total > 0 else "failed"
+            imp = _DI(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                file_name=data.get("file_name", "unknown"),
+                import_type=data.get("import_type", "excel"),
+                data_type=data.get("data_type", "Unknown"),
+                records_total=records_total, records_success=records_total,
+                records_failed=0, status=import_status,
+                uploaded_by=str(user.user_id or "System"),
+            )
+            db.add(imp); db.flush()
+            log = _VL(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                import_id=imp.id,
+                file_name=data.get("file_name", "unknown"),
+                rule="Required fields check",
+                status="pass" if records_total > 0 else "fail",
+                records_affected=records_total,
+                message="All required fields validated successfully" if records_total > 0 else "No records were imported — check column headers",
+            )
+            db.add(log); db.flush()
+            return {"status": import_status, "id": imp.id, "message": f"Logged {records_total} records imported"}
 
         if operation == "org_admin_sync_trigger":
-            from app.repositories.generic_repository import GenericRepository
+            from app.models.operations import SyncIntegration as _SI
+            from sqlalchemy import select as sa_select
             integration_name = data.get("integration")
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "data_management", "sync_integration", limit=100)
-            for r in records:
-                if not integration_name or r.payload.get("name") == integration_name:
-                    r.payload = {**r.payload, "last_sync": "Just now", "status": "active"}
-                    db.flush()
+            syncs = db.scalars(sa_select(_SI).where(_SI.tenant_id == user.tenant_id)).all()
+            for s in syncs:
+                if not integration_name or s.name == integration_name:
+                    s.last_sync = "Just now"; s.status = "active"
+            db.flush()
             return {"status": "sync_triggered", "integration": integration_name or "all"}
 
         if operation == "org_admin_api_integrations_create":
-            from app.repositories.generic_repository import GenericRepository
-            import uuid
-            from datetime import datetime
-            repo = GenericRepository(db)
-            integration_id = str(uuid.uuid4())
-            payload = {
-                **data,
-                "id": integration_id,
-                "is_active": data.get("is_active", True),
-                "records_synced": 0,
-                "created_at": datetime.utcnow().isoformat(),
-            }
-            repo.create(tenant_id=user.tenant_id, module="data_management", record_type="api_integration", payload=payload, status="active")
-            return {"status": "created", "id": integration_id}
+            from app.models.operations import ApiIntegration as _AI
+            import uuid as _uuid
+            ai = _AI(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                name=data.get("name", "Integration"),
+                integration_type=data.get("integration_type"),
+                endpoint_url=data.get("endpoint_url"),
+                api_key=data.get("api_key"),
+                is_active=data.get("is_active", True),
+                records_synced=0,
+                extra_fields={k: v for k, v in data.items() if k not in (
+                    "name","integration_type","endpoint_url","api_key","is_active")} or None,
+            )
+            db.add(ai); db.flush()
+            return {"status": "created", "id": ai.id}
 
         if operation == "org_admin_api_integrations_update":
-            from app.repositories.generic_repository import GenericRepository
+            from app.models.operations import ApiIntegration as _AI
+            from sqlalchemy import select as sa_select
             integration_id = path_params.get("integrationId")
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "data_management", "api_integration", limit=100)
-            for r in records:
-                if r.payload.get("id") == integration_id:
-                    r.payload = {**r.payload, **data, "id": integration_id}
-                    db.flush()
-                    break
+            ai = db.scalars(sa_select(_AI).where(_AI.id == integration_id, _AI.tenant_id == user.tenant_id)).first()
+            if ai:
+                for k, v in data.items():
+                    if hasattr(ai, k): setattr(ai, k, v)
+                db.flush()
             return {"status": "updated", "id": integration_id}
 
         if operation == "org_admin_api_integrations_delete":
-            from app.repositories.generic_repository import GenericRepository
+            from app.models.operations import ApiIntegration as _AI
+            from sqlalchemy import select as sa_select
             integration_id = path_params.get("integrationId")
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "data_management", "api_integration", limit=100)
-            for r in records:
-                if r.payload.get("id") == integration_id:
-                    db.delete(r)
-                    break
-            db.flush()
+            ai = db.scalars(sa_select(_AI).where(_AI.id == integration_id, _AI.tenant_id == user.tenant_id)).first()
+            if ai: db.delete(ai); db.flush()
             return {"status": "deleted", "id": integration_id}
 
         if operation == "org_admin_tickets_create":
-            from app.repositories.generic_repository import GenericRepository
-            import uuid
-            repo = GenericRepository(db)
-            ticket_data = {**data, "id": str(uuid.uuid4()), "status": "open", "created_at": "now"}
-            repo.create(tenant_id=user.tenant_id, module="org_admin", record_type="help_ticket", payload=ticket_data, status="open")
-            return {"status": "created", "ticket_id": ticket_data["id"], "message": "Your support ticket has been submitted successfully."}
+            from app.models.operations import HelpTicket as _HT
+            import uuid as _uuid
+            ticket = _HT(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                subject=data.get("subject"), category=data.get("category"),
+                priority=data.get("priority", "medium"),
+                description=data.get("description"), status="open",
+                extra_fields={k: v for k, v in data.items() if k not in (
+                    "subject","category","priority","description","status")} or None,
+            )
+            db.add(ticket); db.flush()
+            return {"status": "created", "ticket_id": ticket.id, "message": "Your support ticket has been submitted successfully."}
 
         # ── Reports Commands ──────────────────────────────────────────────────
         if operation == "org_admin_reports_generate":
-            from app.repositories.generic_repository import GenericRepository
-            import uuid
-            from datetime import datetime
-            repo = GenericRepository(db)
-            report_id = str(uuid.uuid4())
+            from app.models.operations import GeneratedReport as _GR
+            import uuid as _uuid
             report_type = data.get("type", "kpi")
             fmt = data.get("format", "pdf")
             size_map = {"pdf": "420 KB", "excel": "215 KB", "csv": "85 KB"}
@@ -703,31 +744,24 @@ class DomainDispatcher:
                 "risk": "Risk Register Report", "workforce": "Workforce Health Report",
                 "management": "Management Executive Summary",
             }
-            payload = {
-                "id": report_id,
-                "name": data.get("name") or type_labels.get(report_type, "Report"),
-                "type": report_type,
-                "format": fmt,
-                "period_start": data.get("period_start", ""),
-                "period_end": data.get("period_end", ""),
-                "status": "ready",
-                "size": size_map.get(fmt, "320 KB"),
-                "created_at": datetime.utcnow().isoformat(),
-                "created_by": getattr(user, "email", None) or "System",
-            }
-            repo.create(tenant_id=user.tenant_id, module="reports", record_type="generated_report", payload=payload, status="ready")
-            return {"status": "ready", "id": report_id, "message": f"'{payload['name']}' generated successfully"}
+            rpt = _GR(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                name=data.get("name") or type_labels.get(report_type, "Report"),
+                report_type=report_type, format=fmt,
+                period_start=data.get("period_start", ""),
+                period_end=data.get("period_end", ""),
+                status="ready", size=size_map.get(fmt, "320 KB"),
+                created_by=getattr(user, "email", None) or "System",
+            )
+            db.add(rpt); db.flush()
+            return {"status": "ready", "id": rpt.id, "message": f"'{rpt.name}' generated successfully"}
 
         if operation == "org_admin_reports_delete":
-            from app.repositories.generic_repository import GenericRepository
+            from app.models.operations import GeneratedReport as _GR
+            from sqlalchemy import select as sa_select
             report_id = path_params.get("reportId")
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "reports", "generated_report", limit=500)
-            for r in records:
-                if r.payload.get("id") == report_id:
-                    db.delete(r)
-                    break
-            db.flush()
+            rpt = db.scalars(sa_select(_GR).where(_GR.id == report_id, _GR.tenant_id == user.tenant_id)).first()
+            if rpt: db.delete(rpt); db.flush()
             return {"status": "deleted", "id": report_id}
 
         # ── Org Setup Commands ────────────────────────────────────────────────
@@ -859,27 +893,47 @@ class DomainDispatcher:
             return {"id": rec.id, "ref": rec.incident_ref, "status": rec.status}
 
         if operation == "incident_rca_create":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
+            from app.models.incidents import IncidentRCA as _IRCA
+            import uuid as _uuid
             inc_id = path_params.get("incidentId")
-            rec = repo.create(user.tenant_id, "incidents", "rca", {**data, "incident_id": inc_id}, status="draft")
-            return {"id": rec.id}
+            rca = _IRCA(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                incident_id=inc_id,
+                method=data.get("method"),
+                root_cause=data.get("root_cause"),
+                contributing_factors=data.get("contributing_factors"),
+                status="draft",
+                extra_fields={k: v for k, v in data.items() if k not in (
+                    "method","root_cause","contributing_factors","status")} or None,
+            )
+            db.add(rca); db.flush()
+            return {"id": rca.id}
 
         if operation == "incident_corrective_actions_create":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            rec = repo.create(user.tenant_id, "incidents", "corrective_action", data, status=data.get("status", "open"))
-            return {"id": rec.id, **rec.payload}
+            from app.models.incidents import CorrectiveAction as _CA
+            import uuid as _uuid
+            ca = _CA(
+                id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
+                incident_id=data.get("incident_id", path_params.get("incidentId")),
+                title=data.get("title"), description=data.get("description"),
+                assigned_to=data.get("assigned_to"), due_date=data.get("due_date"),
+                status=data.get("status", "open"),
+                extra_fields={k: v for k, v in data.items() if k not in (
+                    "incident_id","title","description","assigned_to","due_date","status")} or None,
+            )
+            db.add(ca); db.flush()
+            return {"id": ca.id, "status": ca.status}
 
         if operation == "incident_corrective_actions_update":
-            from app.models.generic_record import GenericRecord
+            from app.models.incidents import CorrectiveAction as _CA
             from sqlalchemy import select as _sel
             action_id = path_params.get("actionId")
-            rec = db.scalars(_sel(GenericRecord).where(GenericRecord.id == action_id, GenericRecord.tenant_id == user.tenant_id)).first()
-            if rec:
-                rec.payload = {**rec.payload, **data}
-                if "status" in data: rec.status = data["status"]
-            return {"id": action_id, **(rec.payload if rec else {})}
+            ca = db.scalars(_sel(_CA).where(_CA.id == action_id, _CA.tenant_id == user.tenant_id)).first()
+            if ca:
+                for k, v in data.items():
+                    if hasattr(ca, k): setattr(ca, k, v)
+                db.flush()
+            return {"id": action_id, "status": ca.status if ca else "unknown"}
 
         return None
 
@@ -987,10 +1041,23 @@ class DomainDispatcher:
 
         # Hazard Queries
         if operation == "hazards_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, module="hazards", record_type="hazard", limit=500)
-            return {"items": [r.payload for r in records]}
+            from app.models.risks import HazardObservation as _Haz
+            from sqlalchemy import select as _sel
+            obs = db.scalars(
+                _sel(_Haz).where(_Haz.tenant_id == user.tenant_id).order_by(_Haz.created_at.desc()).limit(500)
+            ).all()
+            return {
+                "items": [
+                    {
+                        "id": h.id, "title": h.description[:60] if h.description else f"Hazard {h.id[:8]}",
+                        "description": h.description, "severity": h.severity,
+                        "location_id": h.location_id, "status": h.status,
+                        "assigned_to": h.assigned_to_user_id,
+                        "created_at": str(h.created_at) if h.created_at else None,
+                    }
+                    for h in obs
+                ]
+            }
 
         # Violation Queries
         if operation == "violations_list":
@@ -1119,20 +1186,12 @@ class DomainDispatcher:
             return {"items": [_to_dict(i) for i in items]}
         
         if operation == "employees_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
+            from app.models.org_setup_data import OrgUserRecord as _OUR
+            from sqlalchemy import select as sa_select
 
-            # Build lookup from step4_user records (email → payload, rec).
-            # These hold the original role/department values from the org-setup CSV/form
-            # and are the source of truth when the employees table has a default role.
-            step4_recs = repo.list_by_type(user.tenant_id, "org_setup", "step4_user", limit=500)
-            step4_payloads: dict[str, dict] = {}
-            step4_metas: dict[str, object] = {}
-            for rec in step4_recs:
-                ek = (rec.payload.get("email") or "").strip().lower()
-                if ek:
-                    step4_payloads[ek] = rec.payload
-                    step4_metas[ek] = rec
+            # Build lookup from OrgUserRecord (email → setup record)
+            our_recs = db.scalars(sa_select(_OUR).where(_OUR.tenant_id == user.tenant_id).limit(500)).all()
+            our_payloads: dict[str, _OUR] = {(r.email or "").strip().lower(): r for r in our_recs}
 
             emp_rows = svc["people"].list_employees(user, {})
             result: list[dict] = []
@@ -1141,37 +1200,24 @@ class DomainDispatcher:
             for e in emp_rows:
                 email = (e.contact or "").strip()
                 key = email.lower()
-                s4 = step4_payloads.get(key, {})
-
-                # Use step4_user role when employees table has empty or generic default
+                our = our_payloads.get(key)
                 role = e.role_name or ""
-                if (not role or role.lower() == "employee") and s4.get("role"):
-                    role = s4["role"]
-
+                if (not role or role.lower() == "employee") and our and our.role:
+                    role = our.role
                 result.append({
-                    "id": e.id,
-                    "name": e.name,
-                    "email": email,
-                    "role": role,
-                    "department": e.department_id or s4.get("department") or "",
-                    "status": e.status or "active",
-                    "joined_at": None,
+                    "id": e.id, "name": e.name, "email": email, "role": role,
+                    "department": e.department_id or (our.department if our else "") or "",
+                    "status": e.status or "active", "joined_at": None,
                 })
                 seen.add(key)
 
-            # Surface step4_user records not yet synced to the employees table
-            for key, payload in step4_payloads.items():
-                if key in seen:
-                    continue
-                rec = step4_metas[key]
+            # Surface OrgUserRecords not yet in the employees table
+            for key, our in our_payloads.items():
+                if key in seen: continue
                 result.append({
-                    "id": rec.id,
-                    "name": payload.get("name", ""),
-                    "email": payload.get("email", "").strip(),
-                    "role": payload.get("role", ""),
-                    "department": payload.get("department", ""),
-                    "status": "active",
-                    "joined_at": str(rec.created_at) if rec.created_at else None,
+                    "id": our.id, "name": our.name or "", "email": our.email or "",
+                    "role": our.role or "", "department": our.department or "",
+                    "status": "active", "joined_at": str(our.created_at) if our.created_at else None,
                 })
 
             return {"items": result}
@@ -1498,32 +1544,21 @@ class DomainDispatcher:
         if operation == "org_admin_overview_get":
             from sqlalchemy import func, select as sa_select
             from app.models.tenant import Tenant
-            from app.models.generic_record import GenericRecord
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
+            from app.models.org_setup_data import OrgProfile as _OrgProfile
 
             tenant = db.get(Tenant, user.tenant_id)
+            org_profile = db.scalars(sa_select(_OrgProfile).where(_OrgProfile.tenant_id == user.tenant_id).limit(1)).first()
+            step1 = {}
+            if org_profile:
+                step1 = {"organizationName": org_profile.organization_name, "industryType": org_profile.industry_type, "country": org_profile.country, "officialEmail": org_profile.official_email, "contactNumber": org_profile.contact_number, "headquartersAddress": org_profile.headquarters_address}
 
-            step1_recs = repo.list_by_type(user.tenant_id, "org_setup", "step1_org_details", limit=1)
-            step1 = step1_recs[0].payload if step1_recs else {}
-
-            def _count(record_type: str) -> int:
-                stmt = (
-                    sa_select(func.count())
-                    .where(GenericRecord.tenant_id == user.tenant_id)
-                    .where(GenericRecord.module == "org_setup")
-                    .where(GenericRecord.record_type == record_type)
-                )
-                return db.scalar(stmt) or 0
-
-            sites_count = _count("step3_site")
-            users_count = _count("step4_user")
-
-            # Also count actual Employee rows (may be higher if employees added after setup)
+            from app.models.sites import Site as _Site
+            from app.models.org_setup_data import OrgUserRecord as _OUR
             from app.models.people import Employee as _Emp
+            sites_count = db.scalar(sa_select(func.count()).where(_Site.tenant_id == user.tenant_id)) or 0
+            our_count = db.scalar(sa_select(func.count()).where(_OUR.tenant_id == user.tenant_id)) or 0
             emp_count = db.scalar(sa_select(func.count()).where(_Emp.tenant_id == user.tenant_id)) or 0
-            if emp_count > users_count:
-                users_count = emp_count
+            users_count = max(our_count, emp_count)
 
             org_name = step1.get("organizationName") or (tenant.name if tenant else "")
 
@@ -1823,12 +1858,10 @@ class DomainDispatcher:
             return {"items": items, "total": len(items)}
 
         if operation == "org_admin_shifts_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, module="org_admin", record_type="shift", limit=200)
-            if records:
-                return {"items": [r.payload for r in records]}
-            return {"items": []}
+            from app.models.operations import Shift as _Shift
+            from sqlalchemy import select as sa_select
+            shifts = db.scalars(sa_select(_Shift).where(_Shift.tenant_id == user.tenant_id).order_by(_Shift.created_at)).all()
+            return {"items": [{"id": s.id, "name": s.name, "start_time": s.start_time, "end_time": s.end_time, "days": s.days, "status": s.status} for s in shifts]}
 
         if operation == "org_admin_engagement_get":
             from sqlalchemy import func, select as sa_select
@@ -1962,80 +1995,84 @@ class DomainDispatcher:
             }
 
         if operation == "org_admin_documents_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "data_management", "document", limit=500)
-            items = [{"created_at": r.created_at.isoformat() if r.created_at else None, **r.payload} for r in records]
+            from app.models.knowledge import KnowledgeDocument as _KD
+            from sqlalchemy import select as sa_select
+            docs = db.scalars(sa_select(_KD).where(_KD.tenant_id == user.tenant_id).order_by(_KD.created_at.desc()).limit(500)).all()
+            items = [{"id": d.id, "file_name": d.file_name, "title": d.title, "file_type": d.file_type, "category": d.category, "size": d.size, "uploaded_by": d.uploaded_by, "record_type": d.record_type, "indexed": d.indexed, "created_at": d.created_at.isoformat() if d.created_at else None} for d in docs]
             return {"items": items}
 
         if operation == "org_admin_documents_delete":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
+            from app.models.knowledge import KnowledgeDocument as _KD
+            from sqlalchemy import select as sa_select
             doc_id = path_params.get("documentId")
-            records = repo.list_by_type(user.tenant_id, "data_management", "document", limit=500)
-            for r in records:
-                if r.payload.get("id") == doc_id:
-                    db.delete(r)
-                    db.flush()
-                    break
+            doc = db.scalars(sa_select(_KD).where(_KD.id == doc_id, _KD.tenant_id == user.tenant_id)).first()
+            if doc: db.delete(doc); db.flush()
             return {"deleted": True}
 
         if operation == "org_admin_imports_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "data_management", "import", limit=200)
-            items = [r.payload for r in records] if records else []
+            from app.models.operations import DataImport as _DI
+            from sqlalchemy import select as sa_select
+            imports = db.scalars(sa_select(_DI).where(_DI.tenant_id == user.tenant_id).order_by(_DI.created_at.desc()).limit(200)).all()
+            items = [{"id": i.id, "file_name": i.file_name, "import_type": i.import_type, "data_type": i.data_type, "records_total": i.records_total, "records_success": i.records_success, "records_failed": i.records_failed, "status": i.status, "uploaded_by": i.uploaded_by, "created_at": i.created_at.isoformat() if i.created_at else None} for i in imports]
             return {"items": items}
 
         if operation == "org_admin_validation_logs_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "data_management", "validation_log", limit=500)
-            items = [r.payload for r in records] if records else []
+            from app.models.operations import ValidationLog as _VL
+            from sqlalchemy import select as sa_select
+            logs = db.scalars(sa_select(_VL).where(_VL.tenant_id == user.tenant_id).order_by(_VL.created_at.desc()).limit(500)).all()
+            items = [{"id": l.id, "import_id": l.import_id, "file_name": l.file_name, "rule": l.rule, "status": l.status, "records_affected": l.records_affected, "message": l.message, "timestamp": l.created_at.strftime("%d %b %Y, %H:%M") if l.created_at else None} for l in logs]
             return {"items": items}
 
         if operation == "org_admin_sync_status_get":
-            from app.repositories.generic_repository import GenericRepository
-            import uuid
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "data_management", "sync_integration", limit=100)
-            if records:
-                items = [r.payload for r in records]
+            from app.models.operations import SyncIntegration as _SI
+            from sqlalchemy import select as sa_select
+            import uuid as _uuid
+            syncs = db.scalars(sa_select(_SI).where(_SI.tenant_id == user.tenant_id)).all()
+            if syncs:
+                items = [{"id": s.id, "name": s.name, "integration_type": s.integration_type, "last_sync": s.last_sync, "status": s.status, "records_synced": s.records_synced} for s in syncs]
             else:
                 defaults = [
-                    {"id": str(uuid.uuid4()), "name": "ERP System",      "integration_type": "erp",    "last_sync": "5 minutes ago",  "status": "active",  "records_synced": 1247},
-                    {"id": str(uuid.uuid4()), "name": "HRMS",             "integration_type": "hrms",   "last_sync": "1 hour ago",     "status": "active",  "records_synced": 847},
-                    {"id": str(uuid.uuid4()), "name": "IoT Sensors",      "integration_type": "iot",    "last_sync": "30 seconds ago", "status": "active",  "records_synced": 3892},
-                    {"id": str(uuid.uuid4()), "name": "Safety Sensors",   "integration_type": "safety", "last_sync": "2 minutes ago",  "status": "warning", "records_synced": 156},
+                    ("ERP System", "erp", "5 minutes ago", "active", 1247),
+                    ("HRMS", "hrms", "1 hour ago", "active", 847),
+                    ("IoT Sensors", "iot", "30 seconds ago", "active", 3892),
+                    ("Safety Sensors", "safety", "2 minutes ago", "warning", 156),
                 ]
-                for d in defaults:
-                    repo.create(tenant_id=user.tenant_id, module="data_management", record_type="sync_integration", payload=d, status=d["status"])
-                items = defaults
+                items = []
+                for name, itype, last_sync, status, records_synced in defaults:
+                    s = _SI(id=str(_uuid.uuid4()), tenant_id=user.tenant_id, name=name, integration_type=itype, last_sync=last_sync, status=status, records_synced=records_synced)
+                    db.add(s)
+                    items.append({"id": s.id, "name": s.name, "integration_type": s.integration_type, "last_sync": s.last_sync, "status": s.status, "records_synced": s.records_synced})
+                db.flush()
             return {"integrations": items}
 
         if operation == "org_admin_api_integrations_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "data_management", "api_integration", limit=100)
-            items = [r.payload for r in records] if records else []
+            from app.models.operations import ApiIntegration as _AI
+            from sqlalchemy import select as sa_select
+            integrations = db.scalars(sa_select(_AI).where(_AI.tenant_id == user.tenant_id).order_by(_AI.created_at.desc()).limit(100)).all()
+            items = [{"id": i.id, "name": i.name, "integration_type": i.integration_type, "endpoint_url": i.endpoint_url, "is_active": i.is_active, "last_sync": i.last_sync, "records_synced": i.records_synced} for i in integrations]
             return {"items": items}
 
         if operation == "org_admin_tickets_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, module="org_admin", record_type="help_ticket")
-            return {"items": [r.payload for r in records] if records else []}
+            from app.models.operations import HelpTicket as _HT
+            from sqlalchemy import select as sa_select
+            tickets = db.scalars(sa_select(_HT).where(_HT.tenant_id == user.tenant_id).order_by(_HT.created_at.desc())).all()
+            return {"items": [{"id": t.id, "subject": t.subject, "category": t.category, "priority": t.priority, "description": t.description, "status": t.status, "created_at": t.created_at.isoformat() if t.created_at else None} for t in tickets]}
 
         if operation == "org_admin_tickets_get":
-            return {"id": path_params.get("ticketId"), "status": "open"}
+            from app.models.operations import HelpTicket as _HT
+            from sqlalchemy import select as sa_select
+            ticket_id = path_params.get("ticketId")
+            ticket = db.scalars(sa_select(_HT).where(_HT.id == ticket_id, _HT.tenant_id == user.tenant_id)).first()
+            if ticket: return {"id": ticket.id, "subject": ticket.subject, "status": ticket.status, "priority": ticket.priority}
+            return {"id": ticket_id, "status": "open"}
 
         # ── Reports Queries ───────────────────────────────────────────────────
         if operation == "org_admin_reports_list":
-            from app.repositories.generic_repository import GenericRepository
+            from app.models.operations import GeneratedReport as _GR
+            from sqlalchemy import select as sa_select
             from datetime import datetime, timedelta
-            repo = GenericRepository(db)
-            records = repo.list_by_type(user.tenant_id, "reports", "generated_report", limit=500)
-            items = [r.payload for r in records] if records else []
+            reports = db.scalars(sa_select(_GR).where(_GR.tenant_id == user.tenant_id).order_by(_GR.created_at.desc()).limit(500)).all()
+            items = [{"id": r.id, "name": r.name, "type": r.report_type, "format": r.format, "period_start": r.period_start, "period_end": r.period_end, "status": r.status, "size": r.size, "created_at": r.created_at.isoformat() if r.created_at else None, "created_by": r.created_by} for r in reports]
             if not items:
                 now = datetime.utcnow()
                 items = [
@@ -2065,16 +2102,19 @@ class DomainDispatcher:
 
             # Corrective actions
             try:
-                ca_recs  = repo.list_by_type(user.tenant_id, "incidents", "corrective_action", limit=500) or []
-                open_cas = sum(1 for r in ca_recs if r.payload.get("status") not in ("closed", "completed"))
+                from app.models.incidents import CorrectiveAction as _CAM
+                from sqlalchemy import select as _casel, func as _cafunc
+                open_cas = db.scalar(_casel(_cafunc.count(_CAM.id)).where(_CAM.tenant_id == user.tenant_id, _CAM.status.notin_(["closed","completed"]))) or 0
+                ca_total = db.scalar(_casel(_cafunc.count(_CAM.id)).where(_CAM.tenant_id == user.tenant_id)) or 0
             except Exception:
-                ca_recs = []; open_cas = 0
+                open_cas = ca_total = 0
 
             # RCA records
             try:
-                rca_recs = repo.list_by_type(user.tenant_id, "incidents", "rca", limit=500) or []
+                from app.models.incidents import IncidentRCA as _IRCAM
+                rca_count = db.scalar(_casel(_cafunc.count(_IRCAM.id)).where(_IRCAM.tenant_id == user.tenant_id)) or 0
             except Exception:
-                rca_recs = []
+                rca_count = 0
 
             # Risk assessments
             try:
@@ -2103,11 +2143,11 @@ class DomainDispatcher:
                 "incident": {
                     "total": inc_total,    "open": inc_open,
                     "resolved": max(0, inc_total - inc_open),
-                    "near_misses": near_miss, "with_rca": len(rca_recs),
+                    "near_misses": near_miss, "with_rca": rca_count,
                 },
                 "audit": {
                     "total_records": risk_total + inc_total, "open_actions": open_cas,
-                    "compliance_items": len(rca_recs) + risk_total,
+                    "compliance_items": rca_count + risk_total,
                     "records_with_findings": high_risk + inc_open,
                 },
                 "compliance": {
@@ -2288,25 +2328,37 @@ class DomainDispatcher:
 
         # ── Sites & Zones Queries ─────────────────────────────────────────────
         if operation == "sites_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            items = repo.list_by_type(user.tenant_id, "sites", "site", limit=500)
-            return {"items": [{"id": r.id, **r.payload} for r in items], "total": len(items)}
+            from app.models.sites import Site as _Site
+            from sqlalchemy import select as _sel
+            sites = db.scalars(
+                _sel(_Site).where(_Site.tenant_id == user.tenant_id).order_by(_Site.name)
+            ).all()
+            items = [
+                {
+                    "id": s.id, "name": s.name, "type": s.site_type, "site_type": s.site_type,
+                    "address": s.address, "city": s.city, "postcode": s.postcode,
+                    "region": s.region, "status": s.status, "capacity": s.capacity,
+                    "hazard_level": s.hazard_level,
+                    "created_at": str(s.created_at) if s.created_at else None,
+                }
+                for s in sites
+            ]
+            return {"items": items, "total": len(items)}
 
         if operation == "zones_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            site_id = payload.get("site_id") or payload.get("siteId")
-            items = repo.list_by_type(user.tenant_id, "sites", "zone", limit=500)
-            if site_id:
-                items = [i for i in items if i.payload.get("site_id") == site_id]
-            return {"items": [{"id": r.id, **r.payload} for r in items], "total": len(items)}
+            from app.models.operations import Zone as _Zone
+            from sqlalchemy import select as sa_select
+            site_id = path_params.get("siteId")
+            q = sa_select(_Zone).where(_Zone.tenant_id == user.tenant_id)
+            if site_id: q = q.where(_Zone.site_id == site_id)
+            zones = db.scalars(q.order_by(_Zone.created_at).limit(500)).all()
+            return {"items": [{"id": z.id, "name": z.name, "site_id": z.site_id, "zone_type": z.zone_type, "status": z.status} for z in zones], "total": len(zones)}
 
         if operation == "escalation_rules_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            items = repo.list_by_type(user.tenant_id, "workflow", "escalation_rule", limit=200)
-            return {"items": [{"id": r.id, **r.payload} for r in items], "total": len(items)}
+            from app.models.operations import EscalationRule as _ERule
+            from sqlalchemy import select as sa_select
+            rules = db.scalars(sa_select(_ERule).where(_ERule.tenant_id == user.tenant_id).limit(200)).all()
+            return {"items": [{"id": r.id, "name": r.name, "trigger_condition": r.trigger_condition, "escalate_to": r.escalate_to, "time_limit_hours": r.time_limit_hours, "status": r.status} for r in rules], "total": len(rules)}
 
         # ── Incident Module Queries ───────────────────────────────────────────────────
         def _inc_to_dict(i):
@@ -2341,36 +2393,35 @@ class DomainDispatcher:
             return {"items": [{"id": i.id, "incident_id": i.incident_id, "lead_user_id": i.lead_user_id, "rca_method": i.rca_method, "findings": i.findings, "status": i.status} for i in items], "total": len(items)}
 
         if operation == "incident_rca_get":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
+            from app.models.incidents import IncidentRCA as _IRCA
+            from sqlalchemy import select as _sel
             inc_id = path_params.get("incidentId")
-            items = repo.list_by_type(user.tenant_id, "incidents", "rca", limit=50)
-            rca_items = [r for r in items if r.payload.get("incident_id") == inc_id]
-            return {"items": [{"id": r.id, **r.payload} for r in rca_items]}
+            rcas = db.scalars(_sel(_IRCA).where(_IRCA.tenant_id == user.tenant_id, _IRCA.incident_id == inc_id)).all()
+            return {"items": [{"id": r.id, "incident_id": r.incident_id, "method": r.method, "root_cause": r.root_cause, "contributing_factors": r.contributing_factors, "status": r.status} for r in rcas]}
 
         if operation == "incident_corrective_actions_list":
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            items = repo.list_by_type(user.tenant_id, "incidents", "corrective_action", limit=500)
-            return {"items": [{"id": r.id, "status": r.status, **r.payload} for r in items], "total": len(items)}
+            from app.models.incidents import CorrectiveAction as _CA
+            from sqlalchemy import select as _sel
+            inc_id = path_params.get("incidentId")
+            q = _sel(_CA).where(_CA.tenant_id == user.tenant_id)
+            if inc_id: q = q.where(_CA.incident_id == inc_id)
+            cas = db.scalars(q.order_by(_CA.created_at.desc()).limit(500)).all()
+            return {"items": [{"id": c.id, "incident_id": c.incident_id, "title": c.title, "description": c.description, "assigned_to": c.assigned_to, "due_date": c.due_date, "status": c.status} for c in cas], "total": len(cas)}
 
         if operation == "incidents_analytics_get":
-            from app.models.incidents import Incident as _Inc
-            from sqlalchemy import select as _sel
+            from app.models.incidents import Incident as _Inc, CorrectiveAction as _CA
+            from sqlalchemy import select as _sel, func as _func
             all_incidents = db.scalars(_sel(_Inc).where(_Inc.tenant_id == user.tenant_id)).all()
             total = len(all_incidents)
-            by_type = {}
-            by_severity = {}
-            by_status = {}
+            by_type: dict = {}
+            by_severity: dict = {}
+            by_status: dict = {}
             for i in all_incidents:
                 by_type[i.incident_type] = by_type.get(i.incident_type, 0) + 1
                 by_severity[i.severity] = by_severity.get(i.severity, 0) + 1
                 by_status[i.status] = by_status.get(i.status, 0) + 1
-            from app.repositories.generic_repository import GenericRepository
-            repo = GenericRepository(db)
-            ca_items = repo.list_by_type(user.tenant_id, "incidents", "corrective_action", limit=500)
-            open_ca = len([c for c in ca_items if c.status in ("open", "in_progress")])
-            closed_ca = len([c for c in ca_items if c.status == "closed"])
+            open_ca = db.scalar(_sel(_func.count(_CA.id)).where(_CA.tenant_id == user.tenant_id, _CA.status.in_(["open","in_progress"]))) or 0
+            closed_ca = db.scalar(_sel(_func.count(_CA.id)).where(_CA.tenant_id == user.tenant_id, _CA.status == "closed")) or 0
             return {
                 "total_incidents": total,
                 "by_type": by_type,

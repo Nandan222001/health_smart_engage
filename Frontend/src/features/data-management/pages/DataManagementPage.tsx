@@ -1004,6 +1004,9 @@ function ExcelTab() {
   async function handleUpload() {
     if (!selectedFile) return;
     setResult(null);
+    let count = 0;
+    let uploadOk = false;
+    let errMsg = "";
     try {
       // Upload file to the real bulk import endpoint
       const formData = new FormData();
@@ -1024,38 +1027,37 @@ function ExcelTab() {
       );
       const uploadJson = await uploadRes.json().catch(() => ({}));
       const uploadData = uploadJson?.data ?? uploadJson;
-      const count: number = uploadData?.count ?? 0;
+      count = uploadData?.count ?? 0;
       const errors: string[] = uploadData?.errors ?? [];
 
-      if (!uploadRes.ok && count === 0) {
-        const errMsg = uploadData?.error || uploadData?.detail || uploadData?.message
+      if (!uploadRes.ok) {
+        errMsg = uploadData?.error || uploadData?.detail || uploadData?.message
           || `Server error ${uploadRes.status} — check the file format and try again.`;
-        setResult({ success: false, message: errMsg });
-        return;
+      } else if (count === 0) {
+        const hint = errors.length > 0 ? ` — ${errors[0]}` : " — check that column headers match the template.";
+        errMsg = `0 records imported${hint}`;
+      } else {
+        uploadOk = true;
+        const warn = errors.length > 0 ? ` (${errors.length} warning${errors.length > 1 ? "s" : ""})` : "";
+        errMsg = `${count} records imported successfully${warn}.`;
       }
+    } catch (e: unknown) {
+      errMsg = (e as Error).message || "Upload failed. Check the file format and try again.";
+    }
 
-      // Log the import in history
+    // Always log the attempt to import history (so users can see what was tried)
+    try {
       await createImport({
         file_name:         selectedFile.name,
         import_type:       "excel",
         data_type:         selectedEntity.label,
         records_estimated: count,
       }).unwrap();
+    } catch { /**/ }
 
-      if (count === 0) {
-        const hint = errors.length > 0 ? ` — ${errors[0]}` : " — check that column headers match the template.";
-        setResult({ success: false, message: `0 records imported${hint}` });
-        setSelectedFile(null);
-        refetchImports();
-        return;
-      }
-      const warn = errors.length > 0 ? ` (${errors.length} warning${errors.length > 1 ? "s" : ""})` : "";
-      setResult({ success: true, message: `${count} records imported successfully${warn}.` });
-      setSelectedFile(null);
-      refetchImports();
-    } catch (e: unknown) {
-      setResult({ success: false, message: (e as Error).message || "Upload failed. Check the file format and try again." });
-    }
+    setResult({ success: uploadOk, message: errMsg });
+    setSelectedFile(null);
+    refetchImports();
   }
   function handleDownloadTemplate(entity: EntityType) {
     const csv  = `${entity.fields.join(",")}\n${entity.sampleData}`;
@@ -1336,10 +1338,27 @@ interface DocRecord {
   file_name: string;
   file_type: string;
   category: DocCategory;
+  record_type?: string;
   size: string;
   uploaded_by: string;
   created_at?: string;
 }
+
+const DOC_RECORD_TYPES = [
+  "SOP / Standard Operating Procedure",
+  "Risk Assessment",
+  "Policy Document",
+  "Training Material / Manual",
+  "Incident Report",
+  "Audit Report / Checklist",
+  "CAPA Document",
+  "Permit Document",
+  "Inspection Report",
+  "Method Statement",
+  "Safety Procedure",
+  "Compliance Document",
+  "Other",
+];
 
 const DOC_SUB_TABS: { key: DocCategory; label: string; icon: React.ElementType; accept: string; color: string; bg: string; ext: string }[] = [
   { key: "pdf",  label: "PDF Documents",   icon: FileText,     accept: ".pdf",        color: "#EF4444", bg: "#FEF2F2", ext: "PDF"  },
@@ -1353,6 +1372,7 @@ function DocumentsTab({ initialSubTab }: { initialSubTab?: DocCategory }) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fetchedOnce, setFetchedOnce] = useState(false);
+  const [recordType, setRecordType] = useState<string>("");
   const fileInputRefs = useRef<Record<DocCategory, HTMLInputElement | null>>({ pdf: null, docs: null, ppt: null });
 
   const API_BASE_DOCS = (import.meta.env.VITE_API_URL as string || "/api/v1").replace(/\/$/, "");
@@ -1390,6 +1410,8 @@ function DocumentsTab({ initialSubTab }: { initialSubTab?: DocCategory }) {
     try {
       const form = new FormData();
       form.append("file", file);
+      form.append("category", subTab);
+      if (recordType) form.append("record_type", recordType);
       const res  = await fetch(`${API_BASE_DOCS}/org-admin/data-management/documents/upload`, {
         method: "POST",
         headers: getHeaders(),
@@ -1447,6 +1469,24 @@ function DocumentsTab({ initialSubTab }: { initialSubTab?: DocCategory }) {
         })}
       </div>
 
+      {/* Record Type selector */}
+      <div className="flex items-center gap-3">
+        <label className="text-[12px] font-bold uppercase tracking-widest flex-shrink-0" style={{ color: "#6B7280" }}>
+          Record Type
+        </label>
+        <select
+          value={recordType}
+          onChange={e => setRecordType(e.target.value)}
+          className="flex-1 max-w-xs rounded-xl border px-3 py-2 text-[13px] outline-none"
+          style={{ borderColor: recordType ? current.color : "#E3E9F6", background: "#FAFBFF", color: recordType ? "#111827" : "#9CA3AF" }}
+        >
+          <option value="">Select document type…</option>
+          {DOC_RECORD_TYPES.map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Upload zone */}
       <div className="rounded-2xl border-2 border-dashed p-8 text-center transition-colors"
         style={{ borderColor: current.color + "55", background: current.bg }}>
@@ -1457,6 +1497,11 @@ function DocumentsTab({ initialSubTab }: { initialSubTab?: DocCategory }) {
         <p className="text-xs mb-4" style={{ color: "#9CA3AF" }}>
           Accepted: {current.accept.replace(/\./g, "").toUpperCase().replace(/,/g, ", ")} — Max 50 MB per file
         </p>
+        {recordType && (
+          <p className="text-xs mb-4 font-semibold" style={{ color: current.color }}>
+            Tagged as: {recordType}
+          </p>
+        )}
         <label
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-opacity"
           style={{ background: current.color, color: "#fff", opacity: uploading ? 0.6 : 1 }}
@@ -1502,7 +1547,8 @@ function DocumentsTab({ initialSubTab }: { initialSubTab?: DocCategory }) {
             <thead>
               <tr style={{ background: "#F9FAFB" }}>
                 <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>File Name</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Type</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Record Type</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Format</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Size</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Uploaded By</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Date</th>
@@ -1515,8 +1561,18 @@ function DocumentsTab({ initialSubTab }: { initialSubTab?: DocCategory }) {
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
                       <current.icon className="w-4 h-4 flex-shrink-0" style={{ color: current.color }} />
-                      <span className="font-medium truncate max-w-[240px]" style={{ color: "#111827" }}>{doc.file_name}</span>
+                      <span className="font-medium truncate max-w-[200px]" style={{ color: "#111827" }}>{doc.file_name}</span>
                     </div>
+                  </td>
+                  <td className="px-5 py-3">
+                    {doc.record_type ? (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                        style={{ background: current.bg, color: current.color }}>
+                        {doc.record_type}
+                      </span>
+                    ) : (
+                      <span className="text-xs" style={{ color: "#D1D5DB" }}>—</span>
+                    )}
                   </td>
                   <td className="px-5 py-3">
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-bold uppercase"

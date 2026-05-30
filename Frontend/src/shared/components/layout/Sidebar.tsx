@@ -104,7 +104,14 @@ const SUPERADMIN_NAV: NavGroup[] = [
 // Org Admin — collapsible groups
 // ---------------------------------------------------------------------------
 
-interface OrgAdminSubItem { name: string; path: string; }
+interface OrgAdminSubItem {
+  name: string;
+  path: string;
+  /** If set, only show this item when this moduleKey is in user.orgModules (or orgModules is empty). */
+  moduleKey?: string;
+  /** If set, only show this item when user has this permission (or admin:*). */
+  requiredPermission?: string;
+}
 interface OrgAdminGroup  {
   icon: LucideIcon;
   items: OrgAdminSubItem[];
@@ -117,11 +124,10 @@ interface OrgAdminGroup  {
 const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   "Home": {
     icon: House,
-    // always visible — no permission or module required
     items: [
       { name: "Dashboard",         path: "/" },
-      { name: "Overview",          path: "/overview" },
-      { name: "Real-Time KPIs",    path: "/kpis" },
+      { name: "Overview",          path: "/overview",      moduleKey: "overview" },
+      { name: "Real-Time KPIs",    path: "/kpis",          moduleKey: "kpis"     },
       { name: "Notifications",     path: "/notifications" },
       { name: "Recent Activities", path: "/activities" },
     ],
@@ -311,7 +317,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
 
   const isOrgAdmin = !isSuperAdmin && user?.role === "Admin";
 
-  // Compute visible org admin groups dynamically based on backend permissions + modules
+  // Compute visible org admin groups + filter sub-items dynamically
   const visibleOrgAdminGroups = useMemo(() => {
     if (!isOrgAdmin) return {};
     const perms = user?.permissions ?? [];
@@ -321,15 +327,25 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
     // Super-admin-level permission or write-all → show everything
     const hasAdminStar = perms.includes("admin:*");
 
+    const itemVisible = (item: OrgAdminSubItem): boolean => {
+      if (noRestrictions || hasAdminStar) return true;
+      const permOk = !item.requiredPermission || perms.includes(item.requiredPermission);
+      const moduleOk = !item.moduleKey || modules.length === 0 || modules.includes(item.moduleKey);
+      return permOk && moduleOk;
+    };
+
     return Object.fromEntries(
-      Object.entries(ORG_ADMIN_GROUPS).filter(([, group]) => {
-        if (noRestrictions || hasAdminStar) return true;
-        // Check permission gate
-        const permOk = !group.requiredPermission || perms.includes(group.requiredPermission);
-        // Check module gate — if orgModules is non-empty, group's moduleKey must be in it
-        const moduleOk = !group.moduleKey || modules.length === 0 || modules.includes(group.moduleKey);
-        return permOk && moduleOk;
-      })
+      Object.entries(ORG_ADMIN_GROUPS)
+        .filter(([, group]) => {
+          if (noRestrictions || hasAdminStar) return true;
+          const permOk = !group.requiredPermission || perms.includes(group.requiredPermission);
+          const moduleOk = !group.moduleKey || modules.length === 0 || modules.includes(group.moduleKey);
+          return permOk && moduleOk;
+        })
+        .map(([name, group]) => [
+          name,
+          { ...group, items: group.items.filter(itemVisible) },
+        ])
     ) as Record<string, OrgAdminGroup>;
   }, [isOrgAdmin, user?.permissions, user?.orgModules]);
 

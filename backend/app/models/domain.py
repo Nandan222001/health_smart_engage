@@ -19,6 +19,17 @@ from app.models.workflow import WorkflowCase, WorkflowStageEvent, WorkflowApprov
 from app.models.outputs import Report, AlertRule, ExportJob, Integration
 from app.models.learning import MLModel, MLModelVersion, DetectedPattern, OperationalEvent
 from app.models.sync import MobileSyncItem
+from app.models.sites import Site
+from app.models.org_setup_data import (
+    OrgProfile, OrgComplianceSetup, OrgWorkflowConfig, OrgAIConfig,
+    OrgActivation, Department, OrgCustomRole, OrgUserRecord, OrgImportRecord,
+)
+from app.models.operations import (
+    Shift, HelpTicket, DataImport, ValidationLog, ApiIntegration,
+    SyncIntegration, Zone, EscalationRule, GeneratedReport,
+)
+from app.models.knowledge import KnowledgeChunk
+from app.models.incidents import IncidentRCA, CorrectiveAction
 
 __all__ = [
     "TenantScopedMixin", "OrganisationNode", "User", "Role",
@@ -26,10 +37,15 @@ __all__ = [
     "Vendor", "VendorDocument", "Asset", "AssetInspection",
     "RiskAssessment", "HazardObservation", "Permit", "PermitApproval",
     "AuditChecklist", "AuditExecution", "Finding", "Capa",
-    "Incident", "Investigation", "KnowledgeDocument", "FileObject",
+    "Incident", "Investigation", "IncidentRCA", "CorrectiveAction",
+    "KnowledgeDocument", "KnowledgeChunk", "FileObject",
     "AiConversation", "AIRecommendation", "PredictiveRiskScore",
     "WorkflowCase", "WorkflowStageEvent", "WorkflowApproval", "WorkflowCAPA",
     "WorkflowResolution", "WorkflowAlert", "Report", "AlertRule", "ExportJob",
     "Integration", "MLModel", "MLModelVersion", "DetectedPattern",
-    "OperationalEvent", "MobileSyncItem",
+    "OperationalEvent", "MobileSyncItem", "Site",
+    "OrgProfile", "OrgComplianceSetup", "OrgWorkflowConfig", "OrgAIConfig",
+    "OrgActivation", "Department", "OrgCustomRole", "OrgUserRecord", "OrgImportRecord",
+    "Shift", "HelpTicket", "DataImport", "ValidationLog", "ApiIntegration",
+    "SyncIntegration", "Zone", "EscalationRule", "GeneratedReport",
 ]

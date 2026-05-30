@@ -1,14 +1,14 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.route_factory import register_catalog_routes
 from app.core.database import get_db
 from app.core.security import CurrentUser, get_current_user
 from app.helpers.response import accepted
-from app.repositories.generic_repository import GenericRepository
+from app.models.knowledge import KnowledgeDocument
 
 router = APIRouter()
 
@@ -88,6 +88,8 @@ _EXT_CATEGORY = {
 )
 async def upload_document(
     file: UploadFile = File(...),
+    record_type: str = Form(default=None),
+    category: str = Form(default=None),
     user: Annotated[CurrentUser, Depends(get_current_user)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
@@ -100,26 +102,25 @@ async def upload_document(
     size_kb = len(content) / 1024
     size_label = f"{size_kb / 1024:.1f} MB" if size_kb > 1024 else f"{size_kb:.0f} KB"
 
-    repo = GenericRepository(db)
     doc_id = str(uuid.uuid4())
     title = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
 
-    repo.create(
+    doc = KnowledgeDocument(
+        id=doc_id,
         tenant_id=user.tenant_id,
-        module=_MODULE,
-        record_type=_DOC_RECORD_TYPE,
-        payload={
-            "id":          doc_id,
-            "file_name":   filename,
-            "file_type":   _ALLOWED_EXTENSIONS[ext],
-            "category":    _EXT_CATEGORY[ext],
-            "size":        size_label,
-            "uploaded_by": user.email or user.user_id,
-            "title":       title,
-            "indexed":     False,
-        },
+        title=title,
+        document_type=_ALLOWED_EXTENSIONS[ext],
+        version="1.0",
+        file_name=filename,
+        file_type=_ALLOWED_EXTENSIONS[ext],
+        category=category or _EXT_CATEGORY[ext],
+        size=size_label,
+        uploaded_by=user.email or user.user_id,
+        indexed=False,
         status="uploaded",
+        record_type=record_type,
     )
+    db.add(doc)
 
     # Extract text and index for AI knowledge search
     chunks_stored = 0
@@ -135,6 +136,8 @@ async def upload_document(
                 text=extracted,
                 db=db,
             )
+            if chunks_stored > 0:
+                doc.indexed = True
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning("Knowledge indexing failed for %s: %s", filename, exc)

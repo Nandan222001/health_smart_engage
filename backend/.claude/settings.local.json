@@ -5,7 +5,9 @@
       "Bash(python scripts/create_admin.py --email \"aapliweb@gmail.com\" --name \"Super Admin\" --password \"John@123\" --superadmin)",
       "Bash(python *)",
       "Read(//c/Users/megha/Downloads/OneDrive_2026-05-15/HSE DATA/Risk Assessment/Re_ Data Requirements from Client \\(6\\)/**)",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(cat)",
+      "Bash(bash /tmp/search_generic.sh)"
     ]
   }
 }
