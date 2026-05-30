@@ -144,7 +144,10 @@ class OrgSetupService:
                       4: "Users Setup", 5: "Workflow Configuration", 6: "Knowledge & Data Import", 7: "AI Configuration"}
 
         def _is_complete(step: int) -> bool:
-            if step == 1: return self._get_org_profile(tenant_id) is not None
+            if step == 1:
+                p = self._get_org_profile(tenant_id)
+                # Profile must exist AND have a non-empty org name to count as complete
+                return p is not None and bool(p.organization_name and p.organization_name.strip())
             if step == 2: return self._get_compliance_setup(tenant_id) is not None
             if step == 3: return self.db.scalars(select(Site).where(Site.tenant_id == tenant_id).limit(1)).first() is not None
             if step == 4: return self.db.scalars(select(OrgUserRecord).where(OrgUserRecord.tenant_id == tenant_id).limit(1)).first() is not None
@@ -178,7 +181,7 @@ class OrgSetupService:
         has_imports = self.db.scalars(select(OrgImportRecord).where(OrgImportRecord.tenant_id == tenant_id).limit(1)).first() is not None
 
         step_status = {
-            1: org_profile is not None,
+            1: org_profile is not None and bool(org_profile.organization_name and org_profile.organization_name.strip()),
             2: compliance is not None,
             3: has_sites,
             4: has_users,
@@ -245,25 +248,43 @@ class OrgSetupService:
     def get_step1(self, user: CurrentUser) -> dict:
         p = self._get_org_profile(user.tenant_id)
         if not p: return {}
-        return {"organizationName": p.organization_name, "industryType": p.industry_type, "employeeCount": p.employee_count, "officialEmail": p.official_email, "contactNumber": p.contact_number, "country": p.country, "headquartersAddress": p.headquarters_address}
+        result = {
+            "organizationName": p.organization_name,
+            "industryType": p.industry_type,
+            "employeeCount": p.employee_count,
+            "officialEmail": p.official_email,
+            "contactNumber": p.contact_number,
+            "country": p.country,
+            "headquartersAddress": p.headquarters_address,
+        }
+        if p.extra_fields:
+            result.update(p.extra_fields)
+        return result
 
     # ── step 2: compliance ────────────────────────────────────────────────────
 
     def save_step2(self, user: CurrentUser, data: dict) -> dict:
         err = self._check_prerequisite(user.tenant_id, 1)
         if err: return err
+        # Frontend sends applicableStandards; normalise to standards
+        standards = data.get("standards") or data.get("applicableStandards")
+        modules = data.get("modules_enabled") or data.get("modulesEnabled")
+        core_keys = {"standards", "applicableStandards", "modules_enabled", "modulesEnabled"}
+        extra = {k: v for k, v in data.items() if k not in core_keys} or None
         existing = self._get_compliance_setup(user.tenant_id)
         if existing:
-            existing.standards = data.get("standards", existing.standards)
-            existing.modules_enabled = data.get("modules_enabled", data.get("modulesEnabled", existing.modules_enabled))
-            existing.extra_fields = {k: v for k, v in data.items() if k not in ("standards","modules_enabled","modulesEnabled")} or None
+            if standards is not None:
+                existing.standards = standards
+            if modules is not None:
+                existing.modules_enabled = modules
+            existing.extra_fields = extra
             self.db.flush()
             return {"step": 2, "status": "saved", "record_id": existing.id}
         rec = OrgComplianceSetup(
             id=str(uuid4()), tenant_id=user.tenant_id,
-            standards=data.get("standards"),
-            modules_enabled=data.get("modules_enabled", data.get("modulesEnabled")),
-            extra_fields={k: v for k, v in data.items() if k not in ("standards","modules_enabled","modulesEnabled")} or None,
+            standards=standards,
+            modules_enabled=modules,
+            extra_fields=extra,
         )
         self.db.add(rec); self.db.flush()
         return {"step": 2, "status": "saved", "record_id": rec.id}
@@ -271,7 +292,13 @@ class OrgSetupService:
     def get_step2(self, user: CurrentUser) -> dict:
         c = self._get_compliance_setup(user.tenant_id)
         if not c: return {}
-        return {"standards": c.standards or {}, "modulesEnabled": c.modules_enabled or {}}
+        result = {
+            "applicableStandards": c.standards or [],
+            "modulesEnabled": c.modules_enabled or {},
+        }
+        if c.extra_fields:
+            result.update(c.extra_fields)
+        return result
 
     # ── step 3: sites ─────────────────────────────────────────────────────────
 
@@ -446,7 +473,14 @@ class OrgSetupService:
     def get_step5(self, user: CurrentUser) -> dict:
         w = self._get_workflow_config(user.tenant_id)
         if not w: return {}
-        return {"approval_levels": w.approval_levels or {}, "escalation_rules": w.escalation_rules or {}, "notification_settings": w.notification_settings or {}}
+        result = {
+            "approval_levels": w.approval_levels or {},
+            "escalation_rules": w.escalation_rules or {},
+            "notification_settings": w.notification_settings or {},
+        }
+        if w.extra_fields:
+            result.update(w.extra_fields)
+        return result
 
     # ── step 6: knowledge upload ──────────────────────────────────────────────
 
@@ -455,8 +489,8 @@ class OrgSetupService:
         if err: return err
         doc = KnowledgeDocument(
             id=str(uuid4()), tenant_id=user.tenant_id,
-            title=data.get("title", data.get("file_name", "Document")),
-            document_type=data.get("document_type", data.get("file_type", "Document")),
+            title=data.get("title", data.get("name", data.get("file_name", "Document"))),
+            document_type=data.get("document_type", data.get("type", data.get("file_type", "Document"))),
             version=data.get("version", "1.0"),
             file_name=data.get("file_name"), file_type=data.get("file_type"),
             category=data.get("category"), size=data.get("size"),
@@ -1008,9 +1042,10 @@ class OrgSetupService:
         if not data.get("confirmed", False):
             return {"error": "Activation requires confirmed=true"}
 
-        err = self._check_prerequisite(user.tenant_id, 1)
-        if err:
-            return {"error": f"Cannot activate: {err['error']}", "prerequisite_step": err["prerequisite_step"]}
+        for required in [1, 2, 3, 4, 5]:
+            err = self._check_prerequisite(user.tenant_id, required)
+            if err:
+                return {"error": f"Cannot activate: complete step {required} first", "prerequisite_step": required}
 
         existing_act = self._get_activation(user.tenant_id)
         if existing_act:

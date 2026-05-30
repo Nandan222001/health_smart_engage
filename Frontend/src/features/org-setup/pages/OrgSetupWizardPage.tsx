@@ -26,10 +26,13 @@ import {
 import {
   useGetOrgSetupProgressQuery,
   useGetOrgSetupStep1Query,
+  useGetOrgSetupStep2Query,
   useGetOrgSetupStep3SitesQuery,
   useGetOrgSetupStep4UsersQuery,
+  useGetOrgSetupStep5Query,
   useGetOrgSetupStep6DocumentsQuery,
   useGetOrgSetupStep6aImportsQuery,
+  useGetOrgSetupStep7Query,
   useSaveOrgSetupStep1Mutation,
   useSaveOrgSetupStep2Mutation,
   useCreateOrgSetupSiteMutation,
@@ -280,9 +283,11 @@ const cardStyle = { borderColor: "#E3E9F6" };
 function StepIndicator({
   currentStep,
   completedSteps,
+  onStepClick,
 }: {
   currentStep: number;
   completedSteps: number[];
+  onStepClick?: (step: number) => void;
 }) {
   return (
     <div className="bg-white rounded-2xl border p-5 overflow-x-auto" style={{ borderColor: "#E3E9F6" }}>
@@ -291,12 +296,13 @@ function StepIndicator({
           const step = idx + 1;
           const isActive = step === currentStep;
           const isDone = completedSteps.includes(step);
+          const isClickable = isDone && onStepClick;
 
           return (
             <div key={step} className="flex items-center">
               <div className="flex flex-col items-center gap-1.5">
                 <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all"
+                  className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${isClickable ? "cursor-pointer hover:opacity-80" : ""}`}
                   style={
                     isDone
                       ? { background: "#10B981", color: "#fff" }
@@ -304,6 +310,8 @@ function StepIndicator({
                       ? { background: "linear-gradient(135deg, #4A57B9, #6F80E8)", color: "#fff", boxShadow: "0 4px 12px rgba(74,87,185,0.35)" }
                       : { background: "#F3F4F6", color: "#9CA3AF" }
                   }
+                  onClick={() => isClickable && onStepClick(step)}
+                  title={isClickable ? `Go back to ${label}` : undefined}
                 >
                   {isDone ? <CheckCircle2 className="w-4 h-4" /> : <span>{step}</span>}
                 </div>
@@ -448,14 +456,17 @@ function Step1({
     const result = await parseExcel(fd);
     // baseApi unwraps the envelope: result.data is already the org fields dict directly
     const parsed = "data" in result ? (result.data as Record<string, string>) : {};
-    const fieldCount = Object.keys(parsed).filter((k) => parsed[k]).length;
+    const backendError = parsed._error as string | undefined;
+    const fieldCount = Object.keys(parsed).filter((k) => parsed[k] && k !== "_error").length;
     if (fieldCount > 0) {
-      setForm((f) => ({ ...f, ...parsed }));
+      const { _error: _e, ...fields } = parsed;
+      void _e;
+      setForm((f) => ({ ...f, ...fields }));
       setExcelStatus("success");
       setExcelMsg(`${fieldCount} fields imported — review and edit below, then click Next`);
     } else {
       setExcelStatus("error");
-      setExcelMsg("Could not read org details from file. Make sure it uses the template format.");
+      setExcelMsg(backendError || "Could not read org details from file. Make sure it uses the template format.");
     }
     if (excelRef.current) excelRef.current.value = "";
   };
@@ -481,7 +492,18 @@ function Step1({
     }
   };
 
+  const [step1Error, setStep1Error] = useState("");
+
   const handleNext = async () => {
+    if (!form.organizationName.trim()) {
+      setStep1Error("Organization Name is required before proceeding.");
+      return;
+    }
+    if (!form.officialEmail.trim()) {
+      setStep1Error("Official Email is required before proceeding.");
+      return;
+    }
+    setStep1Error("");
     await saveStep1({
       ...form,
       employeeCount: Number(form.employeeCount) || 0,
@@ -673,8 +695,13 @@ function Step1({
         </>
       )}
 
+      {step1Error && (
+        <div className="px-4 py-2 rounded-lg text-xs font-semibold" style={{ background: "#FEF2F2", color: "#EF4444" }}>
+          {step1Error}
+        </div>
+      )}
       <div className="flex justify-end">
-        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleNext} disabled={saving || (active === "excel" && excelStatus === "idle" && !form.organizationName)}>
+        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleNext} disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
           Next Step <ChevronRight className="w-4 h-4" />
         </button>
@@ -693,6 +720,7 @@ function Step2({
   onBack: () => void;
 }) {
   const [saveStep2, { isLoading }] = useSaveOrgSetupStep2Mutation();
+  const { data: saved2 } = useGetOrgSetupStep2Query();
 
   const [selectedStandards, setSelectedStandards] = useState<string[]>([]);
   const [regulatoryRegion, setRegulatoryRegion] = useState("");
@@ -706,6 +734,22 @@ function Step2({
   const [capaCritical, setCapaCritical] = useState("");
   const [capaStandard, setCapaStandard] = useState("");
   const [selectedPermits, setSelectedPermits] = useState<string[]>([]);
+  const [step2Error, setStep2Error] = useState("");
+
+  // Pre-fill from saved data
+  useEffect(() => {
+    if (saved2 && Object.keys(saved2).length > 0) {
+      const s = saved2 as Record<string, unknown>;
+      if (Array.isArray(s.applicableStandards)) setSelectedStandards(s.applicableStandards as string[]);
+      if (typeof s.regulatoryRegion === "string") setRegulatoryRegion(s.regulatoryRegion);
+      if (typeof s.auditFrequency === "string") setAuditFrequency(s.auditFrequency);
+      if (s.capaSlaCriticalDays != null) setCapaCritical(String(s.capaSlaCriticalDays));
+      if (s.capaSlaStandardDays != null) setCapaStandard(String(s.capaSlaStandardDays));
+      if (Array.isArray(s.permitTypes)) setSelectedPermits(s.permitTypes as string[]);
+      if (Array.isArray(s.incidentSeverityMatrix)) setSeverityMatrix(s.incidentSeverityMatrix as typeof severityMatrix);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved2]);
 
   const toggleStandard = (s: string) =>
     setSelectedStandards((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -718,6 +762,11 @@ function Step2({
   };
 
   const handleNext = async () => {
+    if (selectedStandards.length === 0) {
+      setStep2Error("Select at least one applicable standard before proceeding.");
+      return;
+    }
+    setStep2Error("");
     await saveStep2({
       applicableStandards: selectedStandards,
       regulatoryRegion,
@@ -874,6 +923,11 @@ function Step2({
         </div>
       </div>
 
+      {step2Error && (
+        <div className="px-4 py-2 rounded-lg text-xs font-semibold" style={{ background: "#FEF2F2", color: "#EF4444" }}>
+          {step2Error}
+        </div>
+      )}
       <div className="flex justify-between">
         <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={onBack}>Back</button>
         <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleNext} disabled={isLoading}>
@@ -1054,9 +1108,14 @@ function Step3({
         )}
       </div>
 
+      {sites.length === 0 && !sitesLoading && (
+        <div className="px-4 py-2 rounded-lg text-xs font-semibold" style={{ background: "#FEF2F2", color: "#EF4444" }}>
+          Add at least one site before proceeding to the next step.
+        </div>
+      )}
       <div className="flex justify-between">
         <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={onBack}>Back</button>
-        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={onNext}>
+        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={onNext} disabled={sites.length === 0}>
           Next Step <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -1287,9 +1346,14 @@ function Step4({
         )}
       </div>
 
+      {users.length === 0 && !usersLoading && (
+        <div className="px-4 py-2 rounded-lg text-xs font-semibold" style={{ background: "#FEF2F2", color: "#EF4444" }}>
+          Add at least one user before proceeding to the next step.
+        </div>
+      )}
       <div className="flex justify-between">
         <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={onBack}>Back</button>
-        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={onNext}>
+        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={onNext} disabled={users.length === 0}>
           Next Step <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -1309,12 +1373,32 @@ function Step5({
   onBack: () => void;
 }) {
   const [saveStep5, { isLoading }] = useSaveOrgSetupStep5Mutation();
+  const { data: saved5 } = useGetOrgSetupStep5Query();
 
   const initialWorkflows: WorkflowState = {};
   WORKFLOW_CARDS.forEach(({ key }) => {
     initialWorkflows[key] = { enabled: true, config: "", expanded: false };
   });
   const [workflows, setWorkflows] = useState<WorkflowState>(initialWorkflows);
+
+  // Pre-fill from saved data
+  useEffect(() => {
+    if (saved5 && Object.keys(saved5).length > 0) {
+      const s = saved5 as Record<string, unknown>;
+      if (Array.isArray(s.workflows)) {
+        const saved = s.workflows as { name: string; enabled: boolean; config: string }[];
+        setWorkflows((prev) => {
+          const next = { ...prev };
+          saved.forEach(({ name, enabled, config }) => {
+            const card = WORKFLOW_CARDS.find((c) => c.label === name);
+            if (card) next[card.key] = { enabled, config, expanded: false };
+          });
+          return next;
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved5]);
 
   const toggle = (key: string, field: "enabled" | "expanded") => {
     setWorkflows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: !prev[key][field] } }));
@@ -1751,9 +1835,14 @@ function Step6({
         </>
       )}
 
+      {documents.length === 0 && imports.length === 0 && !docsLoading && !importsLoading && (
+        <div className="px-4 py-2 rounded-lg text-xs font-semibold" style={{ background: "#FFFBEB", color: "#D97706" }}>
+          Upload at least one knowledge document or import a data module before proceeding.
+        </div>
+      )}
       <div className="flex justify-between">
         <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={onBack}>Back</button>
-        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={onNext}>
+        <button className={primaryBtnCls} style={primaryBtnStyle} onClick={onNext} disabled={documents.length === 0 && imports.length === 0}>
           Next Step <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -1771,10 +1860,30 @@ function Step7({
   onBack: () => void;
 }) {
   const [saveStep7, { isLoading }] = useSaveOrgSetupStep7Mutation();
+  const { data: saved7 } = useGetOrgSetupStep7Query();
 
   const initialState: Record<string, boolean> = {};
   AI_FEATURES.forEach(({ key }) => { initialState[key] = true; });
   const [features, setFeatures] = useState<Record<string, boolean>>(initialState);
+
+  // Pre-fill from saved data
+  useEffect(() => {
+    if (saved7 && Object.keys(saved7).length > 0) {
+      const s = saved7 as Record<string, unknown>;
+      if (Array.isArray(s.aiFeatures)) {
+        const saved = s.aiFeatures as { name: string; enabled: boolean }[];
+        setFeatures((prev) => {
+          const next = { ...prev };
+          saved.forEach(({ name, enabled }) => {
+            const feat = AI_FEATURES.find((f) => f.label === name);
+            if (feat) next[feat.key] = enabled;
+          });
+          return next;
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved7]);
 
   const toggle = (key: string) => setFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -2015,20 +2124,36 @@ export function OrgSetupWizardPage() {
   return (
     <div className="p-6 space-y-5" style={{ background: "#F6F8FC", minHeight: "100vh" }}>
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}>
-          <Building2 className="w-5 h-5 text-white" />
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #4A57B9, #6F80E8)" }}>
+            <Building2 className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: "#111827" }}>Organization Setup</h1>
+            <p className="text-sm" style={{ color: "#6B7280" }}>
+              Step {currentStep} of 8 — {stepTitles[currentStep - 1]}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#111827" }}>Organization Setup</h1>
-          <p className="text-sm" style={{ color: "#6B7280" }}>
-            Step {currentStep} of 8 — {stepTitles[currentStep - 1]}
-          </p>
-        </div>
+        {completedSteps.length > 0 && currentStep > 1 && (
+          <button
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors"
+            style={{ borderColor: "#E3E9F6", color: "#6B7280", background: "#fff" }}
+            onClick={() => { setCurrentStep(1); setCompletedSteps([]); setProgressLoaded(false); }}
+            title="Clear progress and restart from Step 1"
+          >
+            ↺ Start Over
+          </button>
+        )}
       </div>
 
-      {/* Step Indicator */}
-      <StepIndicator currentStep={currentStep} completedSteps={completedSteps} />
+      {/* Step Indicator — click any green step to go back to it */}
+      <StepIndicator
+        currentStep={currentStep}
+        completedSteps={completedSteps}
+        onStepClick={(step) => setCurrentStep(step)}
+      />
 
       {/* Step Content */}
       {currentStep === 1 && (

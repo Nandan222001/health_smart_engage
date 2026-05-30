@@ -113,18 +113,18 @@ export function OrgAdminDashboard() {
   const totalContractors = orgUsers.filter((u: Record<string, unknown>) => u.role === "Contractor").length;
 
   const kpiMetrics = [
-    { label: "Total Employees",       value: orgUsers.length,                                         icon: Users,       color: "#1D4ED8", bg: "#DBEAFE" },
-    { label: "Active Workers on Site", value: Math.round(orgUsers.length * 0.85),                    icon: UserCheck,   color: "#059669", bg: "#D1FAE5" },
-    { label: "Total Contractors",     value: totalContractors,                                         icon: Briefcase,   color: "#D97706", bg: "#FEF3C7" },
-    { label: "Total Sites",           value: sites.length,                                             icon: MapPin,      color: "#4A57B9", bg: "#EEF2FF" },
-    { label: "Open Incidents",        value: findKpi("open_incidents")?.value ?? openIncidents.length, icon: AlertTriangle, color: "#DC2626", bg: "#FEE2E2" },
-    { label: "High Severity Incidents", value: criticalInc.length,                                    icon: ShieldAlert, color: "#991B1B", bg: "#FEF2F2" },
-    { label: "Near Miss Reports",     value: findKpi("near_miss_rate")?.value ?? unsafeActs.length,   icon: Info,        color: "#2563EB", bg: "#EFF6FF" },
-    { label: "Active Work Permits",   value: findKpi("ptw_active")?.value ?? activePermits.length,    icon: FileText,    color: "#0891B2", bg: "#ECFEFF" },
-    { label: "Pending Audits",        value: audits.filter(a => a.status === "open" || a.status === "planned").length, icon: ClipboardCheck, color: "#7C3AED", bg: "#EDE9FE" },
-    { label: "Open CAPA",             value: findKpi("open_capas")?.value ?? openCAPAs.length,        icon: ListTodo,    color: "#D97706", bg: "#FEF3C7" },
-    { label: "Compliance %",          value: `${findKpi("compliance_rate")?.value ?? 92}%`,           icon: GraduationCap, color: "#10B981", bg: "#ECFDF5" },
-    { label: "Open Hazards",          value: hazards.filter(h => h.status === "open" || h.status === "logged").length, icon: Target, color: "#F59E0B", bg: "#FFFBEB" },
+    { label: "Total Employees",        value: findKpi("total_employees")?.value ?? orgUsers.length,                                          icon: Users,         color: "#1D4ED8", bg: "#DBEAFE" },
+    { label: "Active Workers on Site", value: findKpi("active_workers")?.value ?? orgUsers.length,                                           icon: UserCheck,     color: "#059669", bg: "#D1FAE5" },
+    { label: "Total Contractors",      value: totalContractors,                                                                               icon: Briefcase,     color: "#D97706", bg: "#FEF3C7" },
+    { label: "Total Sites",            value: sites.length,                                                                                   icon: MapPin,        color: "#4A57B9", bg: "#EEF2FF" },
+    { label: "Open Incidents",         value: findKpi("open_incidents")?.value ?? openIncidents.length,                                       icon: AlertTriangle, color: "#DC2626", bg: "#FEE2E2" },
+    { label: "High Severity Incidents",value: criticalInc.length,                                                                             icon: ShieldAlert,   color: "#991B1B", bg: "#FEF2F2" },
+    { label: "Near Miss Reports",      value: findKpi("near_miss_count")?.value ?? unsafeActs.length,                                         icon: Info,          color: "#2563EB", bg: "#EFF6FF" },
+    { label: "Active Work Permits",    value: findKpi("ptw_active")?.value ?? activePermits.length,                                           icon: FileText,      color: "#0891B2", bg: "#ECFEFF" },
+    { label: "Pending Audits",         value: audits.filter(a => a.status === "open" || a.status === "planned").length,                       icon: ClipboardCheck,color: "#7C3AED", bg: "#EDE9FE" },
+    { label: "Open CAPA",              value: findKpi("open_capas")?.value ?? openCAPAs.length,                                               icon: ListTodo,      color: "#D97706", bg: "#FEF3C7" },
+    { label: "Compliance %",           value: `${findKpi("compliance_rate")?.value ?? 0}%`,                                                   icon: GraduationCap, color: "#10B981", bg: "#ECFDF5" },
+    { label: "Open Hazards",           value: hazards.filter(h => h.status === "open" || h.status === "logged").length,                       icon: Target,        color: "#F59E0B", bg: "#FFFBEB" },
   ];
 
   // ── AI Alerts — derived from real DB data ─────────────────────────────────

@@ -99,8 +99,14 @@ def _parse_file(content: bytes, filename: str, module: str = "") -> list[dict]:
     # Excel (.xlsx / .xls)
     try:
         import openpyxl
+    except ImportError:
+        raise ValueError("openpyxl not installed – please upload a CSV file instead")
+    try:
         wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    except Exception as exc:
+        raise ValueError(f"Could not open Excel file: {exc}") from exc
 
+    try:
         # Modules that split data across multiple sheets — combine them all
         combine_names = _MODULE_COMBINE_SHEETS.get(module, [])
         if combine_names:
@@ -121,8 +127,8 @@ def _parse_file(content: bytes, filename: str, module: str = "") -> list[dict]:
 
         # Fall back to active sheet
         return _parse_excel_sheet(wb.active)
-    except ImportError:
-        raise ValueError("openpyxl not installed – please upload a CSV file instead")
+    except Exception as exc:
+        raise ValueError(f"Error reading Excel sheet: {exc}") from exc
 
 
 def _normalise(row: dict, *keys: str) -> str:
@@ -252,27 +258,55 @@ async def hrms_import(
 # ── Step 1: Excel parse ───────────────────────────────────────────────────────
 
 _FIELD_MAP = {
+    # Organisation name
     "organization name": "organizationName",
+    "organisation name": "organizationName",
     "org name": "organizationName",
     "company name": "organizationName",
+    "company": "organizationName",
     "name": "organizationName",
+    # Industry
     "industry type": "industryType",
     "industry": "industryType",
+    "sector": "industryType",
+    # Employee count
     "employee count": "employeeCount",
     "employees": "employeeCount",
+    "number of employees": "employeeCount",
+    "no. of employees": "employeeCount",
+    "headcount": "employeeCount",
+    # Sites
     "number of sites": "numberOfSites",
+    "no. of sites": "numberOfSites",
+    "no of sites": "numberOfSites",
     "sites": "numberOfSites",
+    "total sites": "numberOfSites",
+    # Email
     "official email": "officialEmail",
+    "contact email": "officialEmail",
     "email": "officialEmail",
+    "email address": "officialEmail",
+    # Phone
     "contact number": "contactNumber",
+    "contact no": "contactNumber",
+    "contact no.": "contactNumber",
     "phone": "contactNumber",
+    "phone number": "contactNumber",
     "contact": "contactNumber",
+    "mobile": "contactNumber",
+    # Country
     "country": "country",
+    # Timezone
     "timezone": "timezone",
     "time zone": "timezone",
+    # Address
     "headquarters address": "headquartersAddress",
-    "address": "headquartersAddress",
+    "headquarters": "headquartersAddress",
     "hq address": "headquartersAddress",
+    "hq": "headquartersAddress",
+    "address": "headquartersAddress",
+    "head office address": "headquartersAddress",
+    "registered address": "headquartersAddress",
 }
 
 
@@ -283,18 +317,30 @@ async def parse_org_excel(
     db: Annotated[Session, Depends(get_db)] = None,
 ):
     content = await file.read()
-    rows = _parse_file(content, file.filename or "upload.csv")
+    if not content:
+        return {"success": False, "data": {"_error": "Uploaded file is empty"}}
+
+    try:
+        rows = _parse_file(content, file.filename or "upload.csv")
+    except ValueError as exc:
+        return {"success": False, "data": {"_error": str(exc)}}
+    except Exception as exc:
+        return {"success": False, "data": {"_error": f"Failed to parse file: {exc}"}}
+
+    if not rows:
+        return {"success": False, "data": {"_error": "No data rows found in file"}}
+
     result: dict = {}
 
     # Support two layouts:
     # 1. Key-value pairs: rows have "Field" and "Value" columns
     # 2. Header row with org field names as columns (single data row)
-    if rows and "field" in {k.lower().strip() for k in rows[0].keys()}:
+    if "field" in {k.lower().strip() for k in rows[0].keys()}:
         for row in rows:
             field = str(row.get("Field") or row.get("field") or "").lower().strip()
             value = str(row.get("Value") or row.get("value") or "").strip()
             mapped = _FIELD_MAP.get(field)
-            if mapped:
+            if mapped and value:
                 result[mapped] = value
     else:
         for row in rows[:1]:
@@ -302,6 +348,13 @@ async def parse_org_excel(
                 mapped = _FIELD_MAP.get(col.lower().strip())
                 if mapped and val:
                     result[mapped] = str(val).strip()
+
+    if not result:
+        sample_keys = list(rows[0].keys())[:10]
+        return {
+            "success": False,
+            "data": {"_error": f"No recognised fields found. Column/field names in your file: {sample_keys}"},
+        }
 
     return {"success": True, "data": result}
 

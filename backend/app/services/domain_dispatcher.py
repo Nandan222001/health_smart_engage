@@ -1580,7 +1580,11 @@ class DomainDispatcher:
             emp_count = db.scalar(sa_select(func.count()).where(_Emp.tenant_id == user.tenant_id)) or 0
             users_count = max(our_count, emp_count)
 
-            org_name = step1.get("organizationName") or (tenant.name if tenant else "")
+            # Use only the explicitly saved org profile fields — never fall back to
+            # tenant.name / tenant.industry which may contain registration defaults
+            # that differ from what the admin entered during org setup.
+            org_name = step1.get("organizationName") or ""
+            industry  = step1.get("industryType") or ""
 
             # Real incident + compliance counts
             from app.models.incidents import Incident as _Inc
@@ -1603,7 +1607,7 @@ class DomainDispatcher:
 
             return {
                 "orgName": org_name,
-                "industry": step1.get("industryType") or (tenant.industry if tenant else ""),
+                "industry": industry,
                 "country": step1.get("country", ""),
                 "timezone": step1.get("timezone", ""),
                 "headquartersAddress": step1.get("headquartersAddress", ""),
