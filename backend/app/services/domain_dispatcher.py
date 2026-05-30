@@ -704,16 +704,18 @@ class DomainDispatcher:
         if operation == "org_admin_api_integrations_create":
             from app.models.operations import ApiIntegration as _AI
             import uuid as _uuid
+            # Frontend sends `type`; model column is `integration_type`
+            itype = data.get("type") or data.get("integration_type")
+            core_keys = {"name", "type", "integration_type", "endpoint_url", "api_key", "auth_type", "is_active"}
             ai = _AI(
                 id=str(_uuid.uuid4()), tenant_id=user.tenant_id,
                 name=data.get("name", "Integration"),
-                integration_type=data.get("integration_type"),
+                integration_type=itype,
                 endpoint_url=data.get("endpoint_url"),
                 api_key=data.get("api_key"),
                 is_active=data.get("is_active", True),
                 records_synced=0,
-                extra_fields={k: v for k, v in data.items() if k not in (
-                    "name","integration_type","endpoint_url","api_key","is_active")} or None,
+                extra_fields={k: v for k, v in data.items() if k not in core_keys} or None,
             )
             db.add(ai); db.flush()
             return {"status": "created", "id": ai.id}
@@ -724,8 +726,16 @@ class DomainDispatcher:
             integration_id = path_params.get("integrationId")
             ai = db.scalars(sa_select(_AI).where(_AI.id == integration_id, _AI.tenant_id == user.tenant_id)).first()
             if ai:
-                for k, v in data.items():
-                    if hasattr(ai, k): setattr(ai, k, v)
+                # Map frontend `type` to model column `integration_type`
+                mapped = {("integration_type" if k == "type" else k): v for k, v in data.items()}
+                for k, v in mapped.items():
+                    if hasattr(ai, k):
+                        setattr(ai, k, v)
+                # Persist extra fields (auth_type, sync_frequency, description, etc.)
+                extra_keys = {"auth_type", "sync_frequency", "description"}
+                extras = {k: v for k, v in data.items() if k in extra_keys}
+                if extras:
+                    ai.extra_fields = {**(ai.extra_fields or {}), **extras}
                 db.flush()
             return {"status": "updated", "id": integration_id}
 
@@ -2073,8 +2083,23 @@ class DomainDispatcher:
             from app.models.operations import ApiIntegration as _AI
             from sqlalchemy import select as sa_select
             integrations = db.scalars(sa_select(_AI).where(_AI.tenant_id == user.tenant_id).order_by(_AI.created_at.desc()).limit(100)).all()
-            items = [{"id": i.id, "name": i.name, "integration_type": i.integration_type, "endpoint_url": i.endpoint_url, "is_active": i.is_active, "last_sync": i.last_sync, "records_synced": i.records_synced} for i in integrations]
-            return {"items": items}
+            def _ai_dict(i: _AI) -> dict:
+                ex = i.extra_fields or {}
+                return {
+                    "id": i.id,
+                    "name": i.name,
+                    "type": i.integration_type,           # frontend expects `type`
+                    "integration_type": i.integration_type,
+                    "endpoint_url": i.endpoint_url,
+                    "auth_type": ex.get("auth_type", i.api_key and "api_key" or "none"),
+                    "is_active": i.is_active,
+                    "last_sync": i.last_sync,
+                    "records_synced": i.records_synced,
+                    "sync_frequency": ex.get("sync_frequency"),
+                    "description": ex.get("description"),
+                    "created_at": i.created_at.isoformat() if i.created_at else None,
+                }
+            return {"items": [_ai_dict(i) for i in integrations]}
 
         if operation == "org_admin_tickets_list":
             from app.models.operations import HelpTicket as _HT

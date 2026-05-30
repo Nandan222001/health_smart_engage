@@ -63,6 +63,8 @@ export const dataManagementApi = baseApi.injectEndpoints({
     listImports: builder.query<ImportRecord[], void>({
       query: () => "/org-admin/data-management/imports",
       providesTags: ["Import"],
+      transformResponse: (raw: { items?: ImportRecord[] } | ImportRecord[]) =>
+        Array.isArray(raw) ? raw : (raw?.items ?? []),
     }),
 
     createImport: builder.mutation<{ status: string; id: string; message: string }, {
@@ -78,6 +80,8 @@ export const dataManagementApi = baseApi.injectEndpoints({
     listValidationLogs: builder.query<ValidationLog[], void>({
       query: () => "/org-admin/data-management/validation-logs",
       providesTags: ["Import"],
+      transformResponse: (raw: { items?: ValidationLog[] } | ValidationLog[]) =>
+        Array.isArray(raw) ? raw : (raw?.items ?? []),
     }),
 
     getSyncStatus: builder.query<SyncStatusData, void>({
@@ -93,6 +97,13 @@ export const dataManagementApi = baseApi.injectEndpoints({
     listApiIntegrations: builder.query<ApiIntegration[], void>({
       query: () => "/org-admin/data-management/api-integrations",
       providesTags: ["ApiIntegration"],
+      transformResponse: (raw: { items?: (Omit<ApiIntegration, "type"> & { integration_type?: string })[] } | ApiIntegration[]) => {
+        const arr = Array.isArray(raw) ? raw : (raw?.items ?? []);
+        return arr.map((item) => ({
+          ...item,
+          type: (item as { integration_type?: string; type?: string }).integration_type ?? (item as { type?: string }).type ?? "",
+        })) as ApiIntegration[];
+      },
     }),
 
     createApiIntegration: builder.mutation<{ status: string; id: string }, {
