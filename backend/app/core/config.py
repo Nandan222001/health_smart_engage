@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "replace-with-azure-key-vault-secret"
     jwt_algorithm: str = "HS256"
     oidc_jwks_url: str = ""
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = 480
 
     allowed_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 

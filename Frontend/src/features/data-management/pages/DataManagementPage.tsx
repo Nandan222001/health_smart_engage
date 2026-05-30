@@ -8,6 +8,7 @@ import {
   PenLine, Plug, Server, UserCheck, Timer, Wifi, Building2,
   Code2, Plus, Trash2, ChevronRight, CheckSquare, Save,
   RotateCcw, Link, X, FolderOpen, Presentation, BookMarked,
+  GraduationCap, AlertOctagon,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -123,6 +124,89 @@ const MANUAL_MODULES: ManualModule[] = [
       { label: "Assigned To",  key: "assigned_to", type: "email",  placeholder: "assignee@company.com" },
       { label: "Due Date",     key: "due_date",    type: "date",   required: true },
       { label: "Source Type",  key: "source_type", type: "select", options: ["audit","incident","inspection","near_miss","risk_assessment"] },
+    ],
+  },
+  {
+    id: "training", label: "Training", icon: GraduationCap, color: "#7C3AED", bg: "#F5F3FF",
+    endpoint: "/training/requirements",
+    fields: [
+      { label: "Training Name",          key: "training_name",     type: "text",   placeholder: "e.g. Fire Safety Awareness", required: true },
+      { label: "Role",                   key: "role_name",         type: "text",   placeholder: "e.g. All Staff",             required: true },
+      { label: "Validity (days)",        key: "validity_days",     type: "number", placeholder: "365" },
+      { label: "Mandatory",              key: "is_mandatory",      type: "select", options: ["true","false"] },
+      { label: "Description",            key: "description",       type: "textarea", placeholder: "Training objectives..." },
+    ],
+  },
+  {
+    id: "employees", label: "Employees", icon: UserCheck, color: "#0891B2", bg: "#ECFEFF",
+    endpoint: "/employees",
+    fields: [
+      { label: "Full Name",         key: "full_name",         type: "text",   placeholder: "e.g. James Thompson",  required: true },
+      { label: "Employee ID",       key: "employee_id",       type: "text",   placeholder: "EMP-001" },
+      { label: "Job Title",         key: "job_title",         type: "text",   placeholder: "e.g. Safety Officer",  required: true },
+      { label: "Department",        key: "department",        type: "text",   placeholder: "e.g. Operations",      required: true },
+      { label: "Email",             key: "email",             type: "email",  placeholder: "james@org.com" },
+      { label: "Employment Type",   key: "employment_type",   type: "select", options: ["Full-Time","Part-Time","Contractor","Intern"] },
+    ],
+  },
+  {
+    id: "hazards", label: "Hazards", icon: AlertOctagon, color: "#DC2626", bg: "#FEF2F2",
+    endpoint: "/hazards",
+    fields: [
+      { label: "Hazard Title",  key: "title",       type: "text",   placeholder: "e.g. Slippery walkway",    required: true },
+      { label: "Type",          key: "type",        type: "select", options: ["physical","chemical","biological","ergonomic","electrical","fire","environmental"], required: true },
+      { label: "Severity",      key: "severity",    type: "select", options: ["low","medium","high","critical"], required: true },
+      { label: "Location",      key: "location_id", type: "text",   placeholder: "Zone 4 / Site A" },
+      { label: "Description",   key: "description", type: "textarea", placeholder: "Describe the hazard..." },
+      { label: "Mitigation",    key: "mitigation",  type: "textarea", placeholder: "Controls in place..." },
+    ],
+  },
+  {
+    id: "near_miss", label: "Near Miss", icon: AlertTriangle, color: "#EA580C", bg: "#FFF7ED",
+    endpoint: "/incidents",
+    fields: [
+      { label: "Title",             key: "title",         type: "text",   placeholder: "e.g. Forklift near collision", required: true },
+      { label: "Severity",          key: "severity",      type: "select", options: ["low","medium","high","critical"],  required: true },
+      { label: "Description",       key: "description",   type: "textarea", placeholder: "What happened and what was avoided..." },
+      { label: "Location",          key: "location_id",   type: "text",   placeholder: "e.g. Warehouse A" },
+      { label: "Date Occurred",     key: "occurred_at",   type: "date" },
+      { label: "Reported By",       key: "reporter_note", type: "text",   placeholder: "Employee name" },
+    ],
+  },
+  {
+    id: "permits", label: "Permits", icon: Shield, color: "#0D9488", bg: "#F0FDFA",
+    endpoint: "/permits",
+    fields: [
+      { label: "Work Description",  key: "title",          type: "text",   placeholder: "e.g. Welding on roof structure", required: true },
+      { label: "Permit Type",       key: "permit_type",    type: "select", options: ["hot_work","confined_space","electrical","working_at_height","general"], required: true },
+      { label: "Location",          key: "location",       type: "text",   placeholder: "e.g. Zone 3 – Roof" },
+      { label: "Contractor",        key: "contractor",     type: "text",   placeholder: "Company or individual" },
+      { label: "Start Date",        key: "valid_from",     type: "date",   required: true },
+      { label: "End Date",          key: "valid_until",    type: "date" },
+    ],
+  },
+  {
+    id: "vendors", label: "Vendors", icon: Building2, color: "#4338CA", bg: "#EEF2FF",
+    endpoint: "/vendors",
+    fields: [
+      { label: "Company Name",      key: "name",           type: "text",   placeholder: "e.g. ABC Contractors Ltd", required: true },
+      { label: "Type",              key: "vendor_type",    type: "select", options: ["contractor","supplier","service_provider","consultant"], required: true },
+      { label: "Contact Name",      key: "contact_name",   type: "text",   placeholder: "Primary contact" },
+      { label: "Contact Email",     key: "contact_email",  type: "email",  placeholder: "contact@vendor.com" },
+      { label: "Phone",             key: "phone",          type: "text",   placeholder: "+44 20 1234 5678" },
+      { label: "Compliance Status", key: "status",         type: "select", options: ["compliant","non_compliant","pending"] },
+    ],
+  },
+  {
+    id: "assets", label: "Assets", icon: Layers, color: "#92400E", bg: "#FEF3C7",
+    endpoint: "/assets",
+    fields: [
+      { label: "Asset Name",          key: "name",              type: "text",   placeholder: "e.g. Forklift FL-01",   required: true },
+      { label: "Category",            key: "category",          type: "select", options: ["machinery","vehicle","electrical","PPE","tool","infrastructure"], required: true },
+      { label: "Serial Number",       key: "serial_number",     type: "text",   placeholder: "SN-12345" },
+      { label: "Location / Site",     key: "location",          type: "text",   placeholder: "Warehouse A" },
+      { label: "Last Inspection",     key: "last_inspected_at", type: "date" },
+      { label: "Next Inspection",     key: "next_inspection_at",type: "date" },
     ],
   },
 ];
@@ -331,11 +415,12 @@ interface EntityType {
   color: string; bg: string; description: string;
   fields: string[]; requiredFields: string[];
   validations: string[]; templateRows: number; sampleData: string;
+  moduleKey: string;
 }
 
 const ENTITY_TYPES: EntityType[] = [
   {
-    id: "users", label: "Users", icon: Users, color: "#4A57B9", bg: "#EEF2FF",
+    id: "users", label: "Users", icon: Users, color: "#4A57B9", bg: "#EEF2FF", moduleKey: "users",
     description: "Import user accounts with roles and site assignments",
     fields: ["Full Name", "Email", "Role", "Department", "Site ID", "Phone", "Status"],
     requiredFields: ["Full Name", "Email", "Role"],
@@ -343,15 +428,15 @@ const ENTITY_TYPES: EntityType[] = [
     templateRows: 50, sampleData: "John Smith, john@example.com, HSE Manager, Operations, SITE-001, +44...",
   },
   {
-    id: "sites", label: "Sites", icon: MapPin, color: "#0E7490", bg: "#ECFEFF",
+    id: "sites", label: "Sites", icon: MapPin, color: "#0E7490", bg: "#ECFEFF", moduleKey: "sites",
     description: "Import operational sites and location records",
-    fields: ["Site Name", "Type", "Address", "City", "Country", "Status", "Capacity"],
+    fields: ["Site ID", "Site Name", "Address", "Postcode", "City", "Type", "Operational Status", "Capacity", "Hazard Classification"],
     requiredFields: ["Site Name", "Type"],
-    validations: ["Duplicate site name detection", "Type must be Office / Warehouse / Construction / Factory / Other", "Status must be active / inactive"],
-    templateRows: 30, sampleData: "London HQ, Office, 123 Fleet St, London, GB, active...",
+    validations: ["Duplicate site name detection", "Type must be Office / Warehouse / Manufacturing / Construction / Other", "Status must be Active / Inactive"],
+    templateRows: 30, sampleData: "SITE001, London HQ, 123 Fleet St, EC4A 1AB, London, Office, Active, 150, Low Risk...",
   },
   {
-    id: "incidents", label: "Incidents", icon: AlertTriangle, color: "#EF4444", bg: "#FEE2E2",
+    id: "incidents", label: "Incidents", icon: AlertTriangle, color: "#EF4444", bg: "#FEE2E2", moduleKey: "incidents",
     description: "Bulk import historical incident and near-miss records",
     fields: ["Title", "Type", "Severity", "Occurred At", "Site ID", "Reported By", "Status", "Description"],
     requiredFields: ["Title", "Type", "Severity", "Occurred At"],
@@ -359,7 +444,7 @@ const ENTITY_TYPES: EntityType[] = [
     templateRows: 200, sampleData: "Slip on wet floor, incident, high, 2024-03-15, SITE-001...",
   },
   {
-    id: "audits", label: "Audits", icon: ClipboardList, color: "#F97316", bg: "#FFEDD5",
+    id: "audits", label: "Audits", icon: ClipboardList, color: "#F97316", bg: "#FFEDD5", moduleKey: "audits",
     description: "Import audit schedules and completed audit records",
     fields: ["Title", "Audit Type", "Standard", "Scheduled Date", "Lead Auditor", "Status", "Site ID"],
     requiredFields: ["Title", "Audit Type", "Scheduled Date"],
@@ -367,7 +452,7 @@ const ENTITY_TYPES: EntityType[] = [
     templateRows: 100, sampleData: "Q1 Safety Audit, Internal, ISO 45001, 2024-01-15, Jane Doe...",
   },
   {
-    id: "risk_registers", label: "Risk Registers", icon: ShieldAlert, color: "#8B5CF6", bg: "#F5F3FF",
+    id: "risk_registers", label: "Risk Registers", icon: ShieldAlert, color: "#8B5CF6", bg: "#F5F3FF", moduleKey: "risk_assessments",
     description: "Import risk assessments, hazards, and risk registers",
     fields: ["Hazard Title", "Type", "Severity", "Likelihood (1-5)", "Consequence (1-5)", "Site ID", "Mitigation", "Status"],
     requiredFields: ["Hazard Title", "Type", "Severity"],
@@ -375,7 +460,7 @@ const ENTITY_TYPES: EntityType[] = [
     templateRows: 150, sampleData: "Chemical spill risk, chemical, high, 3, 4, SITE-001...",
   },
   {
-    id: "capa", label: "CAPA", icon: CheckCircle2, color: "#10B981", bg: "#DCFCE7",
+    id: "capa", label: "CAPA", icon: CheckCircle2, color: "#10B981", bg: "#DCFCE7", moduleKey: "capa",
     description: "Import corrective and preventive action records",
     fields: ["Title", "Description", "Priority", "Assigned To (Email)", "Due Date", "Status", "Source Type"],
     requiredFields: ["Title", "Priority", "Due Date"],
@@ -383,12 +468,68 @@ const ENTITY_TYPES: EntityType[] = [
     templateRows: 100, sampleData: "Fix machine guard, Replace broken guard, high, jane@org.com...",
   },
   {
-    id: "sops", label: "SOPs", icon: BookOpen, color: "#F59E0B", bg: "#FEF3C7",
+    id: "sops", label: "SOPs", icon: BookOpen, color: "#F59E0B", bg: "#FEF3C7", moduleKey: "sops_policies",
     description: "Import Standard Operating Procedures and policy documents",
     fields: ["Document Title", "Category", "Version", "Owner (Email)", "Effective Date", "Review Date", "Status"],
     requiredFields: ["Document Title", "Category", "Version"],
     validations: ["Version format: v1.0", "Date format: YYYY-MM-DD", "Category must be Safety / Operations / HR / Compliance"],
     templateRows: 50, sampleData: "Hot Work Permit Procedure, Safety, v2.1, hse@org.com...",
+  },
+  {
+    id: "training_records", label: "Training", icon: GraduationCap, color: "#7C3AED", bg: "#F5F3FF", moduleKey: "training_records",
+    description: "Import training requirements and competency records",
+    fields: ["Module Title", "Role", "Validity Period (Months)", "Mandatory", "Module Code", "Competency Framework"],
+    requiredFields: ["Module Title", "Role"],
+    validations: ["Mandatory must be Yes / No", "Validity Period must be a number (months)", "Duplicate module detection"],
+    templateRows: 100, sampleData: "Fire Safety Awareness, All Staff, 12, Yes, FSA-001...",
+  },
+  {
+    id: "employees", label: "Employees", icon: UserCheck, color: "#0891B2", bg: "#ECFEFF", moduleKey: "employees",
+    description: "Import employee and worker records",
+    fields: ["Full Name", "Employee ID", "Job Title", "Department", "Site", "Email", "Phone", "Employment Type", "Start Date"],
+    requiredFields: ["Full Name", "Job Title", "Department"],
+    validations: ["Date format: YYYY-MM-DD", "Employment Type: Full-Time / Part-Time / Contractor", "Duplicate employee detection"],
+    templateRows: 200, sampleData: "James Thompson, EMP-001, Safety Officer, Operations, Site A, james@org.com...",
+  },
+  {
+    id: "hazards", label: "Hazards", icon: AlertOctagon, color: "#DC2626", bg: "#FEF2F2", moduleKey: "incidents",
+    description: "Import hazard register and hazard identification records",
+    fields: ["Hazard Title", "Type", "Severity", "Location", "Reported By", "Description", "Mitigation", "Status"],
+    requiredFields: ["Hazard Title", "Type", "Severity"],
+    validations: ["Severity must be low / medium / high / critical", "Status must be open / mitigated / closed", "Type must be physical / chemical / biological / ergonomic"],
+    templateRows: 150, sampleData: "Slippery walkway, physical, high, Zone 4, John Smith, Water pooling...",
+  },
+  {
+    id: "near_miss", label: "Near Miss", icon: AlertTriangle, color: "#EA580C", bg: "#FFF7ED", moduleKey: "near_miss",
+    description: "Import near miss and unsafe act/condition reports",
+    fields: ["Title", "Type", "Severity", "Location", "Date Occurred", "Reported By", "Description", "Corrective Action"],
+    requiredFields: ["Title", "Severity", "Date Occurred"],
+    validations: ["Date format: YYYY-MM-DD", "Severity must be low / medium / high / critical", "Type must be near_miss / unsafe_act / unsafe_condition"],
+    templateRows: 100, sampleData: "Forklift near collision, near_miss, high, Warehouse A, 2024-03-10...",
+  },
+  {
+    id: "permits", label: "Permits", icon: Shield, color: "#0D9488", bg: "#F0FDFA", moduleKey: "permits",
+    description: "Import Permit to Work records and permit history",
+    fields: ["Permit Number", "Type", "Work Description", "Location", "Contractor", "Start Date", "End Date", "Status", "Approved By"],
+    requiredFields: ["Permit Number", "Type", "Work Description", "Start Date"],
+    validations: ["Date format: YYYY-MM-DD", "Type must be hot_work / confined_space / electrical / working_at_height / general", "Status must be draft / active / closed / cancelled"],
+    templateRows: 100, sampleData: "PTW-001, hot_work, Welding on roof structure, Zone 3, ABC Ltd, 2024-03-01...",
+  },
+  {
+    id: "vendors", label: "Vendors", icon: Building2, color: "#4338CA", bg: "#EEF2FF", moduleKey: "vendors",
+    description: "Import vendor and contractor company records",
+    fields: ["Company Name", "Type", "Contact Name", "Contact Email", "Phone", "Compliance Status", "Contract Start", "Contract End"],
+    requiredFields: ["Company Name", "Type"],
+    validations: ["Type must be contractor / supplier / service_provider", "Date format: YYYY-MM-DD", "Compliance Status must be compliant / non_compliant / pending"],
+    templateRows: 50, sampleData: "ABC Contractors Ltd, contractor, John Doe, john@abc.com, +44...",
+  },
+  {
+    id: "assets", label: "Assets", icon: Layers, color: "#92400E", bg: "#FEF3C7", moduleKey: "assets",
+    description: "Import equipment, machinery and asset records",
+    fields: ["Asset Name", "Category", "Serial Number", "Location / Site", "Purchase Date", "Last Inspection Date", "Next Inspection Date", "Status"],
+    requiredFields: ["Asset Name", "Category"],
+    validations: ["Date format: YYYY-MM-DD", "Status must be active / inactive / under_maintenance / decommissioned", "Category must be machinery / vehicle / electrical / PPE / tool"],
+    templateRows: 150, sampleData: "Forklift FL-01, vehicle, SN-12345, Warehouse A, 2020-06-01, 2024-01-15...",
   },
 ];
 
@@ -864,17 +1005,56 @@ function ExcelTab() {
     if (!selectedFile) return;
     setResult(null);
     try {
-      const res = await createImport({
+      // Upload file to the real bulk import endpoint
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      const headers: Record<string, string> = {};
+      const jwt = localStorage.getItem("hse_jwt");
+      if (jwt) headers["Authorization"] = `Bearer ${jwt}`;
+      try {
+        const u = JSON.parse(localStorage.getItem("hse_user") || "{}");
+        if (u?.email)   headers["X-User-Email"] = u.email;
+        if (u?.role)    headers["X-User-Role"]  = u.role;
+        if (u?.orgCode) headers["X-Tenant-Id"]  = u.orgCode;
+      } catch { /**/ }
+
+      const uploadRes = await fetch(
+        `${API_BASE}/org-setup/onboarding-bulk?module=${selectedEntity.moduleKey}`,
+        { method: "POST", headers, body: formData },
+      );
+      const uploadJson = await uploadRes.json().catch(() => ({}));
+      const uploadData = uploadJson?.data ?? uploadJson;
+      const count: number = uploadData?.count ?? 0;
+      const errors: string[] = uploadData?.errors ?? [];
+
+      if (!uploadRes.ok && count === 0) {
+        const errMsg = uploadData?.error || uploadData?.detail || uploadData?.message
+          || `Server error ${uploadRes.status} — check the file format and try again.`;
+        setResult({ success: false, message: errMsg });
+        return;
+      }
+
+      // Log the import in history
+      await createImport({
         file_name:         selectedFile.name,
         import_type:       "excel",
         data_type:         selectedEntity.label,
-        records_estimated: Math.floor(Math.random() * 200) + 10,
+        records_estimated: count,
       }).unwrap();
-      setResult({ success: true, message: res.message || "Import queued successfully." });
+
+      if (count === 0) {
+        const hint = errors.length > 0 ? ` — ${errors[0]}` : " — check that column headers match the template.";
+        setResult({ success: false, message: `0 records imported${hint}` });
+        setSelectedFile(null);
+        refetchImports();
+        return;
+      }
+      const warn = errors.length > 0 ? ` (${errors.length} warning${errors.length > 1 ? "s" : ""})` : "";
+      setResult({ success: true, message: `${count} records imported successfully${warn}.` });
       setSelectedFile(null);
       refetchImports();
-    } catch {
-      setResult({ success: false, message: "Upload failed. Check the file format and try again." });
+    } catch (e: unknown) {
+      setResult({ success: false, message: (e as Error).message || "Upload failed. Check the file format and try again." });
     }
   }
   function handleDownloadTemplate(entity: EntityType) {
@@ -910,7 +1090,7 @@ function ExcelTab() {
       {/* Entity selector */}
       <div>
         <SectionLabel>Select data type to upload</SectionLabel>
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-5 gap-2 lg:grid-cols-8 xl:grid-cols-10">
           {ENTITY_TYPES.map(entity => {
             const active = selectedEntity.id === entity.id;
             const Icon   = entity.icon;

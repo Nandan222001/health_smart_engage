@@ -21,8 +21,14 @@ _KNOWN: dict[str, set[str]] = {
         "hq address", "address",
     },
     "sites": {
-        "site name", "name", "site type", "type", "address", "location",
-        "region", "hazard level", "hazard",
+        "site id", "site_id", "siteid",
+        "site name", "name", "site_name", "sitename", "facility name", "facility", "site",
+        "site type", "type", "operational status", "operational_status", "category",
+        "address", "location", "city", "town", "postcode", "post code", "zip", "postal code",
+        "region", "area",
+        "capacity", "number_of_working_stations", "stations",
+        "hazard classification", "hazard_classification", "hazard level", "hazard",
+        "status", "primary_products", "primary products",
     },
     "users": {
         "full name", "name", "email", "email address",
@@ -500,18 +506,32 @@ class OrgSetupService:
 
         # ── sites (same as step3/bulk) ──
         if module_key == "sites":
+            if not rows:
+                return {"module": module_key, "status": "imported", "count": 0,
+                        "errors": ["No rows found in file. Check that the file has data and a valid header row."]}
             for row in rows:
-                name = _v(row, "site name", "name")
+                name = _v(row, "site name", "name", "site_name", "sitename",
+                          "facility name", "facility", "site")
                 if not name:
+                    errors.append(f"Skipped row (no site name found). Columns detected: {list(row.keys())[:5]}")
                     continue
                 _, extra = self._split_row("sites", row)
+                site_id = _v(row, "site id", "site_id", "id", "siteid")
                 core_payload = {
                     "name":    name,
-                    "type":    _v(row, "site type", "type") or "Site",
+                    "type":    _v(row, "site type", "type", "operational status",
+                                  "operational_status", "category") or "Site",
                     "address": _v(row, "address", "location"),
-                    "region":  _v(row, "region"),
-                    "hazard":  _v(row, "hazard level", "hazard"),
+                    "city":    _v(row, "city", "town"),
+                    "postcode": _v(row, "postcode", "post code", "zip", "postal code"),
+                    "region":  _v(row, "region", "city", "area"),
+                    "status":  _v(row, "operational status", "operational_status", "status") or "Active",
+                    "capacity": _v(row, "capacity", "number_of_working_stations", "stations"),
+                    "hazard":  _v(row, "hazard classification", "hazard_classification",
+                                  "hazard level", "hazard"),
                 }
+                if site_id:
+                    core_payload["site_id"] = site_id
                 if extra:
                     core_payload["extra_fields"] = extra
                 self.repo.create(
@@ -519,7 +539,7 @@ class OrgSetupService:
                     payload=core_payload, status="active",
                 )
                 created += 1
-            return {"module": module_key, "status": "imported", "count": created}
+            return {"module": module_key, "status": "imported", "count": created, "errors": errors[:5]}
 
         # ── users (same as step4/bulk + employee sync) ──
         if module_key == "users":

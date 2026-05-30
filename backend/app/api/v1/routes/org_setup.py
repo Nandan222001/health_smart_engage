@@ -89,9 +89,12 @@ def _parse_excel_sheet(ws) -> list[dict]:
 def _parse_file(content: bytes, filename: str, module: str = "") -> list[dict]:
     """Parse CSV or Excel bytes into a list of row dicts."""
     name = (filename or "").lower()
-    if name.endswith(".csv"):
+    if name.endswith(".csv") or name.endswith(".tsv") or name.endswith(".txt"):
         text = content.decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(text))
+        # Auto-detect delimiter: tab if more tabs than commas on first line, else comma
+        first_line = text.split("\n")[0] if text else ""
+        delimiter = "\t" if first_line.count("\t") > first_line.count(",") else ","
+        reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
         return [dict(row) for row in reader]
     # Excel (.xlsx / .xls)
     try:

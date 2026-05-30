@@ -611,7 +611,7 @@ class DomainDispatcher:
                 "records_success": records_total,
                 "records_failed": 0,
                 "status": "success",
-                "uploaded_by": user.email or "System",
+                "uploaded_by": user.user_id or "System",
                 "created_at": now,
             }
             repo.create(tenant_id=user.tenant_id, module="data_management", record_type="import", payload=payload, status="success")
@@ -1985,14 +1985,6 @@ class DomainDispatcher:
             repo = GenericRepository(db)
             records = repo.list_by_type(user.tenant_id, "data_management", "import", limit=200)
             items = [r.payload for r in records] if records else []
-            if not items:
-                items = [
-                    {"id": "s1", "file_name": "incidents_may_2025.xlsx", "import_type": "excel", "data_type": "Incidents", "records_total": 142, "records_success": 142, "records_failed": 0, "status": "success", "uploaded_by": "James Carter", "created_at": "2025-05-22T09:14:00"},
-                    {"id": "s2", "file_name": "near_miss_q1.csv", "import_type": "csv", "data_type": "Near Miss", "records_total": 87, "records_success": 87, "records_failed": 0, "status": "success", "uploaded_by": "Sarah Kim", "created_at": "2025-05-20T11:32:00"},
-                    {"id": "s3", "file_name": "permits_batch_04.xlsx", "import_type": "excel", "data_type": "Permits", "records_total": 53, "records_success": 45, "records_failed": 8, "status": "partial", "uploaded_by": "David Osei", "created_at": "2025-05-18T14:07:00"},
-                    {"id": "s4", "file_name": "training_records_apr.csv", "import_type": "csv", "data_type": "Training Records", "records_total": 312, "records_success": 312, "records_failed": 0, "status": "success", "uploaded_by": "Emma Watts", "created_at": "2025-05-15T10:50:00"},
-                    {"id": "s5", "file_name": "employees_update.xlsx", "import_type": "excel", "data_type": "Employees", "records_total": 847, "records_success": 847, "records_failed": 0, "status": "success", "uploaded_by": "Admin", "created_at": "2025-05-12T08:22:00"},
-                ]
             return {"items": items}
 
         if operation == "org_admin_validation_logs_list":
@@ -2000,15 +1992,6 @@ class DomainDispatcher:
             repo = GenericRepository(db)
             records = repo.list_by_type(user.tenant_id, "data_management", "validation_log", limit=500)
             items = [r.payload for r in records] if records else []
-            if not items:
-                items = [
-                    {"id": "v1", "file_name": "incidents_may_2025.xlsx", "rule": "Required fields check", "status": "pass", "records_affected": 142, "message": "All required fields present", "timestamp": "22 May 2025, 09:14"},
-                    {"id": "v2", "file_name": "near_miss_q1.csv", "rule": "Date format validation", "status": "pass", "records_affected": 87, "message": "All dates in ISO 8601 format", "timestamp": "20 May 2025, 11:32"},
-                    {"id": "v3", "file_name": "permits_batch_04.xlsx", "rule": "Duplicate entry check", "status": "fail", "records_affected": 8, "message": "8 duplicate permit references found", "timestamp": "18 May 2025, 14:07"},
-                    {"id": "v4", "file_name": "training_records_apr.csv", "rule": "Employee ID reference", "status": "warning", "records_affected": 12, "message": "12 employee IDs not found in system", "timestamp": "15 May 2025, 10:50"},
-                    {"id": "v5", "file_name": "employees_update.xlsx", "rule": "Email format validation", "status": "warning", "records_affected": 3, "message": "3 email addresses failed format check", "timestamp": "12 May 2025, 08:22"},
-                    {"id": "v6", "file_name": "audits_april.xlsx", "rule": "Site code reference", "status": "pass", "records_affected": 64, "message": "All site codes validated", "timestamp": "8 May 2025, 16:45"},
-                ]
             return {"items": items}
 
         if operation == "org_admin_sync_status_get":
