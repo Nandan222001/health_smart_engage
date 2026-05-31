@@ -18,11 +18,6 @@ const upcomingAudits = [
     { id: "AUD-04", name: "Electrical PPE Compliance", date: "Feb 12, 10:00", zone: "Zone D", priority: "Critical" },
 ];
 
-const recentObservations = [
-    { id: "OBS-1", reporter: "Tom Harris", desc: "Unsecured materials on 3rd-floor edge.", time: "10 mins ago", severity: "High" },
-    { id: "OBS-2", reporter: "Mike Vance", desc: "Spill near the main generator.", time: "1 hr ago", severity: "Medium" },
-    { id: "OBS-3", reporter: "Sarah Connor", desc: "Blocked fire exit path.", time: "3 hrs ago", severity: "Critical" },
-];
 
 export function SiteInspectorDashboard() {
     const navigate = useNavigate();
@@ -206,39 +201,6 @@ export function SiteInspectorDashboard() {
                     </div>
                 </div>
 
-                {/* Recent Observations Feed */}
-                <div className="col-span-2 bg-white rounded-xl border p-6" style={{ borderColor: '#E8EFE8', boxShadow: '0px 2px 12px rgba(27, 94, 32, 0.08)' }}>
-                    <div className="flex items-center justify-between mb-4">
-                        <h2>Recent Worker Observations</h2>
-                    </div>
-                    <div className="space-y-4">
-                        {recentObservations.map((obs) => (
-                            <div key={obs.id} className="p-3 rounded-lg border border-gray-100 bg-gray-50 relative pl-4">
-                                <div
-                                    className="absolute left-0 top-0 bottom-0 w-[4px] rounded-l-lg"
-                                    style={{ background: obs.severity === 'Critical' ? '#DC2626' : obs.severity === 'High' ? '#EA580C' : '#F59E0B' }}
-                                />
-                                <div className="flex justify-between items-start mb-1.5 ml-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[13px] font-bold text-gray-900">{obs.reporter}</span>
-                                        <span className="text-[11px] text-gray-500">{obs.time}</span>
-                                    </div>
-                                    <SeverityBadge severity={obs.severity as any} />
-                                </div>
-                                <p className="text-[12px] text-gray-700 ml-1 leading-relaxed">
-                                    {obs.desc}
-                                </p>
-                                <div className="mt-2 ml-1 flex gap-2">
-                                    <button className="text-[11px] font-semibold text-[#2E7D32] hover:underline">Verify</button>
-                                    <button className="text-[11px] font-semibold text-gray-500 hover:text-gray-800">Assign Action</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    <button className="mt-4 w-full py-2 text-[12px] font-semibold text-gray-600 hover:text-gray-900 text-center transition-colors">
-                        View All Observations
-                    </button>
-                </div>
             </div>
         </div>
     );

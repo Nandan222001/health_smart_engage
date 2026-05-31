@@ -1687,7 +1687,18 @@ class DomainDispatcher:
             org_profile = db.scalars(sa_select(_OrgProfile).where(_OrgProfile.tenant_id == user.tenant_id).limit(1)).first()
             step1 = {}
             if org_profile:
-                step1 = {"organizationName": org_profile.organization_name, "industryType": org_profile.industry_type, "country": org_profile.country, "officialEmail": org_profile.official_email, "contactNumber": org_profile.contact_number, "headquartersAddress": org_profile.headquarters_address}
+                step1 = {
+                    "organisationId": org_profile.organisation_id,
+                    "organisationName": org_profile.organization_name,
+                    "country": org_profile.country,
+                    "industrySector": org_profile.industry_type,
+                    "numberOfEmployees": org_profile.employee_count,
+                    "headquartersLocation": org_profile.headquarters_address,
+                    "parentCompany": org_profile.parent_company,
+                    "iso45001Status": org_profile.iso_45001_status,
+                    "regulatoryAuthority": org_profile.regulatory_authority,
+                    "establishmentDate": org_profile.establishment_date,
+                }
 
             from app.models.sites import Site as _Site
             from app.models.org_setup_data import OrgUserRecord as _OUR

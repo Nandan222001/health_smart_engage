@@ -1,4 +1,4 @@
-import { Search, Bell, ChevronDown, ChevronRight, Moon, Sun, LogOut, Menu } from "lucide-react";
+import { ChevronDown, ChevronRight, Moon, Sun, LogOut, Menu } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/app/context/AuthContext";
 import { useState, useRef, useEffect } from "react";
@@ -98,14 +98,6 @@ export function TopNavbar({ darkMode, onToggleDarkMode, onOpenSidebar }: TopNavb
           style={darkMode ? { background: '#172846' } : {}}
         >
           {darkMode ? <Sun className="w-4 h-4" style={{ color: '#93C5FD' }} /> : <Moon className="w-4 h-4" style={{ color: '#4A5568' }} />}
-        </button>
-
-        {/* Notification Bell */}
-        <button className="relative p-2 rounded-lg transition-colors hover:bg-[#F3F7FF]" style={darkMode ? { background: '#172846' } : {}}>
-          <Bell className="w-[18px] h-[18px]" style={{ color: darkMode ? '#AFC4EE' : '#4A5568' }} />
-          <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[#DC2626] text-white text-[9px] flex items-center justify-center" style={{ fontWeight: 600 }}>
-            3
-          </span>
         </button>
 
         {/* Separator */}

@@ -157,12 +157,19 @@ async def bulk_upload_sites(
     rows = _parse_file(content, file.filename or "upload.csv")
     sites = [
         {
-            "name":    _normalise(r, "name", "site name", "site"),
-            "type":    _normalise(r, "type", "site type") or "Site",
-            "address": _normalise(r, "address", "location"),
+            "name":                _normalise(r, "site name", "name", "site"),
+            "type":                _normalise(r, "type", "site type") or "Site",
+            "address":             _normalise(r, "address"),
+            "postcode":            _normalise(r, "postcode", "post code", "zip"),
+            "city":                _normalise(r, "city", "town"),
+            "operationalStatus":   _normalise(r, "operational status", "operational_status", "status") or "Active",
+            "workingStations":     _normalise(r, "number of working stations", "working stations", "workstations", "number_of_working_stations"),
+            "capacity":            _normalise(r, "capacity"),
+            "primaryProducts":     _normalise(r, "primary products", "primary_products", "products"),
+            "hazardClassification": _normalise(r, "hazard classification", "hazard_classification", "hazard level", "hazard"),
         }
         for r in rows
-        if _normalise(r, "name", "site name", "site")
+        if _normalise(r, "site name", "name", "site")
     ]
     svc = OrgSetupService(db)
     result = svc.bulk_upload_sites(user, {"sites": sites})
@@ -258,55 +265,65 @@ async def hrms_import(
 # ── Step 1: Excel parse ───────────────────────────────────────────────────────
 
 _FIELD_MAP = {
+    # Organisation ID
+    "organisation id": "organisationId",
+    "organization id": "organisationId",
+    "org id": "organisationId",
+    "org_id": "organisationId",
     # Organisation name
-    "organization name": "organizationName",
-    "organisation name": "organizationName",
-    "org name": "organizationName",
-    "company name": "organizationName",
-    "company": "organizationName",
-    "name": "organizationName",
-    # Industry
-    "industry type": "industryType",
-    "industry": "industryType",
-    "sector": "industryType",
-    # Employee count
-    "employee count": "employeeCount",
-    "employees": "employeeCount",
-    "number of employees": "employeeCount",
-    "no. of employees": "employeeCount",
-    "headcount": "employeeCount",
-    # Sites
-    "number of sites": "numberOfSites",
-    "no. of sites": "numberOfSites",
-    "no of sites": "numberOfSites",
-    "sites": "numberOfSites",
-    "total sites": "numberOfSites",
-    # Email
-    "official email": "officialEmail",
-    "contact email": "officialEmail",
-    "email": "officialEmail",
-    "email address": "officialEmail",
-    # Phone
-    "contact number": "contactNumber",
-    "contact no": "contactNumber",
-    "contact no.": "contactNumber",
-    "phone": "contactNumber",
-    "phone number": "contactNumber",
-    "contact": "contactNumber",
-    "mobile": "contactNumber",
+    "organisation name": "organisationName",
+    "organization name": "organisationName",
+    "org name": "organisationName",
+    "company name": "organisationName",
+    "company": "organisationName",
+    "name": "organisationName",
     # Country
     "country": "country",
-    # Timezone
-    "timezone": "timezone",
-    "time zone": "timezone",
-    # Address
-    "headquarters address": "headquartersAddress",
-    "headquarters": "headquartersAddress",
-    "hq address": "headquartersAddress",
-    "hq": "headquartersAddress",
-    "address": "headquartersAddress",
-    "head office address": "headquartersAddress",
-    "registered address": "headquartersAddress",
+    # Industry sector
+    "industry sector": "industrySector",
+    "industry_sector": "industrySector",
+    "industry type": "industrySector",
+    "industry": "industrySector",
+    "sector": "industrySector",
+    # Number of employees
+    "number of employees": "numberOfEmployees",
+    "no. of employees": "numberOfEmployees",
+    "no of employees": "numberOfEmployees",
+    "employee count": "numberOfEmployees",
+    "employees": "numberOfEmployees",
+    "headcount": "numberOfEmployees",
+    # Headquarters location
+    "headquarters location": "headquartersLocation",
+    "headquarters_location": "headquartersLocation",
+    "headquarters": "headquartersLocation",
+    "hq location": "headquartersLocation",
+    "hq": "headquartersLocation",
+    "headquarters address": "headquartersLocation",
+    "hq address": "headquartersLocation",
+    "head office": "headquartersLocation",
+    # Parent company
+    "parent company": "parentCompany",
+    "parent_company": "parentCompany",
+    "parent organisation": "parentCompany",
+    "parent organization": "parentCompany",
+    "parent": "parentCompany",
+    # ISO 45001 status
+    "iso 45001 status": "iso45001Status",
+    "iso_45001_status": "iso45001Status",
+    "iso45001 status": "iso45001Status",
+    "iso 45001": "iso45001Status",
+    "certification status": "iso45001Status",
+    # Regulatory authority
+    "regulatory authority": "regulatoryAuthority",
+    "regulatory_authority": "regulatoryAuthority",
+    "regulator": "regulatoryAuthority",
+    "regulatory body": "regulatoryAuthority",
+    # Establishment date
+    "establishment date": "establishmentDate",
+    "establishment_date": "establishmentDate",
+    "founded": "establishmentDate",
+    "date established": "establishmentDate",
+    "incorporated": "establishmentDate",
 }
 
 
@@ -390,26 +407,45 @@ async def org_api_connect(
     # Normalise common API response shapes into org details
     org: dict = {}
     if isinstance(raw, dict):
-        # Try common keys for org name
-        for key in ("name", "organization_name", "org_name", "company_name", "companyName"):
+        for key in ("org_id", "organisation_id", "organization_id", "orgId"):
             if raw.get(key):
-                org["organizationName"] = str(raw[key])
+                org["organisationId"] = str(raw[key])
                 break
-        for key in ("industry", "industry_type", "industryType", "sector"):
+        for key in ("name", "organisation_name", "organization_name", "org_name", "company_name", "companyName"):
             if raw.get(key):
-                org["industryType"] = str(raw[key])
-                break
-        for key in ("employee_count", "employeeCount", "employees", "headcount"):
-            if raw.get(key):
-                org["employeeCount"] = str(raw[key])
-                break
-        for key in ("email", "contact_email", "official_email"):
-            if raw.get(key):
-                org["officialEmail"] = str(raw[key])
+                org["organisationName"] = str(raw[key])
                 break
         for key in ("country",):
             if raw.get(key):
                 org["country"] = str(raw[key])
+                break
+        for key in ("industry_sector", "industrySector", "industry", "industry_type", "industryType", "sector"):
+            if raw.get(key):
+                org["industrySector"] = str(raw[key])
+                break
+        for key in ("number_of_employees", "numberOfEmployees", "employee_count", "employeeCount", "employees", "headcount"):
+            if raw.get(key):
+                org["numberOfEmployees"] = str(raw[key])
+                break
+        for key in ("headquarters_location", "headquartersLocation", "headquarters", "hq_location", "hq"):
+            if raw.get(key):
+                org["headquartersLocation"] = str(raw[key])
+                break
+        for key in ("parent_company", "parentCompany", "parent_organisation", "parent_organization"):
+            if raw.get(key):
+                org["parentCompany"] = str(raw[key])
+                break
+        for key in ("iso_45001_status", "iso45001Status", "iso45001", "certification_status"):
+            if raw.get(key):
+                org["iso45001Status"] = str(raw[key])
+                break
+        for key in ("regulatory_authority", "regulatoryAuthority", "regulator"):
+            if raw.get(key):
+                org["regulatoryAuthority"] = str(raw[key])
+                break
+        for key in ("establishment_date", "establishmentDate", "founded", "incorporated"):
+            if raw.get(key):
+                org["establishmentDate"] = str(raw[key])
                 break
 
     return {"success": True, "data": org, "raw_preview": str(raw)[:500]}
@@ -421,15 +457,16 @@ async def org_api_connect(
 def download_org_template():
     content = (
         "Field,Value\n"
-        "Organization Name,\n"
-        "Industry Type,\n"
-        "Employee Count,\n"
-        "Number of Sites,\n"
-        "Official Email,\n"
-        "Contact Number,\n"
+        "Organisation ID,\n"
+        "Organisation Name,\n"
         "Country,\n"
-        "Timezone,\n"
-        "Headquarters Address,\n"
+        "Industry Sector,\n"
+        "Number of Employees,\n"
+        "Headquarters Location,\n"
+        "Parent Company,\n"
+        "ISO 45001 Status,\n"
+        "Regulatory Authority,\n"
+        "Establishment Date,\n"
     )
     return StreamingResponse(
         io.BytesIO(content.encode()),
@@ -443,10 +480,10 @@ def download_org_template():
 @router.get("/step3/template", summary="Download sites CSV template")
 def download_sites_template():
     content = (
-        "Name,Type,Address\n"
-        "Head Office,Site,123 Corporate Blvd\n"
-        "Plant A,Plant,456 Industrial Ave\n"
-        "Warehouse B,Branch,789 Logistics Road\n"
+        "Site Name,Address,Postcode,City,Type,Operational Status,Number of Working Stations,Capacity,Primary Products,Hazard Classification\n"
+        "Bridgend Manufacturing Complex,\"Industrial Estate, Bridgend\",CF31 3TR,South Wales,Manufacturing & Assembly,Active,32,150,Wind Turbine Nacelles,High Risk\n"
+        "Head Office,123 Corporate Blvd,SW1A 1AA,London,Site,Active,10,50,Administration,Low Risk\n"
+        "Plant A,456 Industrial Ave,M1 2AB,Manchester,Plant,Active,20,100,Steel Components,Medium Risk\n"
     )
     return StreamingResponse(
         io.BytesIO(content.encode()),
@@ -474,33 +511,161 @@ def download_users_template():
 
 _MODULE_TEMPLATES: dict[str, tuple[str, str]] = {
     "organisation": (
-        "Organisation Name,Industry Type,Employee Count,Country,Official Email,Contact Number,HQ Address,ISO 45001 Status\n"
-        "WindTech Ltd,Manufacturing,150,United Kingdom,safety@windtech.com,+44 1656 000100,123 Industrial Park,Certified\n",
+        "Organisation_ID,Organisation_Name,Country,Industry_Sector,Number_of_Employees,Headquarters_Location,Parent_Company,ISO_45001_Status,Regulatory_Authority,Establishment_Date\n"
+        "ORG001,WindTech Nacelle Manufacturing Ltd,United Kingdom,Renewable Energy - Wind,150,Bridgend Wales,WindTech Group Plc,Certified,Health and Safety Executive (HSE),2015-03-15\n"
+        "ORG002,Example Manufacturing Ltd,Germany,Automotive,320,Berlin,Example Group AG,In Progress,Bundesanstalt für Arbeitsschutz,2010-06-01\n",
         "organisation_template.csv",
     ),
+    "sites": (
+        "Site_ID,Site Name,Address,Postcode,City,Type,Operational_Status,Number_of_Working_Stations,Capacity,Primary_Products,Hazard_Classification\n"
+        "SITE001,Bridgend Manufacturing Complex,\"Industrial Estate, Bridgend\",CF31 3TR,South Wales,Manufacturing & Assembly,Active,32,150,Wind Turbine Nacelles,High Risk\n"
+        "SITE002,Head Office,123 Corporate Blvd,SW1A 1AA,London,Office,Active,10,50,Administration,Low Risk\n",
+        "sites_template.csv",
+    ),
     "departments": (
-        "Department Name,Manager Name,Number of Teams,Assigned Site\n"
-        "Heavy Assembly,James Thompson,3,Bridgend Complex\n"
-        "Maintenance,Sarah Lee,2,Bridgend Complex\n",
+        "Department_ID,Site_ID,Department_Name,Manager_ID,Number_of_Teams\n"
+        "1,SITE001,Heavy Assembly,EMP001,3\n"
+        "2,SITE001,Maintenance,EMP002,2\n",
         "departments_template.csv",
     ),
+    "working_stations": (
+        "Station_ID,Station_Name,Site_ID,Department,Zone_Classification,Primary_Hazards,Staffing_Requirement,Equipment_List,Permit_Types_Required,Access_Restrictions\n"
+        "STN001,Heavy Assembly Station 1,SITE001,Heavy Assembly,Heavy Assembly,HAZ001,3,Equipment Set 1,Hot Work,Authorized Personnel Only\n"
+        "STN002,Welding Bay,SITE001,Heavy Assembly,Hot Work Zone,HAZ002,2,Equipment Set 2,Hot Work,PPE Required\n",
+        "working_stations_template.csv",
+    ),
     "roles": (
-        "Role Name,Description,Access Level,Module Access\n"
-        "HSE Manager,Manages HSE compliance,Manager,Incidents Audits Risk\n"
-        "Site Inspector,Inspects site safety,Supervisor,Audits Inspections\n",
+        "Role_ID,Role_Name,Job_Category,Authority_Level,Permit_Authority,Safety_Signatory\n"
+        "ROLE001,Plant Manager,Senior Management,5,Yes,Yes\n"
+        "ROLE002,HSE Manager,Safety,4,Yes,Yes\n",
         "roles_template.csv",
     ),
+    "employees": (
+        "Employee ID,Full Name,Date_of_Birth,Gender,Employment_Type,Employment_Start_Date,Job Title,Department,Shift_Pattern,Manager_ID,Induction_Date,Active_Status\n"
+        "EMP001,Jessica Hernandez,1965-06-06,F,Permanent,2020-11-09,ROLE001,DEPT001,Rotating,,2020-11-21,Active\n"
+        "EMP002,David Chen,1980-03-14,M,Permanent,2019-05-01,ROLE002,DEPT002,Days,EMP001,2019-05-15,Active\n",
+        "employees_template.csv",
+    ),
+    "policies": (
+        "Policy_ID,Policy_Name,Category,Issue_Date,Owner,Status\n"
+        "POL001,Hot Work Safety,Hot Work,2022-01-15,Safety Manager,Current\n"
+        "POL002,Working at Height,Height Safety,2022-03-01,HSE Manager,Current\n",
+        "policies_template.csv",
+    ),
+    "permit_types": (
+        "Permit_Type_ID,Permit_Type_Name,Risk_Level,Validity_Period_Hours,Concurrent_Limit\n"
+        "PT001,Hot Work Permit,Critical,8,5\n"
+        "PT002,Work at Height Permit,High,12,3\n",
+        "permit_types_template.csv",
+    ),
+    "hazard_categories": (
+        "Hazard_Category_ID,Category_Name,Description\n"
+        "HC001,Mechanical,Moving machinery rotating equipment\n"
+        "HC002,Chemical,Hazardous substances and chemical exposure\n",
+        "hazard_categories_template.csv",
+    ),
+    "hazards": (
+        "Hazard_ID,Category_ID,Hazard_Name,Severity,Probability\n"
+        "HAZ001,HC001,Moving Machinery,Serious,Possible\n"
+        "HAZ002,HC002,Chemical Exposure,Moderate,Unlikely\n",
+        "hazards_template.csv",
+    ),
+    "training_programs": (
+        "Training_ID,Training_Name,Duration_Hours,Frequency,Certification,Expiry_Months\n"
+        "TRN001,Permit-to-Work System,4,Annual,Yes,12\n"
+        "TRN002,Manual Handling,2,Biennial,No,24\n",
+        "training_programs_template.csv",
+    ),
+    "permits_to_work": (
+        "Permit_ID,Permit_Type_ID,Date_Issued,Time_Issued,Location_Station_ID,Work_Description,Duration_Requested_Hours,Issued_By,Approved_By,Validity_Start,Validity_End,Work_Start_Actual,Work_End_Actual,Number_of_Workers,Status,Deviation_Reported,Incident_Occurred\n"
+        "PTW000001,PT001,2024-01-01,12:09,STN022,Welding,8,EMP036,EMP149,2024-01-01 16:09,2024-01-02 00:09,2024-01-01 16:09,,4,Active,Yes,No\n"
+        "PTW000002,PT002,2024-01-02,08:00,STN005,Roof inspection,6,EMP010,EMP020,2024-01-02 09:00,2024-01-02 15:00,2024-01-02 09:00,2024-01-02 14:30,2,Closed,No,No\n",
+        "permits_to_work_template.csv",
+    ),
     "incidents": (
-        "Incident Date,Location / Station,Incident Type,Severity,Description,Immediate Cause,Reported By\n"
-        "2024-01-15,Zone 4 - Chemical Handling,Injury,Minor,Worker slipped on wet floor,Wet floor not marked,John Smith\n"
-        "2024-02-10,STN005 - Heavy Assembly,Near-miss,Significant,Tool nearly fell from height,Improper tool storage,Jane Doe\n",
+        "Incident_ID,Report_Date,Incident_DateTime,Location_Station,Incident_Type,Severity,Number_Persons_Involved,Description,Immediate_Cause,Root_Cause,Hazard_Involved,Permit_Active,Control_Failure,Reported_By,Investigation_Status,CAPA_Generated,Days_Away,Root_Cause_Category\n"
+        "INC00001,2024-04-28,2024-04-28 15:37,STN031,Damage,Minor,3,Incident description,Human Error,Training Deficiency,HAZ001,,Yes,EMP020,In Progress,Yes,0,Training\n"
+        "INC00002,2024-05-10,2024-05-10 09:15,STN012,Injury,Serious,1,Worker struck by falling object,Inadequate guarding,Engineering Deficiency,HAZ003,PTW000001,Yes,EMP045,Closed,Yes,3,Engineering\n",
         "incidents_template.csv",
     ),
-    "permits": (
-        "Permit Type,Work Location,Start Date,End Date,Assigned To,Description,Hazards\n"
-        "Hot Work,Zone 4 - Welding Bay,2024-03-01,2024-03-01,Tom Baker,Welding repairs on pipe,Fire Chemical\n"
-        "Work at Height,Roof Level B,2024-03-05,2024-03-05,Alice Brown,Roof inspection,Fall from height\n",
-        "permits_template.csv",
+    "near_misses": (
+        "Near_Miss_ID,Report_Date,Event_DateTime,Location_Station,Description,Potential_Consequence,Hazard_Involved,Underlying_Cause,Control_Failure,Reported_By,CAPA_Escalation\n"
+        "NM00001,2024-03-09,2024-03-09 09:39,STN019,Near-miss description,Environmental Release,HAZ010,Procedure Gap,No,EMP057,Yes\n"
+        "NM00002,2024-04-01,2024-04-01 14:22,STN003,Tool dropped from height,Injury,HAZ001,Inadequate training,Yes,EMP023,No\n",
+        "near_misses_template.csv",
+    ),
+    "safety_walks": (
+        "Inspection_ID,Inspection_DateTime,Location_Station,Inspector,Inspection_Type,Issues_Found,Critical_Issues,Housekeeping_Rating,Compliance_Rating,Follow_Up_Required\n"
+        "SW00001,2025-09-22 09:50,STN020,EMP053,Routine,2,1,2,2,No\n"
+        "SW00002,2025-10-05 11:00,STN015,EMP031,Planned,0,0,4,5,No\n",
+        "safety_walks_template.csv",
+    ),
+    "capa_actions": (
+        "Action_ID,Incident_ID,Action_Type,Description,Root_Cause_Addressed,Responsible_Person,Due_Date,Status,Effectiveness_Rating\n"
+        "CAPA00001,INC00001,Corrective,CAPA action for INC00001,Training,EMP037,2024-05-18,Completed,4\n"
+        "CAPA00002,INC00002,Preventive,Install additional machine guarding,Engineering Deficiency,EMP012,2024-06-01,Open,\n",
+        "capa_actions_template.csv",
+    ),
+    "shift_schedule": (
+        "Schedule_ID,Employee_ID,Shift_Date,Shift_Type,Shift_Start,Shift_End,Actual_Hours_Worked,Station_Assigned,Supervisor\n"
+        "SH00000001,EMP001,2024-01-01,Days,06:00,14:30,8.5,STN015,EMP118\n"
+        "SH00000002,EMP002,2024-01-01,Nights,22:00,06:30,8.5,STN003,EMP118\n",
+        "shift_schedule_template.csv",
+    ),
+    # ── legacy key aliases (same content, old key names used by UI) ──
+    "incident_records": (
+        "Incident_ID,Report_Date,Incident_DateTime,Location_Station,Incident_Type,Severity,Number_Persons_Involved,Description,Immediate_Cause,Root_Cause,Hazard_Involved,Permit_Active,Control_Failure,Reported_By,Investigation_Status,CAPA_Generated,Days_Away,Root_Cause_Category\n"
+        "INC00001,2024-04-28,2024-04-28 15:37,STN031,Damage,Minor,3,Incident description,Human Error,Training Deficiency,HAZ001,,Yes,EMP020,In Progress,Yes,0,Training\n"
+        "INC00002,2024-05-10,2024-05-10 09:15,STN012,Injury,Serious,1,Worker struck by falling object,Inadequate guarding,Engineering Deficiency,HAZ003,PTW000001,Yes,EMP045,Closed,Yes,3,Engineering\n",
+        "incident_records_template.csv",
+    ),
+    "near_miss": (
+        "Near_Miss_ID,Report_Date,Event_DateTime,Location_Station,Description,Potential_Consequence,Hazard_Involved,Underlying_Cause,Control_Failure,Reported_By,CAPA_Escalation\n"
+        "NM00001,2024-03-09,2024-03-09 09:39,STN019,Near-miss description,Environmental Release,HAZ010,Procedure Gap,No,EMP057,Yes\n"
+        "NM00002,2024-04-01,2024-04-01 14:22,STN003,Tool dropped from height,Injury,HAZ001,Inadequate training,Yes,EMP023,No\n",
+        "near_miss_template.csv",
+    ),
+    "permit_records": (
+        "Permit_ID,Permit_Type_ID,Date_Issued,Time_Issued,Location_Station_ID,Work_Description,Duration_Requested_Hours,Issued_By,Approved_By,Validity_Start,Validity_End,Work_Start_Actual,Work_End_Actual,Number_of_Workers,Status,Deviation_Reported,Incident_Occurred\n"
+        "PTW000001,PT001,2024-01-01,12:09,STN022,Welding,8,EMP036,EMP149,2024-01-01 16:09,2024-01-02 00:09,2024-01-01 16:09,,4,Active,Yes,No\n"
+        "PTW000002,PT002,2024-01-02,08:00,STN005,Roof inspection,6,EMP010,EMP020,2024-01-02 09:00,2024-01-02 15:00,2024-01-02 09:00,2024-01-02 14:30,2,Closed,No,No\n",
+        "permit_records_template.csv",
+    ),
+    "sops_policies": (
+        "Policy_ID,Policy_Name,Category,Issue_Date,Owner,Status\n"
+        "POL001,Hot Work Safety,Hot Work,2022-01-15,Safety Manager,Current\n"
+        "POL002,Working at Height,Height Safety,2022-03-01,HSE Manager,Current\n",
+        "sops_policies_template.csv",
+    ),
+    "capa_data": (
+        "Action_ID,Incident_ID,Action_Type,Description,Root_Cause_Addressed,Responsible_Person,Due_Date,Status,Effectiveness_Rating\n"
+        "CAPA00001,INC00001,Corrective,CAPA action for INC00001,Training,EMP037,2024-05-18,Completed,4\n"
+        "CAPA00002,INC00002,Preventive,Install additional machine guarding,Engineering Deficiency,EMP012,2024-06-01,Open,\n",
+        "capa_data_template.csv",
+    ),
+    "hr_shift_data": (
+        "Schedule_ID,Employee_ID,Shift_Date,Shift_Type,Shift_Start,Shift_End,Actual_Hours_Worked,Station_Assigned,Supervisor\n"
+        "SH00000001,EMP001,2024-01-01,Days,06:00,14:30,8.5,STN015,EMP118\n"
+        "SH00000002,EMP002,2024-01-01,Nights,22:00,06:30,8.5,STN003,EMP118\n",
+        "hr_shift_data_template.csv",
+    ),
+    "training_records": (
+        "Training_ID,Training_Name,Duration_Hours,Frequency,Certification,Expiry_Months\n"
+        "TRN001,Permit-to-Work System,4,Annual,Yes,12\n"
+        "TRN002,Manual Handling,2,Biennial,No,24\n",
+        "training_records_template.csv",
+    ),
+    # ── kept for backward-compat but not aliased ──
+    "audits": (
+        "Audit Title,Audit Type,Standard,Scheduled Date,Lead Auditor,Status,Site\n"
+        "Q1 Fire Safety Audit,Internal,ISO 45001,2024-03-15,Jane Doe,Scheduled,Bridgend Complex\n"
+        "Annual External Audit,External,OSHA,2024-06-01,External Auditor,Scheduled,All Sites\n",
+        "audits_template.csv",
+    ),
+    "audit_reports": (
+        "Audit Title,Audit Type,Scheduled Date,Lead Auditor,Status\n"
+        "Q1 Fire Safety Audit,Internal,2024-03-15,Jane Doe,Completed\n",
+        "audit_reports_template.csv",
     ),
     "risk": (
         "Hazard Description,Location,Risk Level,Likelihood (1-5),Consequence (1-5),Controls,Responsible Person\n"
@@ -508,23 +673,10 @@ _MODULE_TEMPLATES: dict[str, tuple[str, str]] = {
         "Chemical Spill,Zone 4 Chemical Store,Critical,3,5,COSHH training spill kits secondary containment,EHS Lead\n",
         "risk_template.csv",
     ),
-    "capa": (
-        "Title,Description,Priority,Assigned To,Due Date,Source Type\n"
-        "Replace machine guard,Broken guard on conveyor belt needs urgent replacement,High,john@company.com,2024-02-28,Incident\n"
-        "Update fire drill procedure,Annual review overdue requires updated evacuation maps,Medium,jane@company.com,2024-03-15,Audit\n",
-        "capa_template.csv",
-    ),
-    "training": (
-        "Training Name,Employee,Completed Date,Expiry Date,Trainer / Provider,Result\n"
-        "Fire Safety Training,John Smith,2024-01-10,2025-01-10,Internal HSE Team,Pass\n"
-        "Manual Handling,Jane Doe,2024-01-15,2025-01-15,External Provider,Pass\n",
-        "training_template.csv",
-    ),
-    "audits": (
-        "Audit Title,Audit Type,Standard,Scheduled Date,Lead Auditor,Status,Site\n"
-        "Q1 Fire Safety Audit,Internal,ISO 45001,2024-03-15,Jane Doe,Scheduled,Bridgend Complex\n"
-        "Annual External Audit,External,OSHA,2024-06-01,External Auditor,Scheduled,All Sites\n",
-        "audits_template.csv",
+    "risk_assessments": (
+        "Hazard Description,Location,Risk Level,Likelihood (1-5),Consequence (1-5),Controls,Responsible Person\n"
+        "Machinery Contact,STN001,High,4,4,Machine guards fitted,Safety Manager\n",
+        "risk_assessments_template.csv",
     ),
     "kpis": (
         "KPI Name,Period (Month),Value,Target,Unit,Site\n"
@@ -538,82 +690,51 @@ _MODULE_TEMPLATES: dict[str, tuple[str, str]] = {
         "CleanTech Services,info@cleantech.com,+44 9876 543210,Cleaning,Conditional,2024-02-01,2024-07-31\n",
         "vendors_template.csv",
     ),
-    # Step-6 aliases
-    "incident_records": (
-        "Incident Date,Location / Station,Incident Type,Severity,Description,Immediate Cause,Reported By\n"
-        "2024-01-15,Zone 4,Injury,Minor,Worker slipped on wet floor,Wet floor not marked,John Smith\n",
-        "incident_records_template.csv",
-    ),
-    "near_miss": (
-        "Date,Location,Severity,Description,Contributing Factors,Reported By\n"
-        "2024-02-10,STN005,Moderate,Tool nearly fell from height,Improper tool storage,Jane Doe\n",
-        "near_miss_template.csv",
-    ),
-    "permit_records": (
-        "Permit Type,Work Location,Start Date,End Date,Assigned To,Description,Hazards,Status\n"
-        "Hot Work,Zone 4 - Welding Bay,2024-03-01,2024-03-01,Tom Baker,Welding repairs,Fire,Closed\n",
-        "permit_records_template.csv",
-    ),
-    "audit_reports": (
-        "Audit Title,Audit Type,Scheduled Date,Lead Auditor,Status\n"
-        "Q1 Fire Safety Audit,Internal,2024-03-15,Jane Doe,Completed\n",
-        "audit_reports_template.csv",
-    ),
-    "training_records": (
-        "Course Name,Role,Mandatory,Frequency Months,Due Date\n"
-        "Fire Safety Training,All Staff,Yes,12,2025-01-10\n",
-        "training_records_template.csv",
-    ),
-    "sops_policies": (
-        "Title,Document Type,Version,Status,Description\n"
-        "Fire Safety Policy,Policy,2.1,Active,Annual review of fire safety procedures\n",
-        "sops_policies_template.csv",
-    ),
-    "risk_assessments": (
-        "Hazard Description,Location,Risk Level,Likelihood (1-5),Consequence (1-5),Controls,Responsible Person\n"
-        "Machinery Contact,STN001,High,4,4,Machine guards fitted,Safety Manager\n",
-        "risk_assessments_template.csv",
-    ),
-    "capa_data": (
-        "Title,Description,Priority,Assigned To,Due Date,Source Type\n"
-        "Replace machine guard,Broken guard on conveyor belt,High,john@company.com,2024-02-28,Incident\n",
-        "capa_data_template.csv",
-    ),
-    "hr_shift_data": (
-        "Employee ID,Employee Name,Shift Date,Shift Type,Start Time,End Time,Hours Worked,Station\n"
-        "EMP001,John Smith,2024-01-15,Day,08:00,16:00,8,STN001\n",
-        "hr_shift_data_template.csv",
-    ),
     "contractor_records": (
         "Company Name,Contact Email,Contact Phone,Service Type,HSE Rating,Contract Start,Contract End\n"
         "SafeWork Contractors Ltd,contact@safework.com,+44 1234 567890,Construction,Approved,2024-01-01,2024-12-31\n",
         "contractor_records_template.csv",
+    ),
+    "capa": (
+        "Action_ID,Incident_ID,Action_Type,Description,Root_Cause_Addressed,Responsible_Person,Due_Date,Status,Effectiveness_Rating\n"
+        "CAPA00001,INC00001,Corrective,CAPA action for INC00001,Training,EMP037,2024-05-18,Completed,4\n"
+        "CAPA00002,INC00002,Preventive,Install additional machine guarding,Engineering Deficiency,EMP012,2024-06-01,Open,\n",
+        "capa_template.csv",
+    ),
+    "permits": (
+        "Permit_ID,Permit_Type_ID,Date_Issued,Time_Issued,Location_Station_ID,Work_Description,Duration_Requested_Hours,Issued_By,Approved_By,Validity_Start,Validity_End,Work_Start_Actual,Work_End_Actual,Number_of_Workers,Status,Deviation_Reported,Incident_Occurred\n"
+        "PTW000001,PT001,2024-01-01,12:09,STN022,Welding,8,EMP036,EMP149,2024-01-01 16:09,2024-01-02 00:09,2024-01-01 16:09,,4,Active,Yes,No\n"
+        "PTW000002,PT002,2024-01-02,08:00,STN005,Roof inspection,6,EMP010,EMP020,2024-01-02 09:00,2024-01-02 15:00,2024-01-02 09:00,2024-01-02 14:30,2,Closed,No,No\n",
+        "permits_template.csv",
+    ),
+    "training": (
+        "Training_ID,Training_Name,Duration_Hours,Frequency,Certification,Expiry_Months\n"
+        "TRN001,Permit-to-Work System,4,Annual,Yes,12\n"
+        "TRN002,Manual Handling,2,Biennial,No,24\n",
+        "training_template.csv",
+    ),
+    "compliance": (
+        "Policy_ID,Policy_Name,Category,Issue_Date,Owner,Status\n"
+        "POL001,Hot Work Safety,Hot Work,2022-01-15,Safety Manager,Current\n"
+        "POL002,Working at Height,Height Safety,2022-03-01,HSE Manager,Current\n",
+        "compliance_template.csv",
+    ),
+    "users": (
+        "Employee ID,Full Name,Date_of_Birth,Gender,Employment_Type,Employment_Start_Date,Job Title,Department,Shift_Pattern,Manager_ID,Induction_Date,Active_Status\n"
+        "EMP001,Jessica Hernandez,1965-06-06,F,Permanent,2020-11-09,ROLE001,DEPT001,Rotating,,2020-11-21,Active\n"
+        "EMP002,David Chen,1980-03-14,M,Permanent,2019-05-01,ROLE002,DEPT002,Days,EMP001,2019-05-15,Active\n",
+        "users_template.csv",
     ),
 }
 
 
 @router.get("/template/{module_key}", summary="Download CSV template for any module")
 def download_module_template(module_key: str):
-    if module_key == "sites":
-        content = (
-            "Name,Type,Address,Region,Hazard Level,Employee Count,Workstations\n"
-            "Head Office,Site,123 Corporate Blvd,London,Low Risk,50,12\n"
-            "Plant A,Plant,456 Industrial Ave,South Wales,High Risk,150,32\n"
-        )
-        filename = "sites_template.csv"
-    elif module_key == "users":
-        content = (
-            "Name,Email,Role,Department,Site,Phone\n"
-            "John Smith,john.smith@company.com,HSE Manager,Safety,Plant A,+44 7700 900001\n"
-            "Jane Doe,jane.doe@company.com,Supervisor,Operations,Head Office,+44 7700 900002\n"
-        )
-        filename = "users_template.csv"
+    entry = _MODULE_TEMPLATES.get(module_key)
+    if not entry:
+        content, filename = "Field,Value\n", f"{module_key}_template.csv"
     else:
-        entry = _MODULE_TEMPLATES.get(module_key)
-        if not entry:
-            content, filename = "Field,Value\n", f"{module_key}_template.csv"
-        else:
-            content, filename = entry
+        content, filename = entry
 
     return StreamingResponse(
         io.BytesIO(content.encode()),

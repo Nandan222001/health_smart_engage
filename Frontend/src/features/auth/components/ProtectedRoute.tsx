@@ -1,6 +1,7 @@
 import { Navigate } from "react-router";
 import { useLocation } from "react-router";
 import { useAuth } from "@/app/context/AuthContext";
+import { useGetOrgSetupProgressQuery } from "@/features/org-setup/api/orgSetupApi";
 import type { ReactNode } from "react";
 import type { UiModuleLabel } from "@/app/context/AuthContext";
 
@@ -16,17 +17,29 @@ export function ProtectedRoute({
   const { isAuthenticated, user } = useAuth();
   const location = useLocation();
 
+  // Keep these props accepted for compatibility.
+  void requiredModule;
+  void hideForOnboardingScoped;
+
+  const isSuperAdmin = Boolean(user?.is_superadmin);
+
+  // Always verify org setup activation from the backend so page-refresh and
+  // direct URL access are properly guarded (localStorage can be stale).
+  const { data: progress, isLoading: progressLoading } = useGetOrgSetupProgressQuery(undefined, {
+    skip: !isAuthenticated || isSuperAdmin,
+  });
+
   if (!isAuthenticated) {
     return <Navigate to="/auth/login" replace />;
   }
 
-  // Keep these props accepted for compatibility, but do not fallback to base URL.
-  void requiredModule;
-  void hideForOnboardingScoped;
+  // While the activation check is in flight, render nothing to avoid a flash.
+  if (!isSuperAdmin && progressLoading) {
+    return null;
+  }
 
-  const setupRequired = Boolean(user?.onboardingSetupRequired && !user?.onboardingSetupCompleted);
-  // First-time invited org admins must complete org setup before accessing any other page.
-  if (setupRequired && location.pathname !== "/org-setup") {
+  const orgSetupDone = isSuperAdmin || Boolean(progress?.activated);
+  if (!orgSetupDone && location.pathname !== "/org-setup") {
     return <Navigate to="/org-setup" replace />;
   }
 

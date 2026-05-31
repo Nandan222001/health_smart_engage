@@ -55,14 +55,26 @@ class AuthService:
             user.status = "active"
             self.db.flush()
         token = self._create_token(user)
+        org_setup_completed = self._is_org_setup_completed(user.tenant_id)
         return {
             "access_token": token,
             "token_type": "bearer",
             "expires_in": settings.access_token_expire_minutes * 60,
             "is_superadmin": user.is_superadmin,
             "first_login": first_login,
+            "org_setup_completed": org_setup_completed,
             "user": self._serialize(user),
         }
+
+    def _is_org_setup_completed(self, tenant_id: str) -> bool:
+        from app.models.org_setup_data import OrgActivation
+        activation = self.db.scalars(
+            select(OrgActivation).where(
+                OrgActivation.tenant_id == tenant_id,
+                OrgActivation.confirmed == True,  # noqa: E712
+            )
+        ).first()
+        return activation is not None
 
     def me(self, user_id: str, tenant_id: str) -> dict:
         user = self.db.scalars(select(User).where(User.id == user_id)).first()

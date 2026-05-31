@@ -91,6 +91,14 @@ export interface Site {
   name: string;
   type: string;
   address: string;
+  postcode?: string;
+  city?: string;
+  region?: string;
+  operationalStatus?: string;
+  workingStations?: number | string;
+  capacity?: number | string;
+  primaryProducts?: string;
+  hazardClassification?: string;
 }
 
 export interface OrgUser {
@@ -180,15 +188,17 @@ export interface OrgOverview {
 }
 
 export interface OrgDetailsFromExternal {
-  organizationName?: string;
-  industryType?: string;
-  employeeCount?: string;
-  numberOfSites?: string;
-  officialEmail?: string;
-  contactNumber?: string;
+  organisationId?: string;
+  organisationName?: string;
   country?: string;
-  timezone?: string;
-  headquartersAddress?: string;
+  industrySector?: string;
+  numberOfEmployees?: string;
+  headquartersLocation?: string;
+  parentCompany?: string;
+  iso45001Status?: string;
+  regulatoryAuthority?: string;
+  establishmentDate?: string;
+  _error?: string;
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────

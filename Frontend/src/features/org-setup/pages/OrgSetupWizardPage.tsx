@@ -82,7 +82,7 @@ const STEP_LABELS = [
   "Review",
 ];
 
-const INDUSTRY_TYPES = [
+const INDUSTRY_SECTORS = [
   "Construction",
   "Oil & Gas",
   "Manufacturing",
@@ -90,7 +90,17 @@ const INDUSTRY_TYPES = [
   "Logistics & Transport",
   "Power & Utilities",
   "Healthcare",
+  "Chemicals",
+  "Agriculture",
   "Other",
+];
+
+const ISO_45001_STATUSES = [
+  "Certified",
+  "In Progress",
+  "Planned",
+  "Not Started",
+  "Expired",
 ];
 
 const TIMEZONES = [
@@ -121,7 +131,11 @@ const PERMIT_TYPES_LIST = [
   "Cold Work",
 ];
 
-const SITE_TYPES = ["Site", "Plant", "Branch", "Zone", "Department", "Unit"];
+const SITE_TYPES = ["Site", "Plant", "Branch", "Zone", "Department", "Unit", "Manufacturing & Assembly", "Warehouse", "Distribution Centre", "Research & Development"];
+
+const OPERATIONAL_STATUSES = ["Active", "Inactive", "Under Construction", "Maintenance", "Decommissioned"];
+
+const HAZARD_CLASSIFICATIONS = ["Low Risk", "Medium Risk", "High Risk", "Critical"];
 
 const USER_ROLES = [
   "Site HSE Manager",
@@ -161,107 +175,181 @@ const DOC_TYPES = [
 ];
 
 const DATA_IMPORT_TYPES = [
-  { key: "incident_records", label: "Incident Records", icon: AlertTriangle },
-  { key: "near_miss", label: "Near Miss", icon: Shield },
-  { key: "permit_records", label: "Permit Records", icon: FileText },
-  { key: "audit_reports", label: "Audit Reports", icon: Check },
-  { key: "training_records", label: "Training Records", icon: Users },
-  { key: "sops_policies", label: "SOPs & Policies", icon: FileText },
-  { key: "risk_assessments", label: "Risk Assessments", icon: AlertTriangle },
-  { key: "capa_data", label: "CAPA Data", icon: Zap },
-  { key: "hr_shift_data", label: "HR Shift Data", icon: Clock },
-  { key: "contractor_records", label: "Contractor Records", icon: Building2 },
+  { key: "employees",        label: "Employees",          icon: Users },
+  { key: "departments",      label: "Departments",         icon: Building2 },
+  { key: "working_stations", label: "Working Stations",    icon: BarChart3 },
+  { key: "roles",            label: "Roles",               icon: Shield },
+  { key: "policies",         label: "Policies",            icon: FileText },
+  { key: "permit_types",     label: "Permit Types",        icon: FileText },
+  { key: "hazard_categories",label: "Hazard Categories",   icon: AlertTriangle },
+  { key: "hazards",          label: "Hazards",             icon: AlertTriangle },
+  { key: "training_programs",label: "Training Programs",   icon: Brain },
+  { key: "permits_to_work",  label: "Permits To Work",     icon: FileText },
+  { key: "incidents",        label: "Incidents",            icon: AlertTriangle },
+  { key: "near_misses",      label: "Near Misses",          icon: Shield },
+  { key: "safety_walks",     label: "Safety Walks",         icon: Check },
+  { key: "capa_actions",     label: "CAPA Actions",         icon: Zap },
+  { key: "shift_schedule",   label: "Shift Schedule",       icon: Clock },
 ];
 
 type FieldDef = { label: string; key: string; type: string; placeholder?: string; options?: string[]; required?: boolean };
 
 const IMPORT_FIELDS: Record<string, FieldDef[]> = {
-  incident_records: [
-    { label: "Incident Date",      key: "date",        type: "date",     required: true },
-    { label: "Location / Station", key: "location",    type: "text",     placeholder: "STN001 – Heavy Assembly 1" },
-    { label: "Incident Type",      key: "type",        type: "select",   options: ["Injury","Near-miss","Damage","Environmental","Unsafe Act","Unsafe Condition","Fire","Chemical Spill"] },
-    { label: "Severity",           key: "severity",    type: "select",   options: ["Minor","Significant","Serious","Lost Time","Fatality"] },
-    { label: "Description",        key: "description", type: "textarea", placeholder: "Brief description of what happened…" },
-    { label: "Immediate Cause",    key: "cause",       type: "text",     placeholder: "e.g. Human Error" },
-    { label: "Reported By",        key: "reporter",    type: "text",     placeholder: "Employee ID or name" },
+  employees: [
+    { label: "Employee ID",           key: "employee_id",           type: "text",   placeholder: "EMP001",          required: true },
+    { label: "Full Name",             key: "full_name",             type: "text",   placeholder: "Jessica Hernandez",required: true },
+    { label: "Date of Birth",         key: "date_of_birth",         type: "date" },
+    { label: "Gender",                key: "gender",                type: "select", options: ["M","F","Other"] },
+    { label: "Employment Type",       key: "employment_type",       type: "select", options: ["Permanent","Contract","Part-time","Temporary"] },
+    { label: "Employment Start Date", key: "employment_start_date", type: "date" },
+    { label: "Job Title / Role ID",   key: "job_title",             type: "text",   placeholder: "ROLE001 or Plant Manager" },
+    { label: "Department",            key: "department",            type: "text",   placeholder: "DEPT001 or Heavy Assembly" },
+    { label: "Shift Pattern",         key: "shift_pattern",         type: "select", options: ["Rotating","Days","Nights","Afternoon","Fixed"] },
+    { label: "Manager ID",            key: "manager_id",            type: "text",   placeholder: "EMP001" },
+    { label: "Induction Date",        key: "induction_date",        type: "date" },
+    { label: "Active Status",         key: "active_status",         type: "select", options: ["Active","Inactive","On Leave"] },
   ],
-  near_miss: [
-    { label: "Date",                     key: "date",               type: "date",     required: true },
-    { label: "Location",                 key: "location",           type: "text",     placeholder: "Area or station where near miss occurred" },
-    { label: "Description",              key: "description",        type: "textarea", placeholder: "What happened and what could have happened…", required: true },
-    { label: "Potential Severity",       key: "potential_severity", type: "select",   options: ["Minor","Significant","Serious","Fatality"] },
-    { label: "Contributing Factors",     key: "factors",            type: "text",     placeholder: "Environment, equipment, human error…" },
-    { label: "Reported By",              key: "reporter",           type: "text",     placeholder: "Employee name or ID" },
-    { label: "Immediate Action Taken",   key: "action",             type: "text",     placeholder: "What was done immediately" },
+  departments: [
+    { label: "Department ID",   key: "department_id",   type: "text",   placeholder: "DEPT001",        required: true },
+    { label: "Site ID",         key: "site_id",         type: "text",   placeholder: "SITE001",        required: true },
+    { label: "Department Name", key: "department_name", type: "text",   placeholder: "Heavy Assembly",  required: true },
+    { label: "Manager ID",      key: "manager_id",      type: "text",   placeholder: "EMP001" },
+    { label: "Number of Teams", key: "number_of_teams", type: "number", placeholder: "3" },
   ],
-  permit_records: [
-    { label: "Permit Type",    key: "type",        type: "select",   options: ["Hot Work","Electrical","Work at Height","Confined Space","Excavation","Cold Work","Chemical Handling"], required: true },
-    { label: "Work Location",  key: "location",    type: "text",     placeholder: "Zone 4 – Chemical Area" },
-    { label: "Start Date",     key: "start_date",  type: "date" },
-    { label: "End Date",       key: "end_date",    type: "date" },
-    { label: "Assigned To",    key: "assignee",    type: "text",     placeholder: "Permit Holder name" },
-    { label: "Description",    key: "description", type: "textarea", placeholder: "Work to be performed…" },
-    { label: "Hazards",        key: "hazards",     type: "text",     placeholder: "List identified hazards" },
+  working_stations: [
+    { label: "Station ID",              key: "station_id",              type: "text",   placeholder: "STN001",                    required: true },
+    { label: "Station Name",            key: "station_name",            type: "text",   placeholder: "Heavy Assembly Station 1",  required: true },
+    { label: "Site ID",                 key: "site_id",                 type: "text",   placeholder: "SITE001" },
+    { label: "Department",              key: "department",              type: "text",   placeholder: "Heavy Assembly" },
+    { label: "Zone Classification",     key: "zone_classification",     type: "text",   placeholder: "e.g. Heavy Assembly" },
+    { label: "Primary Hazards",         key: "primary_hazards",         type: "text",   placeholder: "HAZ001, HAZ002" },
+    { label: "Staffing Requirement",    key: "staffing_requirement",    type: "number", placeholder: "3" },
+    { label: "Equipment List",          key: "equipment_list",          type: "text",   placeholder: "Equipment Set 1" },
+    { label: "Permit Types Required",   key: "permit_types_required",   type: "text",   placeholder: "Hot Work, Work at Height" },
+    { label: "Access Restrictions",     key: "access_restrictions",     type: "text",   placeholder: "Authorized Personnel Only" },
   ],
-  audit_reports: [
-    { label: "Audit Title",    key: "title",    type: "text",   placeholder: "Q1 Fire Safety Audit",  required: true },
-    { label: "Audit Type",     key: "type",     type: "select", options: ["Internal","External","Regulatory","Supplier","HSE Inspection"] },
-    { label: "Standard",       key: "standard", type: "text",   placeholder: "ISO 45001, OSHA…" },
-    { label: "Scheduled Date", key: "date",     type: "date" },
-    { label: "Lead Auditor",   key: "auditor",  type: "text",   placeholder: "Auditor name" },
-    { label: "Status",         key: "status",   type: "select", options: ["Scheduled","In Progress","Completed","Cancelled","Overdue"] },
-    { label: "Site",           key: "site",     type: "text",   placeholder: "Site name" },
+  roles: [
+    { label: "Role ID",          key: "role_id",          type: "text",   placeholder: "ROLE001",          required: true },
+    { label: "Role Name",        key: "role_name",        type: "text",   placeholder: "Plant Manager",    required: true },
+    { label: "Job Category",     key: "job_category",     type: "text",   placeholder: "Senior Management" },
+    { label: "Authority Level",  key: "authority_level",  type: "number", placeholder: "5" },
+    { label: "Permit Authority", key: "permit_authority", type: "select", options: ["Yes","No"] },
+    { label: "Safety Signatory", key: "safety_signatory", type: "select", options: ["Yes","No"] },
   ],
-  training_records: [
-    { label: "Training Name",      key: "name",     type: "text",   placeholder: "Fire Safety Training", required: true },
-    { label: "Employee",           key: "employee", type: "text",   placeholder: "Employee name or ID" },
-    { label: "Completed Date",     key: "date",     type: "date" },
-    { label: "Expiry Date",        key: "expiry",   type: "date" },
-    { label: "Trainer / Provider", key: "trainer",  type: "text",   placeholder: "Internal / External trainer" },
-    { label: "Result",             key: "result",   type: "select", options: ["Pass","Fail","In Progress","Pending"] },
+  policies: [
+    { label: "Policy ID",    key: "policy_id",    type: "text",  placeholder: "POL001",          required: true },
+    { label: "Policy Name",  key: "policy_name",  type: "text",  placeholder: "Hot Work Safety", required: true },
+    { label: "Category",     key: "category",     type: "text",  placeholder: "Hot Work" },
+    { label: "Issue Date",   key: "issue_date",   type: "date" },
+    { label: "Owner",        key: "owner",        type: "text",  placeholder: "Safety Manager" },
+    { label: "Status",       key: "status",       type: "select",options: ["Current","Archived","Under Review","Draft"] },
   ],
-  sops_policies: [
-    { label: "Document Title",   key: "title",          type: "text",     placeholder: "Fire Emergency SOP",    required: true },
-    { label: "Document Type",    key: "doc_type",        type: "select",   options: ["SOP","Policy","Procedure","Work Instruction","Form","Register"] },
-    { label: "Version",          key: "version",         type: "text",     placeholder: "v1.2" },
-    { label: "Effective Date",   key: "effective_date",  type: "date" },
-    { label: "Review Date",      key: "review_date",     type: "date" },
-    { label: "Owner / Author",   key: "owner",           type: "text",     placeholder: "HSE Manager" },
-    { label: "Description / Scope", key: "description",  type: "textarea", placeholder: "Brief scope of document…" },
+  permit_types: [
+    { label: "Permit Type ID",         key: "permit_type_id",         type: "text",   placeholder: "PT001",           required: true },
+    { label: "Permit Type Name",       key: "permit_type_name",       type: "text",   placeholder: "Hot Work Permit", required: true },
+    { label: "Risk Level",             key: "risk_level",             type: "select", options: ["Critical","High","Medium","Low"] },
+    { label: "Validity Period (Hours)",key: "validity_period_hours",  type: "number", placeholder: "8" },
+    { label: "Concurrent Limit",       key: "concurrent_limit",       type: "number", placeholder: "5" },
   ],
-  risk_assessments: [
-    { label: "Hazard Description",  key: "hazard",      type: "text",     placeholder: "Machinery Contact / Crushing", required: true },
-    { label: "Location",            key: "location",    type: "text",     placeholder: "STN001, STN005" },
-    { label: "Risk Level",          key: "level",       type: "select",   options: ["Critical","High","Medium","Low"] },
-    { label: "Likelihood (1-5)",    key: "likelihood",  type: "number",   placeholder: "4" },
-    { label: "Consequence (1-5)",   key: "consequence", type: "number",   placeholder: "4" },
-    { label: "Controls",            key: "controls",    type: "textarea", placeholder: "Engineering and administrative controls…" },
-    { label: "Responsible",         key: "responsible", type: "text",     placeholder: "Safety Manager" },
+  hazard_categories: [
+    { label: "Category ID",   key: "hazard_category_id", type: "text",     placeholder: "HC001",      required: true },
+    { label: "Category Name", key: "category_name",      type: "text",     placeholder: "Mechanical", required: true },
+    { label: "Description",   key: "description",        type: "textarea", placeholder: "Moving machinery, rotating equipment…" },
   ],
-  capa_data: [
-    { label: "Title",        key: "title",       type: "text",     placeholder: "Fix machine guard",              required: true },
-    { label: "Description",  key: "description", type: "textarea", placeholder: "Describe the corrective action…" },
-    { label: "Priority",     key: "priority",    type: "select",   options: ["Critical","High","Medium","Low"] },
-    { label: "Assigned To",  key: "assigned_to", type: "email",    placeholder: "assignee@company.com" },
-    { label: "Due Date",     key: "due_date",    type: "date",     required: true },
-    { label: "Source Type",  key: "source_type", type: "select",   options: ["Audit","Incident","Inspection","Near Miss","Risk Assessment"] },
+  hazards: [
+    { label: "Hazard ID",    key: "hazard_id",   type: "text",   placeholder: "HAZ001",         required: true },
+    { label: "Category ID",  key: "category_id", type: "text",   placeholder: "HC001" },
+    { label: "Hazard Name",  key: "hazard_name", type: "text",   placeholder: "Moving Machinery",required: true },
+    { label: "Severity",     key: "severity",    type: "select", options: ["Fatal","Serious","Moderate","Minor"] },
+    { label: "Probability",  key: "probability", type: "select", options: ["Certain","Likely","Possible","Unlikely","Rare"] },
   ],
-  hr_shift_data: [
-    { label: "Employee Name / ID", key: "employee",   type: "text",   placeholder: "James Thompson / EMP001", required: true },
-    { label: "Shift Date",         key: "date",        type: "date" },
-    { label: "Shift Type",         key: "shift",       type: "select", options: ["Day","Night","Afternoon","Weekend","Overtime"] },
-    { label: "Hours Worked",       key: "hours",       type: "number", placeholder: "8" },
-    { label: "Site / Location",    key: "site",        type: "text",   placeholder: "Bridgend Complex" },
-    { label: "Department",         key: "department",  type: "text",   placeholder: "Heavy Assembly" },
+  training_programs: [
+    { label: "Training ID",     key: "training_id",   type: "text",   placeholder: "TRN001",               required: true },
+    { label: "Training Name",   key: "training_name", type: "text",   placeholder: "Permit-to-Work System", required: true },
+    { label: "Duration (Hours)",key: "duration_hours",type: "number", placeholder: "4" },
+    { label: "Frequency",       key: "frequency",     type: "select", options: ["Annual","Bi-Annual","Quarterly","Monthly","Once"] },
+    { label: "Certification",   key: "certification", type: "select", options: ["Yes","No"] },
+    { label: "Expiry (Months)", key: "expiry_months", type: "number", placeholder: "12" },
   ],
-  contractor_records: [
-    { label: "Company Name",   key: "name",    type: "text",   placeholder: "SafeWork Contractors Ltd", required: true },
-    { label: "Contact Email",  key: "email",   type: "email",  placeholder: "contact@safework.com" },
-    { label: "Contact Phone",  key: "phone",   type: "text",   placeholder: "+44 1234 567890" },
-    { label: "Service Type",   key: "service", type: "select", options: ["Construction","Electrical","Mechanical","IT Services","Cleaning","Security","Transport","Other"] },
-    { label: "HSE Rating",     key: "rating",  type: "select", options: ["Approved","Conditional","Under Review","Suspended","Rejected"] },
-    { label: "Contract Start", key: "start",   type: "date" },
-    { label: "Contract End",   key: "end",     type: "date" },
+  permits_to_work: [
+    { label: "Permit ID",              key: "permit_id",               type: "text",   placeholder: "PTW000001",   required: true },
+    { label: "Permit Type ID",         key: "permit_type_id",          type: "text",   placeholder: "PT001" },
+    { label: "Date Issued",            key: "date_issued",             type: "date",   required: true },
+    { label: "Time Issued",            key: "time_issued",             type: "text",   placeholder: "08:00" },
+    { label: "Location / Station ID",  key: "location_station_id",     type: "text",   placeholder: "STN001" },
+    { label: "Work Description",       key: "work_description",        type: "textarea",placeholder: "Welding repairs…" },
+    { label: "Duration Requested (h)", key: "duration_requested_hours",type: "number", placeholder: "8" },
+    { label: "Issued By (Employee ID)",key: "issued_by",               type: "text",   placeholder: "EMP036" },
+    { label: "Approved By",            key: "approved_by",             type: "text",   placeholder: "EMP149" },
+    { label: "Number of Workers",      key: "number_of_workers",       type: "number", placeholder: "4" },
+    { label: "Status",                 key: "status",                  type: "select", options: ["Active","Closed","Expired","Cancelled"] },
+    { label: "Deviation Reported",     key: "deviation_reported",      type: "select", options: ["Yes","No"] },
+    { label: "Incident Occurred",      key: "incident_occurred",       type: "select", options: ["Yes","No"] },
+  ],
+  incidents: [
+    { label: "Incident ID",          key: "incident_id",          type: "text",    placeholder: "INC00001",      required: true },
+    { label: "Report Date",          key: "report_date",          type: "date",    required: true },
+    { label: "Incident Date & Time", key: "incident_datetime",    type: "text",    placeholder: "2024-04-28 15:37" },
+    { label: "Location / Station",   key: "location_station",     type: "text",    placeholder: "STN031" },
+    { label: "Incident Type",        key: "incident_type",        type: "select",  options: ["Injury","Damage","Near-miss","Fire","Environmental","Unsafe Act","Unsafe Condition","Chemical Spill"] },
+    { label: "Severity",             key: "severity",             type: "select",  options: ["Minor","Significant","Serious","Lost Time","Fatality"] },
+    { label: "Persons Involved",     key: "number_persons_involved",type: "number",placeholder: "1" },
+    { label: "Description",          key: "description",          type: "textarea",placeholder: "Brief description…" },
+    { label: "Immediate Cause",      key: "immediate_cause",      type: "text",    placeholder: "Human Error" },
+    { label: "Root Cause",           key: "root_cause",           type: "text",    placeholder: "Training Deficiency" },
+    { label: "Hazard Involved",      key: "hazard_involved",      type: "text",    placeholder: "HAZ001" },
+    { label: "Reported By",          key: "reported_by",          type: "text",    placeholder: "EMP020" },
+    { label: "Investigation Status", key: "investigation_status", type: "select",  options: ["Open","In Progress","Completed","Closed"] },
+    { label: "CAPA Generated",       key: "capa_generated",       type: "select",  options: ["Yes","No"] },
+    { label: "Days Away",            key: "days_away",            type: "number",  placeholder: "0" },
+    { label: "Root Cause Category",  key: "root_cause_category",  type: "text",    placeholder: "Training, Management System…" },
+  ],
+  near_misses: [
+    { label: "Near Miss ID",        key: "near_miss_id",        type: "text",     placeholder: "NM00001",            required: true },
+    { label: "Report Date",         key: "report_date",         type: "date",     required: true },
+    { label: "Event Date & Time",   key: "event_datetime",      type: "text",     placeholder: "2024-03-09 09:39" },
+    { label: "Location / Station",  key: "location_station",    type: "text",     placeholder: "STN019" },
+    { label: "Description",         key: "description",         type: "textarea", placeholder: "What happened…",     required: true },
+    { label: "Potential Consequence",key: "potential_consequence",type: "select",  options: ["Injury","Fatality","Property Damage","Environmental Release","Production Loss"] },
+    { label: "Hazard Involved",     key: "hazard_involved",     type: "text",     placeholder: "HAZ010" },
+    { label: "Underlying Cause",    key: "underlying_cause",    type: "text",     placeholder: "Procedure Gap" },
+    { label: "Control Failure",     key: "control_failure",     type: "select",   options: ["Yes","No"] },
+    { label: "Reported By",         key: "reported_by",         type: "text",     placeholder: "EMP057" },
+    { label: "CAPA Escalation",     key: "capa_escalation",     type: "select",   options: ["Yes","No"] },
+  ],
+  safety_walks: [
+    { label: "Inspection ID",        key: "inspection_id",        type: "text",    placeholder: "SW00001",   required: true },
+    { label: "Inspection Date & Time",key: "inspection_datetime",  type: "text",   placeholder: "2025-09-22 09:50" },
+    { label: "Location / Station",   key: "location_station",     type: "text",    placeholder: "STN020" },
+    { label: "Inspector (Employee ID)",key: "inspector",           type: "text",    placeholder: "EMP053" },
+    { label: "Inspection Type",      key: "inspection_type",      type: "select",  options: ["Routine","Compliance","Scheduled","Unannounced","Follow-up"] },
+    { label: "Issues Found",         key: "issues_found",         type: "number",  placeholder: "2" },
+    { label: "Critical Issues",      key: "critical_issues",      type: "number",  placeholder: "1" },
+    { label: "Housekeeping Rating (1-5)",key: "housekeeping_rating",type: "number",placeholder: "4" },
+    { label: "Compliance Rating (1-5)",key: "compliance_rating",  type: "number",  placeholder: "3" },
+    { label: "Follow Up Required",   key: "follow_up_required",   type: "select",  options: ["Yes","No"] },
+  ],
+  capa_actions: [
+    { label: "Action ID",            key: "action_id",            type: "text",     placeholder: "CAPA00001",  required: true },
+    { label: "Incident ID",          key: "incident_id",          type: "text",     placeholder: "INC00001" },
+    { label: "Action Type",          key: "action_type",          type: "select",   options: ["Corrective","Preventive","Improvement"] },
+    { label: "Description",          key: "description",          type: "textarea", placeholder: "CAPA action description…" },
+    { label: "Root Cause Addressed", key: "root_cause_addressed", type: "text",     placeholder: "Training, Procedure Gap…" },
+    { label: "Responsible Person",   key: "responsible_person",   type: "text",     placeholder: "EMP037" },
+    { label: "Due Date",             key: "due_date",             type: "date",     required: true },
+    { label: "Status",               key: "status",               type: "select",   options: ["Open","In Progress","Completed","Overdue","Closed"] },
+    { label: "Effectiveness Rating", key: "effectiveness_rating", type: "number",   placeholder: "1–5" },
+  ],
+  shift_schedule: [
+    { label: "Schedule ID",       key: "schedule_id",         type: "text",   placeholder: "SH00000001" },
+    { label: "Employee ID",       key: "employee_id",         type: "text",   placeholder: "EMP001",  required: true },
+    { label: "Shift Date",        key: "shift_date",          type: "date",   required: true },
+    { label: "Shift Type",        key: "shift_type",          type: "select", options: ["Days","Nights","Afternoon","Weekend","Overtime","Rotating"] },
+    { label: "Shift Start",       key: "shift_start",         type: "text",   placeholder: "06:00" },
+    { label: "Shift End",         key: "shift_end",           type: "text",   placeholder: "14:30" },
+    { label: "Actual Hours Worked",key: "actual_hours_worked",type: "number", placeholder: "8.5" },
+    { label: "Station Assigned",  key: "station_assigned",    type: "text",   placeholder: "STN015" },
+    { label: "Supervisor",        key: "supervisor",          type: "text",   placeholder: "EMP118" },
   ],
 };
 
@@ -339,61 +427,79 @@ function StepIndicator({
 // ── Step 1: Organization Details ───────────────────────────────────────────────
 
 type OrgForm = {
-  organizationName: string; industryType: string; employeeCount: string;
-  numberOfSites: string; officialEmail: string; contactNumber: string;
-  country: string; timezone: string; headquartersAddress: string;
+  organisationId: string;
+  organisationName: string;
+  country: string;
+  industrySector: string;
+  numberOfEmployees: string;
+  headquartersLocation: string;
+  parentCompany: string;
+  iso45001Status: string;
+  regulatoryAuthority: string;
+  establishmentDate: string;
 };
 
 const EMPTY_FORM: OrgForm = {
-  organizationName: "", industryType: "", employeeCount: "",
-  numberOfSites: "", officialEmail: "", contactNumber: "",
-  country: "", timezone: "", headquartersAddress: "",
+  organisationId: "",
+  organisationName: "",
+  country: "",
+  industrySector: "",
+  numberOfEmployees: "",
+  headquartersLocation: "",
+  parentCompany: "",
+  iso45001Status: "",
+  regulatoryAuthority: "",
+  establishmentDate: "",
 };
 
 function OrgDetailsForm({ form, set }: { form: OrgForm; set: (k: string, v: string) => void }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label className={labelCls} style={labelStyle}>Organization Name *</label>
-        <input className={inputCls} style={inputStyle} placeholder="Enter organization name" value={form.organizationName} onChange={(e) => set("organizationName", e.target.value)} />
+        <label className={labelCls} style={labelStyle}>Organisation ID</label>
+        <input className={inputCls} style={inputStyle} placeholder="e.g. ORG-001" value={form.organisationId} onChange={(e) => set("organisationId", e.target.value)} />
       </div>
       <div>
-        <label className={labelCls} style={labelStyle}>Industry Type</label>
-        <select className={inputCls} style={inputStyle} value={form.industryType} onChange={(e) => set("industryType", e.target.value)}>
-          <option value="">Select industry</option>
-          {INDUSTRY_TYPES.map((i) => <option key={i} value={i}>{i}</option>)}
-        </select>
-      </div>
-      <div>
-        <label className={labelCls} style={labelStyle}>Employee Count</label>
-        <input type="number" className={inputCls} style={inputStyle} placeholder="0" value={form.employeeCount} onChange={(e) => set("employeeCount", e.target.value)} />
-      </div>
-      <div>
-        <label className={labelCls} style={labelStyle}>Number of Sites</label>
-        <input type="number" className={inputCls} style={inputStyle} placeholder="0" value={form.numberOfSites} onChange={(e) => set("numberOfSites", e.target.value)} />
-      </div>
-      <div>
-        <label className={labelCls} style={labelStyle}>Official Email *</label>
-        <input type="email" className={inputCls} style={inputStyle} placeholder="admin@company.com" value={form.officialEmail} onChange={(e) => set("officialEmail", e.target.value)} />
-      </div>
-      <div>
-        <label className={labelCls} style={labelStyle}>Contact Number</label>
-        <input className={inputCls} style={inputStyle} placeholder="+1 234 567 8900" value={form.contactNumber} onChange={(e) => set("contactNumber", e.target.value)} />
+        <label className={labelCls} style={labelStyle}>Organisation Name</label>
+        <input className={inputCls} style={inputStyle} placeholder="Enter organisation name" value={form.organisationName} onChange={(e) => set("organisationName", e.target.value)} />
       </div>
       <div>
         <label className={labelCls} style={labelStyle}>Country</label>
-        <input className={inputCls} style={inputStyle} placeholder="e.g. United States" value={form.country} onChange={(e) => set("country", e.target.value)} />
+        <input className={inputCls} style={inputStyle} placeholder="e.g. United Kingdom" value={form.country} onChange={(e) => set("country", e.target.value)} />
       </div>
       <div>
-        <label className={labelCls} style={labelStyle}>Timezone</label>
-        <select className={inputCls} style={inputStyle} value={form.timezone} onChange={(e) => set("timezone", e.target.value)}>
-          <option value="">Select timezone</option>
-          {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+        <label className={labelCls} style={labelStyle}>Industry Sector</label>
+        <select className={inputCls} style={inputStyle} value={form.industrySector} onChange={(e) => set("industrySector", e.target.value)}>
+          <option value="">Select industry sector</option>
+          {INDUSTRY_SECTORS.map((i) => <option key={i} value={i}>{i}</option>)}
         </select>
       </div>
-      <div className="md:col-span-2">
-        <label className={labelCls} style={labelStyle}>Headquarters Address</label>
-        <textarea className={inputCls} style={inputStyle} rows={3} placeholder="Enter full address..." value={form.headquartersAddress} onChange={(e) => set("headquartersAddress", e.target.value)} />
+      <div>
+        <label className={labelCls} style={labelStyle}>Number of Employees</label>
+        <input type="number" className={inputCls} style={inputStyle} placeholder="0" min="0" value={form.numberOfEmployees} onChange={(e) => set("numberOfEmployees", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Headquarters Location</label>
+        <input className={inputCls} style={inputStyle} placeholder="City, Country" value={form.headquartersLocation} onChange={(e) => set("headquartersLocation", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Parent Company</label>
+        <input className={inputCls} style={inputStyle} placeholder="Parent company name (if any)" value={form.parentCompany} onChange={(e) => set("parentCompany", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>ISO 45001 Status</label>
+        <select className={inputCls} style={inputStyle} value={form.iso45001Status} onChange={(e) => set("iso45001Status", e.target.value)}>
+          <option value="">Select status</option>
+          {ISO_45001_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Regulatory Authority</label>
+        <input className={inputCls} style={inputStyle} placeholder="e.g. HSE UK, OSHA" value={form.regulatoryAuthority} onChange={(e) => set("regulatoryAuthority", e.target.value)} />
+      </div>
+      <div>
+        <label className={labelCls} style={labelStyle}>Establishment Date</label>
+        <input type="date" className={inputCls} style={inputStyle} value={form.establishmentDate} onChange={(e) => set("establishmentDate", e.target.value)} />
       </div>
     </div>
   );
@@ -430,15 +536,16 @@ function Step1({
     if (saved && Object.keys(saved).length > 0) {
       const s = saved as Record<string, unknown>;
       setForm({
-        organizationName: String(s.organizationName ?? ""),
-        industryType: String(s.industryType ?? ""),
-        employeeCount: String(s.employeeCount ?? ""),
-        numberOfSites: String(s.numberOfSites ?? ""),
-        officialEmail: String(s.officialEmail ?? ""),
-        contactNumber: String(s.contactNumber ?? ""),
+        organisationId: String(s.organisationId ?? ""),
+        organisationName: String(s.organisationName ?? ""),
         country: String(s.country ?? ""),
-        timezone: String(s.timezone ?? ""),
-        headquartersAddress: String(s.headquartersAddress ?? ""),
+        industrySector: String(s.industrySector ?? ""),
+        numberOfEmployees: String(s.numberOfEmployees ?? ""),
+        headquartersLocation: String(s.headquartersLocation ?? ""),
+        parentCompany: String(s.parentCompany ?? ""),
+        iso45001Status: String(s.iso45001Status ?? ""),
+        regulatoryAuthority: String(s.regulatoryAuthority ?? ""),
+        establishmentDate: String(s.establishmentDate ?? ""),
       });
       if (s.dataEntryOption && ["manual", "excel", "api"].includes(s.dataEntryOption as string)) {
         onDataEntryChange(s.dataEntryOption as "manual" | "excel" | "api");
@@ -454,10 +561,10 @@ function Step1({
     const fd = new FormData();
     fd.append("file", file);
     const result = await parseExcel(fd);
-    const rawBody = "data" in result ? (result.data as { success?: boolean; data?: Record<string, string> }) : null;
-    const parsed = rawBody?.data ?? {};
-    const backendError = parsed._error as string | undefined;
-    const fieldCount = Object.keys(parsed).filter((k) => parsed[k] && k !== "_error").length;
+    // baseApi already unwraps the envelope, so result.data IS the field map directly
+    const parsed = ("data" in result ? result.data : {}) as Record<string, string>;
+    const backendError = parsed?._error;
+    const fieldCount = Object.keys(parsed ?? {}).filter((k) => parsed[k] && k !== "_error").length;
     if (fieldCount > 0) {
       const { _error: _e, ...fields } = parsed;
       void _e;
@@ -493,22 +600,10 @@ function Step1({
     }
   };
 
-  const [step1Error, setStep1Error] = useState("");
-
   const handleNext = async () => {
-    if (!form.organizationName.trim()) {
-      setStep1Error("Organization Name is required before proceeding.");
-      return;
-    }
-    if (!form.officialEmail.trim()) {
-      setStep1Error("Official Email is required before proceeding.");
-      return;
-    }
-    setStep1Error("");
     await saveStep1({
       ...form,
-      employeeCount: Number(form.employeeCount) || 0,
-      numberOfSites: Number(form.numberOfSites) || 0,
+      numberOfEmployees: Number(form.numberOfEmployees) || 0,
       dataEntryOption: parentDataEntryOption,
       ...(parentDataEntryOption === "api" ? { apiUrl, apiKey, apiToken } : {}),
     });
@@ -696,11 +791,6 @@ function Step1({
         </>
       )}
 
-      {step1Error && (
-        <div className="px-4 py-2 rounded-lg text-xs font-semibold" style={{ background: "#FEF2F2", color: "#EF4444" }}>
-          {step1Error}
-        </div>
-      )}
       <div className="flex justify-end">
         <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleNext} disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -958,14 +1048,30 @@ function Step3({
   const [uploadSuccess, setUploadSuccess] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState("");
 
-  const [form, setForm] = useState({ name: "", type: "", address: "" });
+  const [form, setForm] = useState({
+    name: "", type: "", address: "", postcode: "", city: "",
+    operationalStatus: "", workingStations: "", capacity: "",
+    primaryProducts: "", hazardClassification: "",
+  });
   const [error, setError] = useState("");
 
   const handleAdd = async () => {
     if (!form.name.trim()) { setError("Site name is required"); return; }
     setError("");
-    await createSite({ name: form.name, type: form.type, address: form.address });
-    setForm({ name: "", type: "", address: "" });
+    await createSite({
+      name: form.name, type: form.type, address: form.address,
+      postcode: form.postcode, city: form.city,
+      operationalStatus: form.operationalStatus,
+      workingStations: form.workingStations,
+      capacity: form.capacity,
+      primaryProducts: form.primaryProducts,
+      hazardClassification: form.hazardClassification,
+    });
+    setForm({
+      name: "", type: "", address: "", postcode: "", city: "",
+      operationalStatus: "", workingStations: "", capacity: "",
+      primaryProducts: "", hazardClassification: "",
+    });
     refetch();
   };
 
@@ -981,7 +1087,7 @@ function Step3({
       const d = result.data as { count?: number };
       setUploadSuccess(d?.count ?? 0);
     } else {
-      setUploadError("Upload failed. Check that your file has Name, Type, Address columns.");
+      setUploadError("Upload failed. Check that your file has a 'Site Name' column and matches the template format.");
     }
     refetch();
     if (fileRef.current) fileRef.current.value = "";
@@ -1015,7 +1121,7 @@ function Step3({
         <span className="text-sm font-semibold" style={{ color: "#4A57B9" }}>
           {uploading ? "Uploading…" : "Click to upload or drag & drop"}
         </span>
-        <span className="text-xs mt-1" style={{ color: "#9CA3AF" }}>Excel (.xlsx, .xls) or CSV — columns: Name, Type, Address</span>
+        <span className="text-xs mt-1" style={{ color: "#9CA3AF" }}>Excel (.xlsx, .xls) or CSV — Site Name, Address, Postcode, City, Type, Status, Stations, Capacity, Products, Hazard</span>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleBulkFile} />
       </label>
       <button className={secondaryBtnCls} style={secondaryBtnStyle} onClick={() => downloadTemplate("/org-setup/step3/template", "sites_template.csv")}>
@@ -1033,10 +1139,10 @@ function Step3({
         )}
       </div>
       {error && <div className="mb-3 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: "#FEF2F2", color: "#EF4444" }}>{error}</div>}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
         <div>
           <label className={labelCls} style={labelStyle}>Site Name *</label>
-          <input className={inputCls} style={inputStyle} placeholder="Site name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <input className={inputCls} style={inputStyle} placeholder="e.g. Bridgend Manufacturing Complex" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
         </div>
         <div>
           <label className={labelCls} style={labelStyle}>Type</label>
@@ -1045,9 +1151,43 @@ function Step3({
             {SITE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
-        <div>
+        <div className="md:col-span-2">
           <label className={labelCls} style={labelStyle}>Address</label>
-          <input className={inputCls} style={inputStyle} placeholder="Address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+          <input className={inputCls} style={inputStyle} placeholder="Street address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Postcode</label>
+          <input className={inputCls} style={inputStyle} placeholder="e.g. CF31 3TR" value={form.postcode} onChange={(e) => setForm((f) => ({ ...f, postcode: e.target.value }))} />
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>City</label>
+          <input className={inputCls} style={inputStyle} placeholder="e.g. Bridgend" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Operational Status</label>
+          <select className={inputCls} style={inputStyle} value={form.operationalStatus} onChange={(e) => setForm((f) => ({ ...f, operationalStatus: e.target.value }))}>
+            <option value="">Select status</option>
+            {OPERATIONAL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Number of Working Stations</label>
+          <input type="number" min="0" className={inputCls} style={inputStyle} placeholder="e.g. 32" value={form.workingStations} onChange={(e) => setForm((f) => ({ ...f, workingStations: e.target.value }))} />
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Capacity</label>
+          <input type="number" min="0" className={inputCls} style={inputStyle} placeholder="e.g. 150" value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} />
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Primary Products</label>
+          <input className={inputCls} style={inputStyle} placeholder="e.g. Wind Turbine Nacelles" value={form.primaryProducts} onChange={(e) => setForm((f) => ({ ...f, primaryProducts: e.target.value }))} />
+        </div>
+        <div>
+          <label className={labelCls} style={labelStyle}>Hazard Classification</label>
+          <select className={inputCls} style={inputStyle} value={form.hazardClassification} onChange={(e) => setForm((f) => ({ ...f, hazardClassification: e.target.value }))}>
+            <option value="">Select classification</option>
+            {HAZARD_CLASSIFICATIONS.map((h) => <option key={h} value={h}>{h}</option>)}
+          </select>
         </div>
       </div>
       <button className={primaryBtnCls} style={primaryBtnStyle} onClick={handleAdd} disabled={creating}>
@@ -1086,26 +1226,50 @@ function Step3({
         ) : sites.length === 0 ? (
           <div className="text-center py-10 text-sm" style={{ color: "#9CA3AF" }}>No sites added yet</div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "#F9FAFB" }}>
-                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Name</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Type</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Address</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Name</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Type</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>City</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Stations</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Primary Products</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "#6B7280" }}>Hazard</th>
               </tr>
             </thead>
             <tbody>
               {sites.map((site) => (
                 <tr key={site.id} className="border-t hover:bg-gray-50" style={{ borderColor: "#F3F4F6" }}>
-                  <td className="px-5 py-3 font-medium" style={{ color: "#111827" }}>{site.name}</td>
-                  <td className="px-5 py-3">
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#EEF2FF", color: "#4A57B9" }}>{site.type}</span>
+                  <td className="px-4 py-3 font-medium" style={{ color: "#111827" }}>{site.name}</td>
+                  <td className="px-4 py-3">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: "#EEF2FF", color: "#4A57B9" }}>{site.type || "—"}</span>
                   </td>
-                  <td className="px-5 py-3" style={{ color: "#6B7280" }}>{site.address}</td>
+                  <td className="px-4 py-3" style={{ color: "#6B7280" }}>{site.city || "—"}</td>
+                  <td className="px-4 py-3">
+                    {site.operationalStatus ? (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{
+                        background: site.operationalStatus === "Active" ? "#D1FAE5" : "#F3F4F6",
+                        color: site.operationalStatus === "Active" ? "#059669" : "#6B7280",
+                      }}>{site.operationalStatus}</span>
+                    ) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-center" style={{ color: "#6B7280" }}>{site.workingStations ?? "—"}</td>
+                  <td className="px-4 py-3" style={{ color: "#6B7280" }}>{site.primaryProducts || "—"}</td>
+                  <td className="px-4 py-3">
+                    {site.hazardClassification ? (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{
+                        background: site.hazardClassification === "Critical" ? "#FEE2E2" : site.hazardClassification === "High Risk" ? "#FEF3C7" : site.hazardClassification === "Medium Risk" ? "#FEF9C3" : "#D1FAE5",
+                        color: site.hazardClassification === "Critical" ? "#DC2626" : site.hazardClassification === "High Risk" ? "#D97706" : site.hazardClassification === "Medium Risk" ? "#CA8A04" : "#059669",
+                      }}>{site.hazardClassification}</span>
+                    ) : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

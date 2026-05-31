@@ -125,11 +125,9 @@ const ORG_ADMIN_GROUPS: Record<string, OrgAdminGroup> = {
   "Home": {
     icon: House,
     items: [
-      { name: "Dashboard",         path: "/" },
-      { name: "Overview",          path: "/overview",      moduleKey: "overview" },
-      { name: "Real-Time KPIs",    path: "/kpis",          moduleKey: "kpis"     },
-      { name: "Notifications",     path: "/notifications" },
-      { name: "Recent Activities", path: "/activities" },
+      { name: "Dashboard",      path: "/" },
+      { name: "Overview",       path: "/overview",   moduleKey: "overview" },
+      { name: "Real-Time KPIs", path: "/kpis",       moduleKey: "kpis"     },
     ],
   },
   "People": {

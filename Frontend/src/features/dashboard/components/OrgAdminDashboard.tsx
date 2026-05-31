@@ -4,7 +4,7 @@ import {
   Building2, Users, MapPin, AlertTriangle, CheckCircle2,
   FileText, ClipboardCheck, BarChart3, ArrowRight, ChevronRight,
   TrendingUp, Activity, Loader2, ShieldCheck, UserCheck, Briefcase,
-  GraduationCap, AlertCircle, UserX, Zap, Target, Clock, Search,
+  GraduationCap, AlertCircle, UserX, Zap, Target, Search,
   ShieldAlert, Info, ListTodo, Map, Flame, Users2, Database,
 } from "lucide-react";
 import {
@@ -16,7 +16,6 @@ import {
   useGetOrgSetupStep3SitesQuery,
   useGetOrgSetupStep4UsersQuery,
   useGetOrgAdminKpisQuery,
-  useGetOrgAdminActivitiesQuery,
 } from "@/features/org-setup/api/orgSetupApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -47,10 +46,9 @@ export function OrgAdminDashboard() {
   const navigate = useNavigate();
 
   // ── RTK Query hooks ──────────────────────────────────────────────────────────
-  const { data: sites = [],      isLoading: sitesLoading }    = useGetOrgSetupStep3SitesQuery();
-  const { data: orgUsers = [],   isLoading: usersLoading }    = useGetOrgSetupStep4UsersQuery();
-  const { data: kpiData,         isLoading: kpisLoading }     = useGetOrgAdminKpisQuery();
-  const { data: activities = [], isLoading: activityLoading } = useGetOrgAdminActivitiesQuery();
+  const { data: sites = [],    isLoading: sitesLoading } = useGetOrgSetupStep3SitesQuery();
+  const { data: orgUsers = [], isLoading: usersLoading } = useGetOrgSetupStep4UsersQuery();
+  const { data: kpiData,       isLoading: kpisLoading }  = useGetOrgAdminKpisQuery();
 
   // ── Fetch-based state ────────────────────────────────────────────────────────
   const [permits,          setPermits]          = useState<PermitRecord[]>([]);
@@ -100,7 +98,7 @@ export function OrgAdminDashboard() {
     return () => { cancelled = true; };
   }, []);
 
-  const loading = sitesLoading || usersLoading || opsLoading || kpisLoading || activityLoading;
+  const loading = sitesLoading || usersLoading || opsLoading || kpisLoading;
 
   // ── KPI helper ───────────────────────────────────────────────────────────────
   const findKpi = (id: string) => kpiData?.kpis.find(k => k.id === id);
@@ -437,39 +435,6 @@ export function OrgAdminDashboard() {
             </div>
           </div>
 
-          {/* Recent Activities Feed */}
-          <div className="bg-white rounded-2xl border" style={{ borderColor: "#E3E9F6" }}>
-            <div className="px-5 py-4 border-b flex items-center justify-between">
-              <h2 className="text-[15px] font-bold text-gray-900">Recent Activities</h2>
-              <Clock className="w-4 h-4 text-gray-300" />
-            </div>
-            <div className="p-5 space-y-4 max-h-[460px] overflow-y-auto">
-              {activityLoading ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
-                </div>
-              ) : activities.length === 0 ? (
-                <div className="text-center py-10 text-gray-400 text-xs">No recent activities</div>
-              ) : (
-                activities.slice(0, 8).map((activity) => (
-                  <div key={activity.id} className="relative pl-5 pb-4 border-l last:pb-0 border-slate-100">
-                    <div className="absolute left-[-5px] top-1 w-2.5 h-2.5 rounded-full border-2 border-white"
-                      style={{
-                        background: activity.type === "Incident" ? "#DC2626"
-                          : activity.type === "Permit"    ? "#2563EB"
-                          : activity.type === "Audit"     ? "#7C3AED"
-                          : "#059669",
-                      }} />
-                    <div className="text-[13px] font-bold text-gray-500 mb-0.5">{activity.type}</div>
-                    <p className="text-[13px] text-gray-700 leading-snug">{activity.description}</p>
-                    <div className="text-[11px] mt-1 text-gray-400 font-medium">
-                      {activity.user} · {activity.timestamp ? new Date(activity.timestamp).toLocaleTimeString() : "Just now"}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </div>
       </div>
 

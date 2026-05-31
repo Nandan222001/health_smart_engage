@@ -881,8 +881,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const u = tokenData.user ?? {};
           const displayName = u.display_name || u.email || "Admin";
           const initials = displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
-          const isFirstLogin = Boolean(tokenData.first_login);
           const rawOrgModules: string[] = Array.isArray(u.allowed_modules) ? u.allowed_modules : [];
+          const isSuperAdmin = Boolean(tokenData.is_superadmin ?? u.is_superadmin);
+          const orgSetupCompleted = Boolean(tokenData.org_setup_completed);
           const userData: AuthUser = {
             name: displayName,
             email: u.email || trimmedEmail,
@@ -892,10 +893,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             allowedModules: ALL_MODULE_LABELS,
             permissions: Array.isArray(u.permissions) ? u.permissions : [],
             orgModules: rawOrgModules,
-            is_superadmin: Boolean(tokenData.is_superadmin ?? u.is_superadmin),
-            ...(isFirstLogin && {
-              onboardingSetupRequired: true,
-              onboardingSetupCompleted: false,
+            is_superadmin: isSuperAdmin,
+            ...(!isSuperAdmin && {
+              onboardingSetupRequired: !orgSetupCompleted,
+              onboardingSetupCompleted: orgSetupCompleted,
             }),
           };
           setUser(userData);

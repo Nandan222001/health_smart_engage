@@ -10,13 +10,16 @@ class OrgProfile(Base, TenantScopedMixin):
     __tablename__ = "org_profiles"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    organisation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     organization_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(128), nullable=True)
     industry_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     employee_count: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    official_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    contact_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    country: Mapped[str | None] = mapped_column(String(128), nullable=True)
     headquarters_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parent_company: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    iso_45001_status: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    regulatory_authority: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    establishment_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
     extra_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 

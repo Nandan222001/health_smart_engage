@@ -196,7 +196,18 @@ class OrgSetupService:
 
         def _profile_data(p: OrgProfile | None) -> dict:
             if not p: return {}
-            return {"organizationName": p.organization_name, "industryType": p.industry_type, "employeeCount": p.employee_count, "officialEmail": p.official_email, "contactNumber": p.contact_number, "country": p.country, "headquartersAddress": p.headquarters_address}
+            return {
+                "organisationId": p.organisation_id,
+                "organisationName": p.organization_name,
+                "country": p.country,
+                "industrySector": p.industry_type,
+                "numberOfEmployees": p.employee_count,
+                "headquartersLocation": p.headquarters_address,
+                "parentCompany": p.parent_company,
+                "iso45001Status": p.iso_45001_status,
+                "regulatoryAuthority": p.regulatory_authority,
+                "establishmentDate": p.establishment_date,
+            }
 
         step_details = {
             "step1": {"completed": org_profile is not None, "data": _profile_data(org_profile)},
@@ -217,29 +228,54 @@ class OrgSetupService:
 
     # ── step 1: org details ───────────────────────────────────────────────────
 
+    _STEP1_CORE_KEYS = frozenset({
+        "organisationId", "organisation_id",
+        "organisationName", "organization_name",
+        "country",
+        "industrySector", "industry_type",
+        "numberOfEmployees", "employee_count",
+        "headquartersLocation", "headquarters_address",
+        "parentCompany", "parent_company",
+        "iso45001Status", "iso_45001_status",
+        "regulatoryAuthority", "regulatory_authority",
+        "establishmentDate", "establishment_date",
+        # UI-only fields — never persisted
+        "dataEntryOption", "apiUrl", "apiKey", "apiToken",
+    })
+
     def save_step1(self, user: CurrentUser, data: dict) -> dict:
+        def _g(camel, snake, default=None):
+            return data.get(camel, data.get(snake, default))
+
         existing = self._get_org_profile(user.tenant_id)
         if existing:
-            existing.organization_name = data.get("organizationName", data.get("organization_name", existing.organization_name))
-            existing.industry_type = data.get("industryType", data.get("industry_type", existing.industry_type))
-            existing.employee_count = data.get("employeeCount", data.get("employee_count", existing.employee_count))
-            existing.official_email = data.get("officialEmail", data.get("official_email", existing.official_email))
-            existing.contact_number = data.get("contactNumber", data.get("contact_number", existing.contact_number))
+            existing.organisation_id = _g("organisationId", "organisation_id", existing.organisation_id)
+            existing.organization_name = _g("organisationName", "organization_name", existing.organization_name)
             existing.country = data.get("country", existing.country)
-            existing.headquarters_address = data.get("headquartersAddress", data.get("headquarters_address", existing.headquarters_address))
-            existing.extra_fields = {k: v for k, v in data.items() if k not in ("organizationName","organization_name","industryType","industry_type","employeeCount","employee_count","officialEmail","official_email","contactNumber","contact_number","country","headquartersAddress","headquarters_address")} or None
+            existing.industry_type = _g("industrySector", "industry_type", existing.industry_type)
+            existing.employee_count = str(_g("numberOfEmployees", "employee_count", existing.employee_count) or "") or existing.employee_count
+            existing.headquarters_address = _g("headquartersLocation", "headquarters_address", existing.headquarters_address)
+            existing.parent_company = _g("parentCompany", "parent_company", existing.parent_company)
+            existing.iso_45001_status = _g("iso45001Status", "iso_45001_status", existing.iso_45001_status)
+            existing.regulatory_authority = _g("regulatoryAuthority", "regulatory_authority", existing.regulatory_authority)
+            existing.establishment_date = _g("establishmentDate", "establishment_date", existing.establishment_date)
+            existing.extra_fields = {k: v for k, v in data.items() if k not in self._STEP1_CORE_KEYS} or None
             self.db.flush()
             return {"step": 1, "status": "saved", "record_id": existing.id}
+
         profile = OrgProfile(
             id=str(uuid4()), tenant_id=user.tenant_id,
-            organization_name=data.get("organizationName", data.get("organization_name")),
-            industry_type=data.get("industryType", data.get("industry_type")),
-            employee_count=str(data["employeeCount"]) if data.get("employeeCount") else (str(data["employee_count"]) if data.get("employee_count") else None),
-            official_email=data.get("officialEmail", data.get("official_email")),
-            contact_number=data.get("contactNumber", data.get("contact_number")),
+            organisation_id=_g("organisationId", "organisation_id"),
+            organization_name=_g("organisationName", "organization_name"),
             country=data.get("country"),
-            headquarters_address=data.get("headquartersAddress", data.get("headquarters_address")),
-            extra_fields={k: v for k, v in data.items() if k not in ("organizationName","organization_name","industryType","industry_type","employeeCount","employee_count","officialEmail","official_email","contactNumber","contact_number","country","headquartersAddress","headquarters_address")} or None,
+            industry_type=_g("industrySector", "industry_type"),
+            employee_count=str(_g("numberOfEmployees", "employee_count") or "") or None,
+            headquarters_address=_g("headquartersLocation", "headquarters_address"),
+            parent_company=_g("parentCompany", "parent_company"),
+            iso_45001_status=_g("iso45001Status", "iso_45001_status"),
+            regulatory_authority=_g("regulatoryAuthority", "regulatory_authority"),
+            establishment_date=_g("establishmentDate", "establishment_date"),
+            extra_fields={k: v for k, v in data.items() if k not in self._STEP1_CORE_KEYS} or None,
         )
         self.db.add(profile)
         self.db.flush()
@@ -247,15 +283,19 @@ class OrgSetupService:
 
     def get_step1(self, user: CurrentUser) -> dict:
         p = self._get_org_profile(user.tenant_id)
-        if not p: return {}
+        if not p:
+            return {}
         result = {
-            "organizationName": p.organization_name,
-            "industryType": p.industry_type,
-            "employeeCount": p.employee_count,
-            "officialEmail": p.official_email,
-            "contactNumber": p.contact_number,
+            "organisationId": p.organisation_id,
+            "organisationName": p.organization_name,
             "country": p.country,
-            "headquartersAddress": p.headquarters_address,
+            "industrySector": p.industry_type,
+            "numberOfEmployees": p.employee_count,
+            "headquartersLocation": p.headquarters_address,
+            "parentCompany": p.parent_company,
+            "iso45001Status": p.iso_45001_status,
+            "regulatoryAuthority": p.regulatory_authority,
+            "establishmentDate": p.establishment_date,
         }
         if p.extra_fields:
             result.update(p.extra_fields)
@@ -309,58 +349,63 @@ class OrgSetupService:
             "type": s.site_type,
             "site_type": s.site_type,
             "address": s.address,
-            "city": s.city,
             "postcode": s.postcode,
+            "city": s.city,
             "region": s.region,
-            "status": s.status,
+            "operationalStatus": s.status,
+            "workingStations": s.working_stations,
             "capacity": s.capacity,
-            "hazard_level": s.hazard_level,
+            "primaryProducts": s.primary_products,
+            "hazardClassification": s.hazard_level,
             "extra_fields": s.extra_fields,
             "created_at": str(s.created_at) if s.created_at else None,
         }
+
+    _SITE_CORE_KEYS = frozenset({
+        "name", "site_name", "type", "site_type",
+        "address", "postcode", "city", "region",
+        "status", "operationalStatus", "operational_status",
+        "workingStations", "working_stations", "numberOfWorkingStations", "number_of_working_stations",
+        "capacity",
+        "primaryProducts", "primary_products",
+        "hazardClassification", "hazard_classification", "hazard_level", "hazard",
+    })
+
+    def _build_site(self, tenant_id: str, d: dict) -> Site:
+        def _int(v):
+            try: return int(v) if v not in (None, "") else None
+            except (ValueError, TypeError): return None
+
+        return Site(
+            id=str(uuid4()),
+            tenant_id=tenant_id,
+            name=d.get("name", d.get("site_name", "Unnamed Site")),
+            site_type=d.get("type", d.get("site_type", "Site")),
+            address=d.get("address"),
+            postcode=d.get("postcode"),
+            city=d.get("city"),
+            region=d.get("region"),
+            status=d.get("operationalStatus", d.get("operational_status", d.get("status", "Active"))),
+            working_stations=_int(d.get("workingStations", d.get("working_stations", d.get("numberOfWorkingStations", d.get("number_of_working_stations"))))),
+            capacity=_int(d.get("capacity")),
+            primary_products=d.get("primaryProducts", d.get("primary_products")),
+            hazard_level=d.get("hazardClassification", d.get("hazard_classification", d.get("hazard_level", d.get("hazard")))),
+            extra_fields={k: v for k, v in d.items() if k not in self._SITE_CORE_KEYS} or None,
+        )
 
     def create_site(self, user: CurrentUser, data: dict) -> dict:
         err = self._check_prerequisite(user.tenant_id, 2)
         if err:
             return err
-        site = Site(
-            id=str(uuid4()),
-            tenant_id=user.tenant_id,
-            name=data.get("name", data.get("site_name", "Unnamed Site")),
-            site_type=data.get("type", data.get("site_type", "Site")),
-            address=data.get("address"),
-            city=data.get("city"),
-            postcode=data.get("postcode"),
-            region=data.get("region"),
-            status=data.get("status", "Active"),
-            capacity=int(data["capacity"]) if data.get("capacity") else None,
-            hazard_level=data.get("hazard_level", data.get("hazard")),
-            extra_fields={k: v for k, v in data.items()
-                          if k not in ("name", "site_name", "type", "site_type", "address",
-                                       "city", "postcode", "region", "status", "capacity",
-                                       "hazard_level", "hazard")} or None,
-        )
+        site = self._build_site(user.tenant_id, data)
         self.db.add(site)
         self.db.flush()
         return {"step": 3, "status": "created", "record_id": site.id, "site_id": site.id}
 
     def bulk_upload_sites(self, user: CurrentUser, data: dict) -> dict:
-        sites_data = data.get("sites", [])
         created_ids = []
-        for s in sites_data:
-            site = Site(
-                id=str(uuid4()),
-                tenant_id=user.tenant_id,
-                name=s.get("name", s.get("site_name", "Unnamed Site")),
-                site_type=s.get("type", s.get("site_type", "Site")),
-                address=s.get("address"),
-                city=s.get("city"),
-                postcode=s.get("postcode"),
-                region=s.get("region"),
-                status=s.get("status", "Active"),
-                capacity=int(s["capacity"]) if s.get("capacity") else None,
-                hazard_level=s.get("hazard_level", s.get("hazard")),
-            )
+        for d in data.get("sites", []):
+            site = self._build_site(user.tenant_id, d)
             self.db.add(site)
             created_ids.append(site.id)
         self.db.flush()
@@ -572,6 +617,13 @@ class OrgSetupService:
             "risk_assessments": "risk",
             "capa_data": "capa",
             "contractor_records": "vendors",
+            "near_misses": "near_miss",
+            "capa_actions": "capa",
+            "shift_schedule": "hr_shift_data",
+            "permits_to_work": "permits",
+            "employees": "users",
+            "training_programs": "training",
+            "policies": "compliance",
         }
         module_key = _ALIASES.get(module_key, module_key)
 
@@ -592,13 +644,18 @@ class OrgSetupService:
         if module_key == "organisation":
             for row in rows[:1]:  # only first row matters for org details
                 payload = {
-                    "organizationName":    _v(row, "organisation name", "org name", "name"),
-                    "industryType":        _v(row, "industry type", "industry"),
-                    "employeeCount":       _v(row, "employee count", "employees"),
+                    "organisationId":      _v(row, "organisation_id", "organisation id", "org_id", "org id"),
+                    "organisationName":    _v(row, "organisation_name", "organisation name", "org name", "name"),
+                    "country":             _v(row, "country"),
+                    "industrySector":      _v(row, "industry_sector", "industry sector", "industry type", "industry"),
+                    "numberOfEmployees":   _v(row, "number_of_employees", "number of employees", "employee count", "employees"),
+                    "headquartersLocation": _v(row, "headquarters_location", "headquarters location", "hq address", "address"),
+                    "parentCompany":       _v(row, "parent_company", "parent company", "parent"),
+                    "iso45001Status":      _v(row, "iso_45001_status", "iso 45001 status", "certification status"),
+                    "regulatoryAuthority": _v(row, "regulatory_authority", "regulatory authority", "regulator"),
+                    "establishmentDate":   _v(row, "establishment_date", "establishment date", "founded"),
                     "officialEmail":       _v(row, "official email", "email"),
                     "contactNumber":       _v(row, "contact number", "phone", "contact"),
-                    "country":             _v(row, "country"),
-                    "headquartersAddress": _v(row, "hq address", "address"),
                 }
                 payload = {k: v for k, v in payload.items() if v}
                 self.save_step1(user, payload)
@@ -652,18 +709,44 @@ class OrgSetupService:
         if module_key == "users":
             for row in rows:
                 email = _v(row, "email", "email address")
-                if not email: continue
+                name = _v(row, "full name", "name", "employee id")
+                if not email and not name: continue
                 _, extra = self._split_row("users", row)
                 our = OrgUserRecord(
                     id=str(uuid4()), tenant_id=tenant_id,
                     name=_v(row, "full name", "name"),
                     email=email,
-                    role=_v(row, "role", "job title", "position") or "Worker",
+                    role=_v(row, "job title", "role", "position") or "Worker",
                     department=_v(row, "department", "dept", "team"),
-                    status="pending", extra_fields=extra or None,
+                    status=_v(row, "active_status", "status") or "pending",
+                    extra_fields={
+                        **(extra or {}),
+                        **{k: _v(row, k) for k in (
+                            "employee id", "date_of_birth", "gender", "employment_type",
+                            "employment_start_date", "shift_pattern", "manager_id", "induction_date",
+                        ) if _v(row, k)},
+                    } or None,
                 )
                 self.db.add(our)
-                self._sync_user_to_employees(tenant_id, {"name": our.name, "email": email, "role": our.role, "department": our.department}, our.id, extra_fields=extra)
+                self._sync_user_to_employees(
+                    tenant_id,
+                    {
+                        "name": our.name,
+                        "email": email,
+                        "role": our.role,
+                        "department": our.department,
+                        "id": _v(row, "employee id"),
+                        "startDate": _v(row, "employment_start_date"),
+                        "dob": _v(row, "date_of_birth"),
+                        "shiftPattern": _v(row, "shift_pattern"),
+                        "inductionDate": _v(row, "induction_date"),
+                        "managerId": _v(row, "manager_id"),
+                        "employmentType": _v(row, "employment_type"),
+                        "status": _v(row, "active_status", "status"),
+                    },
+                    our.id,
+                    extra_fields=extra,
+                )
                 created += 1
             self.db.flush()
             return {"module": module_key, "status": "imported", "count": created}
@@ -671,14 +754,14 @@ class OrgSetupService:
         # ── departments ──
         if module_key == "departments":
             for row in rows:
-                name = _v(row, "department name", "name")
+                name = _v(row, "department_name", "department name", "name")
                 if not name: continue
                 _, extra = self._split_row("departments", row)
                 dept = Department(
                     id=str(uuid4()), tenant_id=tenant_id, name=name,
-                    manager=_v(row, "manager name", "manager"),
-                    teams=_v(row, "number of teams", "teams"),
-                    site=_v(row, "assigned site", "site"),
+                    manager=_v(row, "manager_id", "manager name", "manager"),
+                    teams=_v(row, "number_of_teams", "number of teams", "teams"),
+                    site=_v(row, "site_id", "assigned site", "site"),
                     extra_fields=extra or None,
                 )
                 self.db.add(dept)
@@ -689,14 +772,14 @@ class OrgSetupService:
         # ── roles ──
         if module_key == "roles":
             for row in rows:
-                name = _v(row, "role name", "name")
+                name = _v(row, "role_name", "role name", "name")
                 if not name: continue
                 _, extra = self._split_row("roles", row)
                 role = OrgCustomRole(
                     id=str(uuid4()), tenant_id=tenant_id, name=name,
-                    description=_v(row, "description"),
-                    level=_v(row, "access level", "level"),
-                    modules=_v(row, "module access", "modules"),
+                    description=_v(row, "job_category", "description"),
+                    level=_v(row, "authority_level", "access level", "level"),
+                    modules=_v(row, "permit_authority", "module access", "modules"),
                     extra_fields=extra or None,
                 )
                 self.db.add(role)
@@ -714,14 +797,22 @@ class OrgSetupService:
                     inc = Incident(
                         id=str(uuid4()),
                         tenant_id=tenant_id,
-                        incident_ref=f"INC-{_rand.randint(10000, 99999)}",
+                        incident_ref=_v(row, "incident_id", "ref", "id") or f"INC-{_rand.randint(10000, 99999)}",
                         reporter_user_id=user.user_id,
-                        incident_type=_v(row, "incident type", "type") or "incident_report",
+                        incident_type=_v(row, "incident_type", "incident type", "type") or "incident_report",
                         severity=_v(row, "severity") or "unclassified",
                         description=_v(row, "description") or "",
                         is_confidential=False,
-                        status="reported",
-                        extra_fields=extra,
+                        status=_v(row, "investigation_status", "status") or "reported",
+                        extra_fields={
+                            **(extra or {}),
+                            **{k: _v(row, k) for k in (
+                                "incident_datetime", "location_station", "number_persons_involved",
+                                "immediate_cause", "root_cause", "hazard_involved", "permit_active",
+                                "control_failure", "reported_by", "capa_generated", "days_away",
+                                "root_cause_category",
+                            ) if _v(row, k)},
+                        },
                     )
                     self.db.add(inc)
                     created += 1
@@ -843,17 +934,26 @@ class OrgSetupService:
                 from app.models.permits import Permit
                 import random as _rand
                 for row in rows:
-                    ptype = _v(row, "permit type", "type") or "General"
+                    ptype = _v(row, "permit_type_id", "permit type", "type") or "General"
                     _, extra = self._split_row("permits", row)
                     permit = Permit(
                         id=str(uuid4()),
                         tenant_id=tenant_id,
-                        permit_ref=_v(row, "permit ref", "permit id", "ref") or f"PTW-{_rand.randint(10000, 99999)}",
+                        permit_ref=_v(row, "permit_id", "permit ref", "permit id", "ref") or f"PTW-{_rand.randint(10000, 99999)}",
                         permit_type=ptype,
-                        title=_v(row, "title", "description", "work description") or ptype,
+                        title=_v(row, "work_description", "title", "description") or ptype,
                         requester_user_id=user.user_id,
                         status=_v(row, "status") or "closed",
-                        extra_fields=extra,
+                        extra_fields={
+                            **(extra or {}),
+                            **{k: _v(row, k) for k in (
+                                "permit_id", "permit_type_id", "date_issued", "time_issued",
+                                "location_station_id", "work_description", "duration_requested_hours",
+                                "issued_by", "approved_by", "validity_start", "validity_end",
+                                "work_start_actual", "work_end_actual", "number_of_workers",
+                                "deviation_reported", "incident_occurred",
+                            ) if _v(row, k)},
+                        },
                     )
                     self.db.add(permit)
                     created += 1
@@ -872,14 +972,21 @@ class OrgSetupService:
                     inc = Incident(
                         id=str(uuid4()),
                         tenant_id=tenant_id,
-                        incident_ref=_v(row, "ref", "near miss id", "id") or f"NM-{_rand.randint(10000, 99999)}",
+                        incident_ref=_v(row, "near_miss_id", "ref", "near miss id", "id") or f"NM-{_rand.randint(10000, 99999)}",
                         reporter_user_id=user.user_id,
                         incident_type="near_miss",
                         severity=_v(row, "severity") or "unclassified",
                         description=_v(row, "description", "summary") or "",
                         is_confidential=False,
                         status="reported",
-                        extra_fields=extra,
+                        extra_fields={
+                            **(extra or {}),
+                            **{k: _v(row, k) for k in (
+                                "event_datetime", "location_station", "potential_consequence",
+                                "hazard_involved", "underlying_cause", "control_failure",
+                                "reported_by", "capa_escalation",
+                            ) if _v(row, k)},
+                        },
                     )
                     self.db.add(inc)
                     created += 1
@@ -895,7 +1002,7 @@ class OrgSetupService:
                 for row in rows:
                     _, extra = self._split_row("capa", row)
                     import datetime as _dt
-                    raw_due = _v(row, "due date", "due")
+                    raw_due = _v(row, "due_date", "due date", "due")
                     due_date = None
                     if raw_due:
                         try:
@@ -905,15 +1012,21 @@ class OrgSetupService:
                     capa = Capa(
                         id=str(uuid4()),
                         tenant_id=tenant_id,
-                        source_type=_v(row, "source type", "source") or "import",
+                        source_type=_v(row, "action_type", "source type", "source") or "import",
                         owner_user_id=user.user_id,
-                        title=_v(row, "title", "action", "description"),
+                        title=_v(row, "action_id", "title", "action", "description"),
                         description=_v(row, "description"),
-                        root_cause=_v(row, "root cause"),
+                        root_cause=_v(row, "root_cause_addressed", "root cause"),
                         corrective_action=_v(row, "corrective action", "action"),
                         due_date=due_date,
                         status=_v(row, "status") or "open",
-                        extra_fields=extra,
+                        extra_fields={
+                            **(extra or {}),
+                            **{k: _v(row, k) for k in (
+                                "action_id", "incident_id", "action_type", "root_cause_addressed",
+                                "responsible_person", "effectiveness_rating",
+                            ) if _v(row, k)},
+                        },
                     )
                     self.db.add(capa)
                     created += 1
